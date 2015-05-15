@@ -78,6 +78,41 @@ class UpdatePermissionsError(Exception):
         )
 
 
+def _try_upgrade_startup(sgtk, startup_location_dict):
+    if sys.platform == "darwin":
+        frameworks_cache = os.path.expanduser("~/Library/Caches/Shotgun/")
+    elif sys.platform == "win32":
+        frameworks_cache = os.path.join(os.environ["APPDATA"], "Shotgun")
+    elif sys.platform.startswith("linux"):
+        frameworks_cache = os.path.expanduser("~/.shotgun")
+
+    frameworks_cache = os.path.join(frameworks_cache, "desktop", "install", "frameworks")
+
+    current_desc = sgtk.deploy.descriptor.get_from_location(
+        sgtk.deploy.descriptor.AppDescriptor.FRAMEWORK,
+        {"frameworks": frameworks_cache},
+        startup_location_dict
+    )
+
+    latest_descriptor = current_desc.find_latest_version()
+
+    # check deprecation
+    (is_dep, dep_msg) = latest_descriptor.get_deprecation_status()
+
+    if is_dep:
+        logger.warning("This item has been flagged as deprecated with the following status: %s" % dep_msg)
+        return
+
+    # out of date check
+    out_of_date = (latest_descriptor.get_version() != current_desc.get_version())
+
+    if out_of_date:
+        latest_descriptor.download_local()
+        return True
+    else:
+        return False
+
+
 def __supports_authentication_module(sgtk):
     """
     Tests if the given Toolkit API supports the shotgun_authentication module.
@@ -269,7 +304,7 @@ def __restart_app(splash, reason):
     # splash screen that from the user point of view looks like the app is redoing work
     # it already did by mistake. This makes the behavior explicit.
     for i in range(3, 0, -1):
-        splash.set_message("%s Restarting desktop in %d seconds..." % (reason, i))
+        splash.set_message("%s Restarting in %d seconds..." % (reason, i))
         time.sleep(1)
     subprocess.Popen(sys.argv)
     return 0
@@ -401,12 +436,17 @@ def __launch_app(app, splash, connection):
         localize.set_logger(logger)
         localize.execute({})
 
-
     tk = sgtk.sgtk_from_path(default_site_config)
     if tk.pipeline_configuration.is_auto_path():
         splash.set_message("Getting updates...")
         logger.info("Getting updates...")
         app.processEvents()
+
+        # Downloads an upgrade, if available.
+        startup_updated = _try_upgrade_startup(
+            sgtk,
+            {"name": "tk-framework-desktopstartup", "type": "app_store", "version": "v0.0.0"}
+        )
 
         core_update = tk.get_command("core")
         core_update.set_logger(logger)
@@ -414,13 +454,22 @@ def __launch_app(app, splash, connection):
 
         # If core was updated.
         if result["status"] == "updated":
+            core_updated = True
+        else:
+            core_updated = False
+            if result["status"] == "update_blocked":
+                # Core update should not be blocked. Warn, because it is not a fatal error.
+                logger.warning("Core update was blocked. Reason: %s" % result["reason"])
+            elif result["status"] != "up_to_date":
+                # Core update should not fail. Warn, because it is not a fatal error.
+                logger.warning("Unknown Core upgrade result: %s" % str(result))
+
+        if core_updated and startup_updated:
+            return __restart_app(splash, "Desktop and Core updated.")
+        elif core_updated:
             return __restart_app(splash, "Core updated.")
-        elif result["status"] == "update_blocked":
-            # Core update should not be blocked. Warn, because it is not a fatal error.
-            logger.warning("Core update was blocked. Reason: %s" % result["reason"])
-        elif result["status"] != "up_to_date":
-            # Core update should not fail. Warn, because it is not a fatal error.
-            logger.warning("Unknown Core upgrade result: %s" % str(result))
+        elif startup_updated:
+            return __restart_app(splash, "Desktop updated.")
 
         updates = tk.get_command("updates")
         updates.set_logger(logger)
