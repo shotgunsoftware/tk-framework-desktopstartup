@@ -1,0 +1,9 @@
+<RCC>
+  <qresource prefix="res">
+    <file>shotgun_badge.png</file>
+    <file>splash.png</file>
+    <file>shotgun_logo_light_medium.png</file>
+    <file alias="sg_logo">sg_logo.png</file>
+    <file alias="sg_badge">shotgun_badge_light_medium.png</file>
+  </qresource>
+</RCC>
