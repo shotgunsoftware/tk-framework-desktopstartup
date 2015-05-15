@@ -2,11 +2,12 @@
 
 # Form implementation generated from reading ui file 'splash.ui'
 #
+# Created: Thu May 14 23:57:57 2015
 #      by: pyside-uic 0.2.15 running on PySide 1.2.1
 #
 # WARNING! All changes made in this file will be lost!
 
-from sgtk.platform.qt import QtCore, QtGui
+from PySide import QtCore, QtGui
 
 class Ui_Splash(object):
     def setupUi(self, Splash):
