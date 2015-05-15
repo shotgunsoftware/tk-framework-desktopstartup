@@ -1,4 +1,0 @@
-[submodule "python/tk-core"]
-	path = python/tk-core
-	url = https://github.com/shotgunsoftware/tk-core
-    branch = security
