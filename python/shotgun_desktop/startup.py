@@ -33,6 +33,7 @@ from shotgun_desktop import authenticator
 
 from shotgun_desktop.ui import resources_rc
 import shutil
+from distutils.version import LooseVersion
 
 
 class UpgradeCoreError(Exception):
@@ -78,6 +79,15 @@ class UpdatePermissionsError(Exception):
 
 
 def _try_upgrade_startup(sgtk, app_bootstrap):
+    """
+    Tries to upgrade the startup logic. If an update is available, it will be donwloaded to the
+    local cache directory and the startup descriptor will be updated.
+
+    :param app_bootstrap: Application bootstrap instance, used to update the startup descriptor.
+
+    :returns: True if an update was downloaded and the descriptor updated, False otherwise.
+    """
+    logger.info("Upgrading startup code.")
     if sys.platform == "darwin":
         desktop_root = os.path.expanduser("~/Library/Caches/Shotgun/")
     elif sys.platform == "win32":
@@ -104,17 +114,25 @@ def _try_upgrade_startup(sgtk, app_bootstrap):
 
     if is_dep:
         logger.warning("This item has been flagged as deprecated with the following status: %s" % dep_msg)
-        return
+        return False
 
     # out of date check
     out_of_date = (latest_descriptor.get_version() != current_desc.get_version())
 
-    if out_of_date:
-        latest_descriptor.download_local()
-        app_bootstrap.update_descriptor(latest_descriptor)
-        return True
-    else:
+    if not out_of_date:
+        logger.info("Not upgraded: latest version already downloaded.")
         return False
+
+    bootstrap_version = LooseVersion(app_bootstrap.get_version())
+    # 1.1.0 is the first version that is supported.
+    minimal_desktop_version = LooseVersion(latest_descriptor.get_version_constraints().get("min_desktop", "v1.1.0"))
+    if bootstrap_version < minimal_desktop_version:
+        logger.info("Not upgraded: requires %s, found %s" % (minimal_desktop_version, bootstrap_version))
+        return False
+
+    latest_descriptor.download_local()
+    app_bootstrap.update_descriptor(latest_descriptor)
+    return True
 
 
 def __supports_authentication_module(sgtk):
@@ -248,6 +266,7 @@ def _get_default_site_config_root(splash, connection):
             # Toolkit is not turned on show the dialog that explains what to do
             splash.hide()
             dialog = TurnOnToolkit(connection)
+            dialog.show()
             dialog.raise_()
             dialog.activateWindow()
             results = dialog.exec_()
