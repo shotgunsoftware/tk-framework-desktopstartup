@@ -18,7 +18,6 @@ import subprocess
 # initialize logging
 import logging
 import shotgun_desktop.splash
-import shotgun_desktop.logging
 logger = logging.getLogger("tk-desktop.startup")
 logger.info("------------------ Desktop Engine Startup ------------------")
 
