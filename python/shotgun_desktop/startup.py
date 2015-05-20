@@ -35,6 +35,13 @@ import shutil
 from distutils.version import LooseVersion
 
 
+class ResetToDefaultsException(Exception):
+    """
+    Short circuits all the application code for a quick exit. The user
+    wants to reinitialize the app.
+    """
+    pass
+
 class UpgradeCoreError(Exception):
     """
     This exception notifies the catcher that the site's core needs to be upgraded in order to 
@@ -282,7 +289,7 @@ def __init_app():
     return QtGui.QApplication(sys.argv), shotgun_desktop.splash.Splash()
 
 
-def __do_login(shotgun_authentication):
+def __do_login(shotgun_authentication, app_bootstrap):
     """
     Asks for the credentials of the user or automatically logs the user in if the credentials are
     cached on disk.
@@ -295,8 +302,10 @@ def __do_login(shotgun_authentication):
     )
     # If the application was launched holding the alt key, log the user out.
     if (QtGui.QApplication.queryKeyboardModifiers() & QtCore.Qt.AltModifier) == QtCore.Qt.AltModifier:
-        logger.info("Alt was pressed, clearing default user.")
+        logger.info("Alt was pressed, clearing default user and startup descriptor")
         shotgun_authenticator.clear_default_user()
+        app_bootstrap.clear_descriptor()
+        raise ResetToDefaultsException()
 
     logger.debug("Retrieving credentials")
     connection = shotgun_authenticator.get_user().create_sg_connection()
@@ -550,6 +559,8 @@ def main(**kwargs):
         logger.exception("Fatal error, user will be logged out.")
         return -1
 
+    app_bootstrap = kwargs["app_bootstrap"]
+
     # We might crash before even initializing the authenticator, so instantiate
     # it right away.
     shotgun_authenticator = None
@@ -568,7 +579,7 @@ def main(**kwargs):
     # We have gui and the authentication module, now do the rest.
     try:
         # Authenticate
-        shotgun_authenticator, connection = __do_login(shotgun_authentication)
+        shotgun_authenticator, connection = __do_login(shotgun_authentication, app_bootstrap)
         # If we didn't authenticate a user
         if not connection:
             # We're done for the day.
@@ -581,8 +592,11 @@ def main(**kwargs):
                 app,
                 splash,
                 connection,
-                kwargs["app_bootstrap"]
+                app_bootstrap
             )
+    except ResetToDefaultsException:
+        subprocess.Popen(sys.argv)
+        return 0
     except shotgun_authentication.AuthenticationCancelled:
         splash.hide()
         # This is not a failure, but track from where it happened anyway.
