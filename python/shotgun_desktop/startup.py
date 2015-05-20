@@ -19,9 +19,8 @@ import subprocess
 import logging
 import shotgun_desktop.splash
 import shotgun_desktop.logging
-shotgun_desktop.logging.initialize_logging()
-logger = logging.getLogger("tk-desktop.bootstrap")
-logger.info("------------------ Desktop Engine Bootstrap ------------------")
+logger = logging.getLogger("tk-desktop.startup")
+logger.info("------------------ Desktop Engine Startup ------------------")
 
 # now proceed with non builtin imports
 from PySide import QtCore, QtGui
@@ -78,20 +77,24 @@ class UpdatePermissionsError(Exception):
         )
 
 
-def _try_upgrade_startup(sgtk, startup_location_dict):
+def _try_upgrade_startup(sgtk, app_bootstrap):
     if sys.platform == "darwin":
-        frameworks_cache = os.path.expanduser("~/Library/Caches/Shotgun/")
+        desktop_root = os.path.expanduser("~/Library/Caches/Shotgun/")
     elif sys.platform == "win32":
-        frameworks_cache = os.path.join(os.environ["APPDATA"], "Shotgun")
+        desktop_root = os.path.join(os.environ["APPDATA"], "Shotgun")
     elif sys.platform.startswith("linux"):
-        frameworks_cache = os.path.expanduser("~/.shotgun")
+        desktop_root = os.path.expanduser("~/.shotgun")
+    else:
+        raise NotImplementedError("Unsupported platform: %s" % sys.platform)
 
-    frameworks_cache = os.path.join(frameworks_cache, "desktop", "install", "frameworks")
+    desktop_root = os.path.join(desktop_root, "desktop")
+
+    frameworks_cache = os.path.join(desktop_root, "install", "frameworks")
 
     current_desc = sgtk.deploy.descriptor.get_from_location(
         sgtk.deploy.descriptor.AppDescriptor.FRAMEWORK,
-        {"frameworks": frameworks_cache},
-        startup_location_dict
+        {"frameworks": frameworks_cache, "root": desktop_root},
+        app_bootstrap.get_descriptor_dict()
     )
 
     latest_descriptor = current_desc.find_latest_version()
@@ -108,6 +111,7 @@ def _try_upgrade_startup(sgtk, startup_location_dict):
 
     if out_of_date:
         latest_descriptor.download_local()
+        app_bootstrap.update_descriptor(latest_descriptor)
         return True
     else:
         return False
@@ -310,7 +314,7 @@ def __restart_app(splash, reason):
     return 0
 
 
-def __launch_app(app, splash, connection):
+def __launch_app(app, splash, connection, app_bootstrap):
     """
     Shows the splash screen, optionally downloads and configures Toolkit, imports it, optionally
     updates it and then launches the desktop engine.
@@ -445,7 +449,7 @@ def __launch_app(app, splash, connection):
         # Downloads an upgrade, if available.
         startup_updated = _try_upgrade_startup(
             sgtk,
-            {"name": "tk-framework-desktopstartup", "type": "app_store", "version": "v0.0.0"}
+            app_bootstrap
         )
 
         core_update = tk.get_command("core")
@@ -485,7 +489,7 @@ def __launch_app(app, splash, connection):
     engine = sgtk.platform.start_engine("tk-desktop", tk, ctx)
 
     # engine will take over logging
-    shotgun_desktop.logging.tear_down_logging()
+    app_bootstrap.tear_down_logging()
 
     # reset PYTHONPATH and PYTHONHOME if they were overridden by the application
     if "SGTK_DESKTOP_ORIGINAL_PYTHONPATH" in os.environ:
@@ -498,7 +502,7 @@ def __launch_app(app, splash, connection):
 
     # and run the engine
     logger.debug("Running tk-desktop")
-    return engine.run(splash, version=shotgun_desktop.version.DESTKOP_APPLICATION_VERSION)
+    return engine.run(splash, version=app_bootstrap.get_version())
 
 
 def __handle_exception(splash, shotgun_authenticator, error_message):
@@ -520,9 +524,13 @@ def __handle_exception(splash, shotgun_authenticator, error_message):
         shotgun_authenticator.clear_default_user()
 
 
-def __main_internal():
+def main(**kwargs):
     """
-    Main implementation.
+    Main
+
+    :params app_bootstrap: AppBoostrap instance, used to get information from
+        the installed application as well as updating the startup description
+        location.
 
     :returns: Error code for the process.
     """
@@ -545,7 +553,7 @@ def __main_internal():
         # We have a gui, so we can call our standard __handle_exception
         # method.
         __handle_exception(
-            splash, shotgun_authenticator, 
+            splash, shotgun_authenticator,
             "Unexpected Toolkit error, please contact support.\n\n%s" % ex
         )
         return -1
@@ -562,7 +570,12 @@ def __main_internal():
         else:
             # Now that we are logged, we can proceed with launching the
             # application.
-            return __launch_app(app, splash, connection)
+            return __launch_app(
+                app,
+                splash,
+                connection,
+                kwargs["app_bootstrap"]
+            )
     except shotgun_authentication.AuthenticationCancelled:
         splash.hide()
         # This is not a failure, but track from where it happened anyway.
@@ -579,8 +592,3 @@ def __main_internal():
             "Unexpected Toolkit error, please contact support.\n\n%s" % ex
         )
         return -1
-
-
-def main():
-    """Main"""
-    os._exit(__main_internal())
