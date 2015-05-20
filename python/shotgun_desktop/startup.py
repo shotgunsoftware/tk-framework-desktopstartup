@@ -87,22 +87,11 @@ def _try_upgrade_startup(sgtk, app_bootstrap):
     :returns: True if an update was downloaded and the descriptor updated, False otherwise.
     """
     logger.info("Upgrading startup code.")
-    if sys.platform == "darwin":
-        desktop_root = os.path.expanduser("~/Library/Caches/Shotgun/")
-    elif sys.platform == "win32":
-        desktop_root = os.path.join(os.environ["APPDATA"], "Shotgun")
-    elif sys.platform.startswith("linux"):
-        desktop_root = os.path.expanduser("~/.shotgun")
-    else:
-        raise NotImplementedError("Unsupported platform: %s" % sys.platform)
-
-    desktop_root = os.path.join(desktop_root, "desktop")
-
-    frameworks_cache = os.path.join(desktop_root, "install", "frameworks")
 
     current_desc = sgtk.deploy.descriptor.get_from_location(
         sgtk.deploy.descriptor.AppDescriptor.FRAMEWORK,
-        {"frameworks": frameworks_cache, "root": desktop_root},
+        {"frameworks": app_bootstrap.get_shotgun_desktop_frameworks_cache_location(),
+         "root": app_bootstrap.get_shotgun_desktop_cache_location()},
         app_bootstrap.get_descriptor_dict()
     )
 
@@ -520,7 +509,7 @@ def __launch_app(app, splash, connection, app_bootstrap):
 
     # and run the engine
     logger.debug("Running tk-desktop")
-    return engine.run(splash, version=app_bootstrap.get_version())
+    return engine.run(splash, version=app_bootstrap.get_version(), startup_version=app_bootstrap.get_descriptor_dict().get("version"))
 
 
 def __handle_exception(splash, shotgun_authenticator, error_message):
