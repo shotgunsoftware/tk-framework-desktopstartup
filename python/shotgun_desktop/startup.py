@@ -42,6 +42,7 @@ class ResetToDefaultsException(Exception):
     """
     pass
 
+
 class UpgradeCoreError(Exception):
     """
     This exception notifies the catcher that the site's core needs to be upgraded in order to 
@@ -142,9 +143,16 @@ def __supports_authentication_module(sgtk):
     return hasattr(sgtk, "set_authenticated_user")
 
 
-def __supports_path_dictionary_on_descriptors(sgtk):
-    # Features were both introduced at the same time, so testing for
-    # one is the same as testing for the other.
+def __supports_get_from_location_and_paths(sgtk):
+    """
+    Tests if the descriptor factory in core supports non-pipeline configuration based
+    setups.
+
+    :param sgtk: The Toolkit API handle.
+
+    :returns: True if the sgtk.deploy.descriptor.get_from_location_and_paths is available,
+        False otherwise.
+    """
     return hasattr(sgtk.deploy.descriptor, "get_from_location_and_paths")
 
 
@@ -471,7 +479,7 @@ def __launch_app(app, splash, connection, app_bootstrap):
         # It is possible to launch the app with a version of core
         # that doesn't support the functionality needed to update
         # the startup code.
-        if __supports_path_dictionary_on_descriptors(sgtk):
+        if __supports_get_from_location_and_paths(sgtk):
             # Downloads an upgrade, if available.
             startup_updated = _try_upgrade_startup(
                 sgtk,
