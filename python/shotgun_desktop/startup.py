@@ -95,10 +95,10 @@ def _try_upgrade_startup(sgtk, app_bootstrap):
     """
     logger.info("Upgrading startup code.")
 
-    current_desc = sgtk.deploy.descriptor.get_from_location(
+    current_desc = sgtk.deploy.descriptor.get_from_location_and_paths(
         sgtk.deploy.descriptor.AppDescriptor.FRAMEWORK,
-        {"frameworks": app_bootstrap.get_shotgun_desktop_frameworks_cache_location(),
-         "root": app_bootstrap.get_shotgun_desktop_cache_location()},
+        app_bootstrap.get_shotgun_desktop_cache_location(),
+        app_bootstrap.get_shotgun_desktop_bundles_cache_location(),
         app_bootstrap.get_descriptor_dict()
     )
 
@@ -140,6 +140,12 @@ def __supports_authentication_module(sgtk):
     """
     # if the authentication module is not supported, this method won't be present on the core.
     return hasattr(sgtk, "set_authenticated_user")
+
+
+def __supports_path_dictionary_on_descriptors(sgtk):
+    # Features were both introduced at the same time, so testing for
+    # one is the same as testing for the other.
+    return hasattr(sgtk.deploy.descriptor, "get_from_location_and_paths")
 
 
 def __import_sgtk_from_path(path, try_escalate_user=False):
@@ -462,11 +468,17 @@ def __launch_app(app, splash, connection, app_bootstrap):
         logger.info("Getting updates...")
         app.processEvents()
 
-        # Downloads an upgrade, if available.
-        startup_updated = _try_upgrade_startup(
-            sgtk,
-            app_bootstrap
-        )
+        # It is possible to launch the app with a version of core
+        # that doesn't support the functionality needed to update
+        # the startup code.
+        if __supports_path_dictionary_on_descriptors(sgtk):
+            # Downloads an upgrade, if available.
+            startup_updated = _try_upgrade_startup(
+                sgtk,
+                app_bootstrap
+            )
+        else:
+            startup_updated = False
 
         core_update = tk.get_command("core")
         core_update.set_logger(logger)
