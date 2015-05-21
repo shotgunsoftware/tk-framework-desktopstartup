@@ -17,7 +17,7 @@ import logging
 import tempfile
 import traceback
 
-from zipfilehelper import unzip_file
+from .zipfilehelper import unzip_file
 from distutils.version import LooseVersion
 
 from PySide import QtCore

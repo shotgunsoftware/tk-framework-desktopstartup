@@ -15,13 +15,14 @@ import sys
 import time
 import subprocess
 
+# Add shotgun_api3 bundled with tk-core to the path.
+sys.path.insert(0, os.path.join(os.path.split(__file__)[0], "..", "tk-core", "python", "tank_vendor"))
+
 # initialize logging
 import logging
 import shotgun_desktop.splash
-import shotgun_desktop.logging
-shotgun_desktop.logging.initialize_logging()
-logger = logging.getLogger("tk-desktop.bootstrap")
-logger.info("------------------ Desktop Engine Bootstrap ------------------")
+logger = logging.getLogger("tk-desktop.startup")
+logger.info("------------------ Desktop Engine Startup ------------------")
 
 # now proceed with non builtin imports
 from PySide import QtCore, QtGui
@@ -34,6 +35,15 @@ from shotgun_desktop import authenticator
 
 from shotgun_desktop.ui import resources_rc
 import shutil
+from distutils.version import LooseVersion
+
+
+class RequestRestartException(Exception):
+    """
+    Short circuits all the application code for a quick exit. The user
+    wants to reinitialize the app.
+    """
+    pass
 
 
 class UpgradeCoreError(Exception):
@@ -78,6 +88,86 @@ class UpdatePermissionsError(Exception):
         )
 
 
+def _try_upgrade_startup(splash, sgtk, app_bootstrap):
+    """
+    Tries to upgrade the startup logic. If an update is available, it will be donwloaded to the
+    local cache directory and the startup descriptor will be updated.
+
+    :param app_bootstrap: Application bootstrap instance, used to update the startup descriptor.
+
+    :returns: True if an update was downloaded and the descriptor updated, False otherwise.
+    """
+    logger.info("Upgrading startup code.")
+
+    current_desc = sgtk.deploy.descriptor.get_from_location_and_paths(
+        sgtk.deploy.descriptor.AppDescriptor.FRAMEWORK,
+        app_bootstrap.get_shotgun_desktop_cache_location(),
+        app_bootstrap.get_shotgun_desktop_bundles_cache_location(),
+        app_bootstrap.get_descriptor_dict()
+    )
+
+    latest_descriptor = current_desc.find_latest_version()
+
+    # check deprecation
+    (is_dep, dep_msg) = latest_descriptor.get_deprecation_status()
+
+    if is_dep:
+        logger.warning(
+            "This version of tk-framework-desktopstartup has been flagged as deprecated with the "
+            "following  status: %s" % dep_msg
+        )
+        return False
+
+    # out of date check
+    out_of_date = (latest_descriptor.get_version() != current_desc.get_version())
+
+    if not out_of_date:
+        logger.debug("Desktop startup does not need upgrading. Currenty running version %s" % current_desc.get_version())
+        return False
+
+    if latest_descriptor.get_version_constraints().get("min_desktop"):
+        current_desktop_version = LooseVersion(app_bootstrap.get_version())
+        minimal_desktop_version = LooseVersion(latest_descriptor.get_version_constraints()["min_desktop"])
+        if current_desktop_version < minimal_desktop_version:
+            logger.warning(
+                "Cannot upgrade to the latest Desktop Startup %s. This version requires %s of the "
+                "Shotgun Desktop, but you are currently running %s. Please consider upgrading your "
+                "Shotgun Desktop." % (
+                    latest_descriptor.get_version(), minimal_desktop_version, current_desktop_version
+                )
+            )
+            return False
+
+    try:
+        # Download the update
+        latest_descriptor.download_local()
+
+        # create required shotgun fields
+        latest_descriptor.ensure_shotgun_fields_exist()
+
+        # run post install hook
+        latest_descriptor.run_post_install()
+
+        # update the descriptor so the next desktop startup we use the newer version.
+        app_bootstrap.update_descriptor(latest_descriptor)
+        return True
+    except Exception, e:
+        splash.hide()
+        # If there is an error updating, don't prevent the user from running the app, but let them
+        # know something wrong is going on.
+        logger.exception("Unexpected error when updating startup code.")
+        QtGui.QMessageBox.critical(
+            None,
+            "Desktop update failed",
+            "There is a new update of the Shotgun Desktop, but it couldn't be installed. Shotgun "
+            "Desktop will be launched with the currently installed version of the code.\n\n"
+            "If this problem persists, please contact Shotgun support at "
+            "support@shotgunsoftware.com.\n\n"
+            "Error: %s" % str(e))
+        splash.show()
+        return False
+
+
 def __supports_authentication_module(sgtk):
     """
     Tests if the given Toolkit API supports the shotgun_authentication module.
@@ -88,6 +178,19 @@ def __supports_authentication_module(sgtk):
     """
     # if the authentication module is not supported, this method won't be present on the core.
     return hasattr(sgtk, "set_authenticated_user")
+
+
+def __supports_get_from_location_and_paths(sgtk):
+    """
+    Tests if the descriptor factory in core supports non-pipeline configuration based
+    setups.
+
+    :param sgtk: The Toolkit API handle.
+
+    :returns: True if the sgtk.deploy.descriptor.get_from_location_and_paths is available,
+        False otherwise.
+    """
+    return hasattr(sgtk.deploy.descriptor, "get_from_location_and_paths")
 
 
 def __import_sgtk_from_path(path, try_escalate_user=False):
@@ -209,6 +312,7 @@ def _get_default_site_config_root(splash, connection):
             # Toolkit is not turned on show the dialog that explains what to do
             splash.hide()
             dialog = TurnOnToolkit(connection)
+            dialog.show()
             dialog.raise_()
             dialog.activateWindow()
             results = dialog.exec_()
@@ -236,7 +340,7 @@ def __init_app():
     return QtGui.QApplication(sys.argv), shotgun_desktop.splash.Splash()
 
 
-def __do_login(shotgun_authentication):
+def __do_login(splash, shotgun_authentication, app_bootstrap):
     """
     Asks for the credentials of the user or automatically logs the user in if the credentials are
     cached on disk.
@@ -249,33 +353,44 @@ def __do_login(shotgun_authentication):
     )
     # If the application was launched holding the alt key, log the user out.
     if (QtGui.QApplication.queryKeyboardModifiers() & QtCore.Qt.AltModifier) == QtCore.Qt.AltModifier:
-        logger.info("Alt was pressed, clearing default user.")
+        logger.info("Alt was pressed, clearing default user and startup descriptor")
         shotgun_authenticator.clear_default_user()
+        app_bootstrap.clear_descriptor()
+        __restart_app_with_countdown(splash, "Desktop has been reinitialized.")
 
     logger.debug("Retrieving credentials")
-    connection = shotgun_authenticator.get_user().create_sg_connection()
+    try:
+        user = shotgun_authenticator.get_user()
+    except shotgun_authentication.AuthenticationCancelled:
+        return None, None
+    else:
+        connection = user.create_sg_connection()
     return shotgun_authenticator, connection
 
 
-def __restart_app(splash, reason):
+def __restart_app_with_countdown(splash, reason):
     """
     Restarts the app after displaying a countdown.
 
     :param splash: Splash dialog, used to display the countdown.
     :param reason: Reason to display in the dialog for the restart.
+
+    :throws RequestRestartException: This method never returns and throws
     """
     # Provide a countdown so the user knows that the desktop app is being restarted
     # on purpose because of a core update. Otherwise, the user would get a flickering
     # splash screen that from the user point of view looks like the app is redoing work
     # it already did by mistake. This makes the behavior explicit.
+    splash.show()
+    splash.raise_()
+    splash.activateWindow()
     for i in range(3, 0, -1):
-        splash.set_message("%s Restarting desktop in %d seconds..." % (reason, i))
+        splash.set_message("%s Restarting in %d seconds..." % (reason, i))
         time.sleep(1)
-    subprocess.Popen(sys.argv)
-    return 0
+    raise RequestRestartException()
 
 
-def __launch_app(app, splash, connection):
+def __launch_app(app, splash, connection, app_bootstrap):
     """
     Shows the splash screen, optionally downloads and configures Toolkit, imports it, optionally
     updates it and then launches the desktop engine.
@@ -401,12 +516,24 @@ def __launch_app(app, splash, connection):
         localize.set_logger(logger)
         localize.execute({})
 
-
     tk = sgtk.sgtk_from_path(default_site_config)
     if tk.pipeline_configuration.is_auto_path():
         splash.set_message("Getting updates...")
         logger.info("Getting updates...")
         app.processEvents()
+
+        # It is possible to launch the app with a version of core
+        # that doesn't support the functionality needed to update
+        # the startup code.
+        if __supports_get_from_location_and_paths(sgtk):
+            # Downloads an upgrade, if available.
+            startup_updated = _try_upgrade_startup(
+                splash,
+                sgtk,
+                app_bootstrap
+            )
+        else:
+            startup_updated = False
 
         core_update = tk.get_command("core")
         core_update.set_logger(logger)
@@ -414,13 +541,22 @@ def __launch_app(app, splash, connection):
 
         # If core was updated.
         if result["status"] == "updated":
-            return __restart_app(splash, "Core updated.")
-        elif result["status"] == "update_blocked":
-            # Core update should not be blocked. Warn, because it is not a fatal error.
-            logger.warning("Core update was blocked. Reason: %s" % result["reason"])
-        elif result["status"] != "up_to_date":
-            # Core update should not fail. Warn, because it is not a fatal error.
-            logger.warning("Unknown Core upgrade result: %s" % str(result))
+            core_updated = True
+        else:
+            core_updated = False
+            if result["status"] == "update_blocked":
+                # Core update should not be blocked. Warn, because it is not a fatal error.
+                logger.warning("Core update was blocked. Reason: %s" % result["reason"])
+            elif result["status"] != "up_to_date":
+                # Core update should not fail. Warn, because it is not a fatal error.
+                logger.warning("Unknown Core upgrade result: %s" % str(result))
+
+        if core_updated and startup_updated:
+            return __restart_app_with_countdown(splash, "Desktop and Core updated.")
+        elif core_updated:
+            return __restart_app_with_countdown(splash, "Core updated.")
+        elif startup_updated:
+            return __restart_app_with_countdown(splash, "Desktop updated.")
 
         updates = tk.get_command("updates")
         updates.set_logger(logger)
@@ -436,7 +572,7 @@ def __launch_app(app, splash, connection):
     engine = sgtk.platform.start_engine("tk-desktop", tk, ctx)
 
     # engine will take over logging
-    shotgun_desktop.logging.tear_down_logging()
+    app_bootstrap.tear_down_logging()
 
     # reset PYTHONPATH and PYTHONHOME if they were overridden by the application
     if "SGTK_DESKTOP_ORIGINAL_PYTHONPATH" in os.environ:
@@ -449,7 +585,8 @@ def __launch_app(app, splash, connection):
 
     # and run the engine
     logger.debug("Running tk-desktop")
-    return engine.run(splash, version=shotgun_desktop.version.DESTKOP_APPLICATION_VERSION)
+    startup_version = app_bootstrap.get_descriptor_dict().get("version") or "Undefined"
+    return engine.run(splash, version=app_bootstrap.get_version(), startup_version=startup_version)
 
 
 def __handle_exception(splash, shotgun_authenticator, error_message):
@@ -471,67 +608,83 @@ def __handle_exception(splash, shotgun_authenticator, error_message):
         shotgun_authenticator.clear_default_user()
 
 
-def __main_internal():
+def __handle_unexpected_exception(splash, shotgun_authenticator):
     """
-    Main implementation.
+    Tears down the application and logs you out.
+
+    :param splash: Splash dialog to hide.
+    :param shotgun_authenticator: Used to clear the default user so we logout
+        automatically on Desktop failure.
+
+    :raises Exception: Any exception being handled is raised as is so its callstack
+        is left as is.
+    """
+    if splash:
+        splash.hide()
+    # If we are logged in, we should log out so the user is not stuck in a loop of always
+    # automatically logging in each time the app is launched again
+    if shotgun_authenticator:
+        shotgun_authenticator.clear_default_user()
+    # Let the bootstrap catch this error and handle it.
+    raise
+
+
+def main(**kwargs):
+    """
+    Main
+
+    :params app_bootstrap: AppBoostrap instance, used to get information from
+        the installed application as well as updating the startup description
+        location.
 
     :returns: Error code for the process.
     """
-    # Init the gui.
-    try:
-        # Create some ui related objects
-        app, splash = __init_app()
-    except Exception, ex:
-        # Gui initialization failed, can't really do more than log the error.
-        logger.exception("Fatal error, user will be logged out.")
-        return -1
+    # Create some ui related objects
+    app, splash = __init_app()
 
     # We might crash before even initializing the authenticator, so instantiate
     # it right away.
     shotgun_authenticator = None
+    # We have to import this in a separate try catch block because we'll be using
+    # shotgun_authentication in the following catch statements.
+
     try:
         # get the shotgun authentication module.
         shotgun_authentication = __import_shotgun_authentication_from_path()
-    except Exception, ex:
-        # We have a gui, so we can call our standard __handle_exception
-        # method.
-        __handle_exception(
-            splash, shotgun_authenticator, 
-            "Unexpected Toolkit error, please contact support.\n\n%s" % ex
-        )
-        return -1
+    except:
+        __handle_unexpected_exception(splash, shotgun_authenticator)
+
+    app_bootstrap = kwargs["app_bootstrap"]
 
     # We have gui and the authentication module, now do the rest.
     try:
         # Authenticate
-        shotgun_authenticator, connection = __do_login(shotgun_authentication)
+        shotgun_authenticator, connection = __do_login(splash, shotgun_authentication, app_bootstrap)
         # If we didn't authenticate a user
         if not connection:
             # We're done for the day.
-            logger.info("Login canceled.  Quitting.")
+            logger.info("Login canceled. Quitting.")
             return 0
         else:
             # Now that we are logged, we can proceed with launching the
             # application.
-            return __launch_app(app, splash, connection)
+            return __launch_app(
+                app,
+                splash,
+                connection,
+                app_bootstrap
+            )
+    except RequestRestartException:
+        subprocess.Popen(sys.argv)
+        return 0
     except shotgun_authentication.AuthenticationCancelled:
+        # The user cancelled an authentication request while the app was running, log him out.
         splash.hide()
-        # This is not a failure, but track from where it happened anyway.
-        logger.exception("Authentication cancelled.")
+        shotgun_authenticator.clear_default_user()
         return 0
     except (UpgradeCoreError, UpdatePermissionsError, ToolkitDisabledError), ex:
         # Those are expected errors and the error message will be printed as is.
         __handle_exception(splash, shotgun_authenticator, str(ex))
         return -1
-    except Exception, ex:
-        # This is an unexpected error and will be presented as such.
-        __handle_exception(
-            splash, shotgun_authenticator, 
-            "Unexpected Toolkit error, please contact support.\n\n%s" % ex
-        )
-        return -1
-
-
-def main():
-    """Main"""
-    os._exit(__main_internal())
+    except:
+        __handle_unexpected_exception(splash, shotgun_authenticator)
