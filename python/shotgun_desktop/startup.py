@@ -102,7 +102,9 @@ def _try_upgrade_startup(splash, sgtk, app_bootstrap):
     current_desc = sgtk.deploy.descriptor.get_from_location_and_paths(
         sgtk.deploy.descriptor.AppDescriptor.FRAMEWORK,
         app_bootstrap.get_shotgun_desktop_cache_location(),
-        app_bootstrap.get_shotgun_desktop_bundles_cache_location(),
+        os.path.join(
+            app_bootstrap.get_shotgun_desktop_cache_location(), "install"
+        ),
         app_bootstrap.get_descriptor_dict()
     )
 
