@@ -193,7 +193,7 @@ def __supports_get_from_location_and_paths(sgtk):
     return hasattr(sgtk.deploy.descriptor, "get_from_location_and_paths")
 
 
-def __import_sgtk_from_path(path, try_escalate_user=False):
+def __import_sgtk_from_path(path, app_bootstrap, try_escalate_user=False):
     """
     Imports Toolkit from the given path. If that version of Toolkit supports the shotgun_authentication
     module, the current user will be set. The Toolkit will not support the shotgun_authentication
@@ -227,11 +227,14 @@ def __import_sgtk_from_path(path, try_escalate_user=False):
     # If the version of Toolkit supports the new authentication mechanism
     if __supports_authentication_module(sgtk):
         # import authentication
-        from tank_vendor.shotgun_authentication import ShotgunAuthenticator
+        from tank_vendor import shotgun_authentication
+        # Add the module to the log file.
+        app_bootstrap.add_logger_to_logfile(shotgun_authentication.get_logger())
+
         dm = None
         if try_escalate_user:
             dm = sgtk.util.CoreDefaultsManager()
-        sg_auth = ShotgunAuthenticator(dm)
+        sg_auth = shotgun_authentication.ShotgunAuthenticator(dm)
         logger.info("Authentication module imported and instantiated...")
 
         # get the current user
@@ -261,7 +264,7 @@ def __uuid_import(module, path):
     return module
 
 
-def __import_shotgun_authentication_from_path():
+def __import_shotgun_authentication_from_path(app_bootstrap):
     """
     Imports bundled Shotgun authentication module with a decorated name so
     another instance can be loaded later on. If SGTK_CORE_DEBUG_LOCATION
@@ -294,7 +297,9 @@ def __import_shotgun_authentication_from_path():
     sys.path_importer_cache.clear()
 
     # finally try the import
-    return __uuid_import("shotgun_authentication", os.path.join(python_path, "tank_vendor"))
+    sg_auth = __uuid_import("shotgun_authentication", os.path.join(python_path, "tank_vendor"))
+    app_bootstrap.add_logger_to_logfile(sg_auth.get_logger())
+    return sg_auth
 
 
 def _get_default_site_config_root(splash, connection):
@@ -417,7 +422,7 @@ def __launch_app(app, splash, connection, app_bootstrap):
         if os.path.exists(default_site_config):
             if "--reset-site" not in sys.argv:
                 logger.info("Trying site config from '%s'" % default_site_config)
-                sgtk = __import_sgtk_from_path(default_site_config)
+                sgtk = __import_sgtk_from_path(default_site_config, app_bootstrap)
                 toolkit_imported = True
             else:
                 logger.info("Resetting site at '%s'" % default_site_config)
@@ -459,7 +464,7 @@ def __launch_app(app, splash, connection, app_bootstrap):
         #   configuing the site
         #
         needs_script_user = is_script_user_required(connection)
-        sgtk = __import_sgtk_from_path(core_path, try_escalate_user=needs_script_user)
+        sgtk = __import_sgtk_from_path(core_path, app_bootstrap, try_escalate_user=needs_script_user)
 
         if sgtk is None:
             # Generate a generic error message, which will suggest to contact support.
@@ -507,7 +512,7 @@ def __launch_app(app, splash, connection, app_bootstrap):
         setup_project.execute(params)
 
         # and now try to load up sgtk through the config again
-        sgtk = __import_sgtk_from_path(default_site_config)
+        sgtk = __import_sgtk_from_path(default_site_config, app_bootstrap)
         tk = sgtk.sgtk_from_path(default_site_config)
 
         # now localize the core to the config
@@ -633,12 +638,13 @@ def main(**kwargs):
     """
     Main
 
-    :params app_bootstrap: AppBoostrap instance, used to get information from
+    :params app_bootstrap: AppBootstrap instance, used to get information from
         the installed application as well as updating the startup description
         location.
 
     :returns: Error code for the process.
     """
+    logger.debug("Running main from %s" % __file__)
     # Create some ui related objects
     app, splash = __init_app()
 
@@ -648,13 +654,14 @@ def main(**kwargs):
     # We have to import this in a separate try catch block because we'll be using
     # shotgun_authentication in the following catch statements.
 
+    app_bootstrap = kwargs["app_bootstrap"]
+
     try:
         # get the shotgun authentication module.
-        shotgun_authentication = __import_shotgun_authentication_from_path()
+        shotgun_authentication = __import_shotgun_authentication_from_path(app_bootstrap)
     except:
         __handle_unexpected_exception(splash, shotgun_authenticator)
 
-    app_bootstrap = kwargs["app_bootstrap"]
 
     # We have gui and the authentication module, now do the rest.
     try:
