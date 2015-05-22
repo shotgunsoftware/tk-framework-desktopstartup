@@ -11,6 +11,12 @@
 """
 This module will provide basic i/o to read and write session user's credentials
 in the site's cache location.
+
+--------------------------------------------------------------------------------
+NOTE! This module is part of the authentication library internals and should
+not be called directly. Interfaces and implementation of this module may change
+at any point.
+--------------------------------------------------------------------------------
 """
 
 from __future__ import with_statement
@@ -30,6 +36,7 @@ _CURRENT_USER = "current_user"
 _USERS = "users"
 _LOGIN = "login"
 _SESSION_TOKEN = "session_token"
+
 
 def _get_cache_location():
     """
@@ -123,13 +130,22 @@ def _try_load_yaml_file(file_path):
         logger.debug("Yaml file missing: %s" % file_path)
         return {}
     try:
+        config_file = None
         # Open the file and read it.
-        with open(file_path, "r") as config_file:
-            return yaml.load(config_file)
+        config_file = open(file_path, "r")
+        result = yaml.load(config_file)
+        # Make sure we got a dictionary back.
+        if isinstance(result, dict):
+            return result
+        else:
+            logger.warning("File '%s' didn't have a dictionary, defaulting to an empty one.")
+            return {}
     except yaml.YAMLError:
         # Return to the beginning
         config_file.seek(0)
         logger.exception("File '%s' is corrupted!" % file_path)
+
+        logger.debug("Here's its content:")
         # And log the complete file for debugging.
         for line in config_file:
             # Log line without \n
@@ -139,6 +155,10 @@ def _try_load_yaml_file(file_path):
     except:
         logger.exception("Unexpected error whie opening %s" % file_path)
         return {}
+    finally:
+        # If the exception occured when we opened the file, there is no file to close.
+        if config_file:
+            config_file.close()
 
 
 def _try_load_site_authentication_file(file_path):
@@ -331,7 +351,7 @@ def get_current_host():
     logger.debug("Looking for the current host at '%s'" % info_path)
     if os.path.exists(info_path):
         document = _try_load_global_authentication_file(info_path)
-        host =  document[_CURRENT_HOST]
+        host = document[_CURRENT_HOST]
         logger.debug("Current host is '%s'" % host)
         return host
     else:
