@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.join(os.path.split(__file__)[0], "..", "tk-core", "py
 # initialize logging
 import logging
 import shotgun_desktop.splash
+
 logger = logging.getLogger("tk-desktop.startup")
 logger.info("------------------ Desktop Engine Startup ------------------")
 
@@ -32,10 +33,11 @@ import shotgun_desktop.version
 from shotgun_desktop.turn_on_toolkit import TurnOnToolkit
 from shotgun_desktop.initialization import initialize, is_script_user_required
 from shotgun_desktop import authenticator
+from shotgun_desktop.upgrade_startup import upgrade_startup
+from shotgun_desktop.location import get_location
 
 from shotgun_desktop.ui import resources_rc
 import shutil
-from distutils.version import LooseVersion
 
 
 class RequestRestartException(Exception):
@@ -88,88 +90,6 @@ class UpdatePermissionsError(Exception):
         )
 
 
-def _try_upgrade_startup(splash, sgtk, app_bootstrap):
-    """
-    Tries to upgrade the startup logic. If an update is available, it will be donwloaded to the
-    local cache directory and the startup descriptor will be updated.
-
-    :param app_bootstrap: Application bootstrap instance, used to update the startup descriptor.
-
-    :returns: True if an update was downloaded and the descriptor updated, False otherwise.
-    """
-    logger.info("Upgrading startup code.")
-
-    current_desc = sgtk.deploy.descriptor.get_from_location_and_paths(
-        sgtk.deploy.descriptor.AppDescriptor.FRAMEWORK,
-        app_bootstrap.get_shotgun_desktop_cache_location(),
-        os.path.join(
-            app_bootstrap.get_shotgun_desktop_cache_location(), "install"
-        ),
-        app_bootstrap.get_descriptor_dict()
-    )
-
-    latest_descriptor = current_desc.find_latest_version()
-
-    # check deprecation
-    (is_dep, dep_msg) = latest_descriptor.get_deprecation_status()
-
-    if is_dep:
-        logger.warning(
-            "This version of tk-framework-desktopstartup has been flagged as deprecated with the "
-            "following  status: %s" % dep_msg
-        )
-        return False
-
-    # out of date check
-    out_of_date = (latest_descriptor.get_version() != current_desc.get_version())
-
-    if not out_of_date:
-        logger.debug("Desktop startup does not need upgrading. Currenty running version %s" % current_desc.get_version())
-        return False
-
-    if latest_descriptor.get_version_constraints().get("min_desktop"):
-        current_desktop_version = LooseVersion(app_bootstrap.get_version())
-        minimal_desktop_version = LooseVersion(latest_descriptor.get_version_constraints()["min_desktop"])
-        if current_desktop_version < minimal_desktop_version:
-            logger.warning(
-                "Cannot upgrade to the latest Desktop Startup %s. This version requires %s of the "
-                "Shotgun Desktop, but you are currently running %s. Please consider upgrading your "
-                "Shotgun Desktop." % (
-                    latest_descriptor.get_version(), minimal_desktop_version, current_desktop_version
-                )
-            )
-            return False
-
-    try:
-        # Download the update
-        latest_descriptor.download_local()
-
-        # create required shotgun fields
-        latest_descriptor.ensure_shotgun_fields_exist()
-
-        # run post install hook
-        latest_descriptor.run_post_install()
-
-        # update the descriptor so the next desktop startup we use the newer version.
-        app_bootstrap.update_descriptor(latest_descriptor)
-        return True
-    except Exception, e:
-        splash.hide()
-        # If there is an error updating, don't prevent the user from running the app, but let them
-        # know something wrong is going on.
-        logger.exception("Unexpected error when updating startup code.")
-        QtGui.QMessageBox.critical(
-            None,
-            "Desktop update failed",
-            "There is a new update of the Shotgun Desktop, but it couldn't be installed. Shotgun "
-            "Desktop will be launched with the currently installed version of the code.\n\n"
-            "If this problem persists, please contact Shotgun support at "
-            "support@shotgunsoftware.com.\n\n"
-            "Error: %s" % str(e))
-        splash.show()
-        return False
-
-
 def __supports_authentication_module(sgtk):
     """
     Tests if the given Toolkit API supports the shotgun_authentication module.
@@ -180,19 +100,6 @@ def __supports_authentication_module(sgtk):
     """
     # if the authentication module is not supported, this method won't be present on the core.
     return hasattr(sgtk, "set_authenticated_user")
-
-
-def __supports_get_from_location_and_paths(sgtk):
-    """
-    Tests if the descriptor factory in core supports non-pipeline configuration based
-    setups.
-
-    :param sgtk: The Toolkit API handle.
-
-    :returns: True if the sgtk.deploy.descriptor.get_from_location_and_paths is available,
-        False otherwise.
-    """
-    return hasattr(sgtk.deploy.descriptor, "get_from_location_and_paths")
 
 
 def __import_sgtk_from_path(path, app_bootstrap, try_escalate_user=False):
@@ -362,7 +269,7 @@ def __do_login(splash, shotgun_authentication, app_bootstrap):
     if (QtGui.QApplication.queryKeyboardModifiers() & QtCore.Qt.AltModifier) == QtCore.Qt.AltModifier:
         logger.info("Alt was pressed, clearing default user and startup descriptor")
         shotgun_authenticator.clear_default_user()
-        app_bootstrap.clear_descriptor()
+        app_bootstrap.clear_startup_location()
         __restart_app_with_countdown(splash, "Desktop has been reinitialized.")
 
     logger.debug("Retrieving credentials")
@@ -529,18 +436,12 @@ def __launch_app(app, splash, connection, app_bootstrap):
         logger.info("Getting updates...")
         app.processEvents()
 
-        # It is possible to launch the app with a version of core
-        # that doesn't support the functionality needed to update
-        # the startup code.
-        if __supports_get_from_location_and_paths(sgtk):
-            # Downloads an upgrade, if available.
-            startup_updated = _try_upgrade_startup(
-                splash,
-                sgtk,
-                app_bootstrap
-            )
-        else:
-            startup_updated = False
+        # Downloads an upgrade, if available.
+        startup_updated = upgrade_startup(
+            splash,
+            sgtk,
+            app_bootstrap
+        )
 
         core_update = tk.get_command("core")
         core_update.set_logger(logger)
@@ -592,7 +493,7 @@ def __launch_app(app, splash, connection, app_bootstrap):
 
     # and run the engine
     logger.debug("Running tk-desktop")
-    startup_version = app_bootstrap.get_descriptor_dict().get("version") or "Undefined"
+    startup_version = get_location(sgtk, app_bootstrap).get("version") or "Undefined"
     return engine.run(splash, version=app_bootstrap.get_version(), startup_version=startup_version)
 
 
@@ -663,7 +564,6 @@ def main(**kwargs):
         shotgun_authentication = __import_shotgun_authentication_from_path(app_bootstrap)
     except:
         __handle_unexpected_exception(splash, shotgun_authenticator)
-
 
     # We have gui and the authentication module, now do the rest.
     try:
