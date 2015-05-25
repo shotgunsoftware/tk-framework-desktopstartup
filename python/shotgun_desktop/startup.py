@@ -206,7 +206,7 @@ def __import_shotgun_authentication_from_path(app_bootstrap):
     return sg_auth
 
 
-def _get_default_site_config_root(splash, connection):
+def _assert_toolkit_enabled(splash, connection):
     """
     Returns the path to the pipeline configuration for a given site.
 
@@ -215,7 +215,7 @@ def _get_default_site_config_root(splash, connection):
     # get the pipeline configuration for the site we are logged into
     while True:
         try:
-            (default_site_config, _) = shotgun_desktop.paths.get_default_site_config_root(connection)
+            shotgun_desktop.paths.assert_toolkit_enabled(connection)
             break
         except shotgun_desktop.paths.NoPipelineConfigEntityError:
             # Toolkit is not turned on show the dialog that explains what to do
@@ -235,7 +235,6 @@ def _get_default_site_config_root(splash, connection):
             continue
 
     splash.show()
-    return default_site_config
 
 
 def __init_app():
@@ -299,6 +298,10 @@ def __restart_app_with_countdown(splash, reason):
     raise RequestRestartException()
 
 
+def _get_default_site_config_root(connection):
+    return shotgun_desktop.paths.get_default_site_pipeline_configuration(connection)
+
+
 def __launch_app(app, splash, connection, app_bootstrap):
     """
     Shows the splash screen, optionally downloads and configures Toolkit, imports it, optionally
@@ -316,6 +319,8 @@ def __launch_app(app, splash, connection, app_bootstrap):
     splash.activateWindow()
     splash.set_message("Looking up site configuration.")
     app.processEvents()
+
+    _assert_toolkit_enabled(splash, connection)
 
     logger.debug("Getting the default site config")
     default_site_config = _get_default_site_config_root(splash, connection)
@@ -394,7 +399,7 @@ def __launch_app(app, splash, connection, app_bootstrap):
             "auto_path": True,
             "config_uri": config_uri,
             "project_folder_name": "site",
-            "project_id": template_project["id"],
+            "project_id": template_project["id"] if template_project else None,
             path_param: default_site_config,
         }
         setup_project = sgtk.get_command("setup_project")

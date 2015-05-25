@@ -44,6 +44,19 @@ def get_python_path():
     return python
 
 
+def assert_toolkit_enabled(connection):
+    """
+    Makes sure that Toolkit is enabled on the site. If it isn't the
+    NoPipelineConfigEntityError is raised.
+
+    :raises NoPipelineConfigEntityError: Raised if Toolkit is not enabled.
+    """
+    # Toolkit may not have been turned on, check that the PipelineConfiguration entity is available
+    pc_schema = connection.schema_entity_read().get("PipelineConfiguration")
+    if pc_schema is None:
+        raise NoPipelineConfigEntityError()
+
+
 def get_default_site_config_root(connection):
     """ return the path to the default configuration for the site """
     # find what path field from the entity we need
