@@ -31,7 +31,7 @@ from PySide import QtCore, QtGui
 import shotgun_desktop.paths
 import shotgun_desktop.version
 from shotgun_desktop.turn_on_toolkit import TurnOnToolkit
-from shotgun_desktop.initialization import initialize
+from shotgun_desktop.initialization import initialize, is_pipeline_configuration_project_entity
 from shotgun_desktop import authenticator
 from shotgun_desktop.upgrade_startup import upgrade_startup
 from shotgun_desktop.location import get_location
@@ -299,7 +299,7 @@ def __restart_app_with_countdown(splash, reason):
 
 
 def _get_default_site_config_root(connection):
-    return shotgun_desktop.paths.get_default_site_pipeline_configuration(connection)
+    return shotgun_desktop.paths.get_default_site_config_root(connection)
 
 
 def __launch_app(app, splash, connection, app_bootstrap):
@@ -323,7 +323,7 @@ def __launch_app(app, splash, connection, app_bootstrap):
     _assert_toolkit_enabled(splash, connection)
 
     logger.debug("Getting the default site config")
-    default_site_config = _get_default_site_config_root(splash, connection)
+    default_site_config, pc = _get_default_site_config_root(connection)
 
     # try and import toolkit
     toolkit_imported = False
@@ -369,16 +369,25 @@ def __launch_app(app, splash, connection, app_bootstrap):
 
         # Install the default site config
         sg = sgtk.util.shotgun.create_sg_connection()
-        template_project = sg.find_one(
-            "Project",
-            [["name", "is", "Template Project"], ["layout_project", "is", None]])
 
-        if template_project is None:
-            # Generate a generic error message, which will suggest to contact support.
-            raise Exception("Error finding the Template project on your site.")
-
-        # Get the pipeline configuration from Shotgun
-        (default_site_config, _) = shotgun_desktop.paths.get_default_site_config_root(sg)
+        # If no pipeline configuration had been found.
+        if not pc:
+            # This site config has never been set by anyone, so we're the first.
+            # If pipeline configurations are stil project entities, we'll have to use the
+            # TemplateProject as the project which will host the pipeline configuration.
+            if is_pipeline_configuration_project_entity(connection):
+                template_project = sg.find_one(
+                    "Project",
+                    [["name", "is", "Template Project"], ["layout_project", "is", None]])
+                # Can't find template project, so we're effectively done here, we need a project
+                # to create a pipeline configuration.
+                if template_project is None:
+                    # Generate a generic error message, which will suggest to contact support.
+                    raise Exception("Error finding the Template project on your site.")
+            else:
+                template_project = None
+        else:
+            template_project = None
 
         # Create the directory
         if not os.path.exists(default_site_config):

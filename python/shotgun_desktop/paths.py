@@ -72,18 +72,33 @@ def get_default_site_config_root(connection):
     # interesting fields to return
     fields = ["id", "code", "windows_path", "mac_path", "linux_path"]
 
-    # Toolkit may not have been turned on, check that the PipelineConfiguration entity is available
-    pc_schema = connection.schema_entity_read().get("PipelineConfiguration")
-    if pc_schema is None:
-        raise NoPipelineConfigEntityError()
-
+    # Find either the pipeline configuration set with the template project
+    # or the one without any project assigned. Note that is the both exist,
+    # it will return the one with the earliest project id. Sorting on project.Project.id
+    # will first list in ascending project id order pipeline configurations with a project set
+    # and then will list the remaining projects with an id. In case there is then
+    # multiple pipeline configurations for a given project, we'll always take the first one.
     pc = connection.find_one(
         "PipelineConfiguration",
-        [
-            ["project.Project.name", "is", "Template Project"],
-            ["project.Project.layout_project", "is", None],
-        ],
-        fields=fields)
+        [{
+            "filter_operator": "any",
+            "filters": [
+                ["project", "is", None],
+                {
+                    "filter_operator": "all",
+                    "filters": [
+                        ["project.Project.name", "is", "Template Project"],
+                        ["project.Project.layout_project", "is", None]
+                    ]
+                }
+            ]
+        }],
+        fields=fields,
+        order=[
+            {'field_name':'project.Project.id','direction':'asc'},
+            {'field_name':'id','direction':'asc'}
+        ]
+    )
 
     # see if we found a pipeline configuration
     if pc is not None and pc.get(plat_key, ""):
