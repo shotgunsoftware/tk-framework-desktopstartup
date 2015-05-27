@@ -37,23 +37,27 @@ DEST_REPO=$ROOT/repo
 # Zip file that will be generated from that repo
 ZIP=$ROOT/tk-core.zip
 # Destination relative to this script for the files
-DEST=python/tk-core
+DEST=`pwd`/python/tk-core
 
 # Recreate the folder structure
 mkdir $ROOT
 mkdir $DEST_REPO
+# Strip files from the destination
+rm -rf $DEST
 # Clone the repo
 git clone $SRC_REPO $DEST_REPO
 # Generate the zip
 git archive --format zip --output $ZIP --remote $DEST_REPO $1
-# Strip files from the destination
-rm -rf $DEST
 # Unzip the files except for the tests.
 unzip $ZIP -d $DEST -x tests/*
+# Move to the git repo to generate the sha and write it to the $DEST
+pushd $DEST_REPO
+git rev-parse HEAD > $DEST/commit_id
+popd
 # Add the version in the info.yml
 sed -i "" -e "s/version: \"HEAD\"/version: \"$1\"/" $DEST/info.yml
 # Put files in the staging area.
-git add $DEST
+git add -A $DEST
 # Cleanup!
 rm -rf $ROOT
 
