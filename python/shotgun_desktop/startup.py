@@ -31,7 +31,7 @@ from PySide import QtCore, QtGui
 import shotgun_desktop.paths
 import shotgun_desktop.version
 from shotgun_desktop.turn_on_toolkit import TurnOnToolkit
-from shotgun_desktop.initialization import initialize, is_script_user_required
+from shotgun_desktop.initialization import initialize
 from shotgun_desktop import authenticator
 from shotgun_desktop.upgrade_startup import upgrade_startup
 from shotgun_desktop.location import get_location
@@ -50,7 +50,7 @@ class RequestRestartException(Exception):
 
 class UpgradeCoreError(Exception):
     """
-    This exception notifies the catcher that the site's core needs to be upgraded in order to 
+    This exception notifies the catcher that the site's core needs to be upgraded in order to
     use this version of the Desktop installer.
     """
     def __init__(self, toolkit_path):
@@ -102,7 +102,7 @@ def __supports_authentication_module(sgtk):
     return hasattr(sgtk, "set_authenticated_user")
 
 
-def __import_sgtk_from_path(path, app_bootstrap, try_escalate_user=False):
+def __import_sgtk_from_path(path, app_bootstrap):
     """
     Imports Toolkit from the given path. If that version of Toolkit supports the shotgun_authentication
     module, the current user will be set. The Toolkit will not support the shotgun_authentication
@@ -111,9 +111,6 @@ def __import_sgtk_from_path(path, app_bootstrap, try_escalate_user=False):
     won't support the shotgun_authentication module.
 
     :param path: Path to import Toolkit from.
-    :param try_escalate_user: If True, the CoreDefaultManager will be used, which might pick a script
-        user if one is configured. This would allow operations like creating Pipeline Configurations
-        on pre-6.0.2 sites.
 
     :returns: The Toolkit API handle.
     """
@@ -140,9 +137,7 @@ def __import_sgtk_from_path(path, app_bootstrap, try_escalate_user=False):
         # Add the module to the log file.
         app_bootstrap.add_logger_to_logfile(shotgun_authentication.get_logger())
 
-        dm = None
-        if try_escalate_user:
-            dm = sgtk.util.CoreDefaultsManager()
+        dm = sgtk.util.CoreDefaultsManager()
         sg_auth = shotgun_authentication.ShotgunAuthenticator(dm)
         logger.info("Authentication module imported and instantiated...")
 
@@ -359,21 +354,7 @@ def __launch_app(app, splash, connection, app_bootstrap):
         # try again after the initialization is done
         logger.debug("Importing sgtk after initialization")
 
-        # The Desktop always runs with a HumanUser for the Toolkit authenticated user (sgtk.get_authenticated_user).
-        # However, on 5.0 sites, HumanUsers can't configure a project. Therefore, we'll use the ShotgunAuthenticator
-        # here to get the default user using the CoreDefaultsManager.
-        #
-        # Since the Destktop bootstrap always sets up a script user for 5.0 sites, regardless of the version of the
-        # core, we can assume that on 5.0 sites we'll have a script user configured. Therefore, the scenarios are:
-        #
-        # - 5.0 site with 0.16 core and a script user configured -> You will escalate to script user
-        # - 6.0 site with 0.16 core and no script user -> The same user will be returned, no escalation will take
-        #   place and the setup will succeed if you have the right permissions.
-        # - 6.0 site with 0.16 and a script user -> You will escalate to script user and will always succeed at
-        #   configuing the site
-        #
-        needs_script_user = is_script_user_required(connection)
-        sgtk = __import_sgtk_from_path(core_path, app_bootstrap, try_escalate_user=needs_script_user)
+        sgtk = __import_sgtk_from_path(core_path, app_bootstrap)
 
         if sgtk is None:
             # Generate a generic error message, which will suggest to contact support.

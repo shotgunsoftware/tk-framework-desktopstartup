@@ -30,7 +30,7 @@ from .errors import IncompleteCredentials
 _shotgun_instance_factory = ShotgunWrapper
 
 import logging
-logger = logging.getLogger("shotgun_auth").getChild("user_impl")
+logger = logging.getLogger("sg_auth.user_impl")
 
 
 class ShotgunUserImpl(object):
@@ -193,14 +193,17 @@ class SessionUser(ShotgunUserImpl):
         """
         return self._session_token
 
-    def set_session_token(self, session_token):
+    def set_session_token(self, session_token, cache=True):
         """
         Updates the session token for this user.
 
         :param session_token: The new session token for this user.
+        :param cache: Set to False if you don't want the token to be written back
+            to the session cache. Defaults to True.
         """
         self._session_token = session_token
-        self._try_save()
+        if cache:
+            self._try_save()
 
     def create_sg_connection(self):
         """
@@ -264,7 +267,7 @@ class SessionUser(ShotgunUserImpl):
                 self.get_session_token()
             )
         except:
-            # Do not break the running pass because somehow we couldn't
+            # Do not break execution because somehow we couldn't
             # cache the credentials. We'll simply be asking them again
             # next time.
             logger.exception("Couldn't log the credentials to disk:")
