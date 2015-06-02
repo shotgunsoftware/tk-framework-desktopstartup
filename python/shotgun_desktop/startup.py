@@ -90,6 +90,23 @@ class UpdatePermissionsError(Exception):
         )
 
 
+class SitePipelineConfigurationNotFound(Exception):
+    """
+    This exception notifiers the catcher that the site's pipeline configuration can't be found.
+    """
+    def __init__(self, site_config_path):
+        """
+        Constructor
+        """
+        Exception.__init__(
+            self,
+            "Can't find your site's pipeline configuration.\n\n"
+            "This can happen if you don't have the permissions to see the Template Project or if "
+            "the site's pipeline configuration id in Shotgun differs from the one at "
+            "%s/config/core/pipeline_configuration.yml." % site_config_path
+        )
+
+
 def __supports_authentication_module(sgtk):
     """
     Tests if the given Toolkit API supports the shotgun_authentication module.
@@ -298,10 +315,6 @@ def __restart_app_with_countdown(splash, reason):
     raise RequestRestartException()
 
 
-def _get_default_site_config_root(connection):
-    return shotgun_desktop.paths.get_default_site_config_root(connection)
-
-
 def __launch_app(app, splash, connection, app_bootstrap):
     """
     Shows the splash screen, optionally downloads and configures Toolkit, imports it, optionally
@@ -323,7 +336,7 @@ def __launch_app(app, splash, connection, app_bootstrap):
     _assert_toolkit_enabled(splash, connection)
 
     logger.debug("Getting the default site config")
-    default_site_config, pc = _get_default_site_config_root(connection)
+    default_site_config, pc = shotgun_desktop.paths.get_default_site_config_root(connection)
 
     # try and import toolkit
     toolkit_imported = False
@@ -334,8 +347,8 @@ def __launch_app(app, splash, connection, app_bootstrap):
                 sgtk = __import_sgtk_from_path(default_site_config, app_bootstrap)
                 toolkit_imported = True
             else:
-                logger.info("Resetting site at '%s'" % default_site_config)
-                splash.set_message("Resetting site...")
+                logger.info("Resetting site configuration at '%s'" % default_site_config)
+                splash.set_message("Resetting site configuration ...")
                 shutil.rmtree(default_site_config)
     except Exception:
         pass
@@ -371,10 +384,12 @@ def __launch_app(app, splash, connection, app_bootstrap):
         # Install the default site config
         sg = sgtk.util.shotgun.create_sg_connection()
 
+        # Site config has a none project id.
+        project_id = None
         # If no pipeline configuration had been found.
         if not pc:
             # This site config has never been set by anyone, so we're the first.
-            # If pipeline configurations are stil project entities, we'll have to use the
+            # If pipeline configurations are still project entities, we'll have to use the
             # TemplateProject as the project which will host the pipeline configuration.
             if is_pipeline_configuration_project_entity(connection):
                 template_project = sg.find_one(
@@ -385,10 +400,21 @@ def __launch_app(app, splash, connection, app_bootstrap):
                 if template_project is None:
                     # Generate a generic error message, which will suggest to contact support.
                     raise Exception("Error finding the Template project on your site.")
+
+                logger.info("Creating the site config using the template project.")
+
+                # We'll need to use the template project's id to setup the site config in this case.
+                project_id = template_project["id"]
             else:
-                template_project = None
+                logger.info("Creating the site config without using a project.")
         else:
-            template_project = None
+            # If a project is set in the pipeline configuration, it's an old style site config tied
+            # to the template project, so we have to use it.
+            if pc.get("project") is not None:
+                logger.info("Reusing the site config with a project.")
+                project_id = pc["project"]["id"]
+            else:
+                logger.info("Reusing the site config without a project.")
 
         # Create the directory
         if not os.path.exists(default_site_config):
@@ -409,7 +435,7 @@ def __launch_app(app, splash, connection, app_bootstrap):
             "auto_path": True,
             "config_uri": config_uri,
             "project_folder_name": "site",
-            "project_id": template_project["id"] if template_project else None,
+            "project_id": project_id,
             path_param: default_site_config,
         }
         setup_project = sgtk.get_command("setup_project")
@@ -435,7 +461,13 @@ def __launch_app(app, splash, connection, app_bootstrap):
         localize.execute({})
 
     tk = sgtk.sgtk_from_path(default_site_config)
-    if tk.pipeline_configuration.is_auto_path():
+    try:
+        is_auto_path = tk.pipeline_configuration.is_auto_path()
+    except sgtk.TankError, error:
+        logger.exception(error)
+        raise SitePipelineConfigurationNotFound(default_site_config)
+
+    if is_auto_path:
         splash.set_message("Getting updates...")
         logger.info("Getting updates...")
         app.processEvents()
@@ -461,7 +493,7 @@ def __launch_app(app, splash, connection, app_bootstrap):
                 logger.warning("Core update was blocked. Reason: %s" % result["reason"])
             elif result["status"] != "up_to_date":
                 # Core update should not fail. Warn, because it is not a fatal error.
-                logger.warning("Unknown Core upgrade result: %s" % str(result))
+                logger.warning("Unexpected Core upgrade result: %s" % str(result))
 
         if core_updated and startup_updated:
             return __restart_app_with_countdown(splash, "Desktop and Core updated.")

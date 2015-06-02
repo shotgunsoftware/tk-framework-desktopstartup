@@ -70,7 +70,7 @@ def get_default_site_config_root(connection):
         raise RuntimeError("unknown platform: %s" % sys.platform)
 
     # interesting fields to return
-    fields = ["id", "code", "windows_path", "mac_path", "linux_path"]
+    fields = ["id", "code", "windows_path", "mac_path", "linux_path", "project"]
 
     # Find either the pipeline configuration set with the template project
     # or the one without any project assigned. Note that is the both exist,
