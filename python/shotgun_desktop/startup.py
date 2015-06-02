@@ -344,6 +344,7 @@ def __launch_app(app, splash, connection, app_bootstrap):
             logger.info("Initializing Toolkit")
             core_path = initialize(splash, connection)
         except Exception, error:
+            logger.exception(error)
             if "ApiUser can not be accessed" in error.message:
                 # Login does not have permission to see Scripts, throw an informative
                 # error how to work around this for now.
@@ -399,7 +400,15 @@ def __launch_app(app, splash, connection, app_bootstrap):
         }
         setup_project = sgtk.get_command("setup_project")
         setup_project.set_logger(logger)
-        setup_project.execute(params)
+
+        try:
+            setup_project.execute(params)
+        except Exception, error:
+            logger.exception(error)
+            if "CRUD ERROR" in error.message:
+                raise UpdatePermissionsError()
+            else:
+                raise
 
         # and now try to load up sgtk through the config again
         sgtk = __import_sgtk_from_path(default_site_config, app_bootstrap)
