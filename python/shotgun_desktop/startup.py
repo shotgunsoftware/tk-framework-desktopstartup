@@ -67,7 +67,7 @@ class ToolkitDisabledError(Exception):
     """
     This exception notifies the catcher that Toolkit has not been enabled by the user on the site.
     """
-    def __init__(self, toolkit_path):
+    def __init__(self):
         """Constructor"""
         Exception.__init__(
             self,
