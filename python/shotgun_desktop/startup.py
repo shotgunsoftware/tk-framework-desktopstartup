@@ -31,7 +31,7 @@ from PySide import QtCore, QtGui
 import shotgun_desktop.paths
 import shotgun_desktop.version
 from shotgun_desktop.turn_on_toolkit import TurnOnToolkit
-from shotgun_desktop.initialization import initialize, is_pipeline_configuration_project_entity
+from shotgun_desktop.initialization import initialize, does_pipeline_configuration_require_project
 from shotgun_desktop import authenticator
 from shotgun_desktop.upgrade_startup import upgrade_startup
 from shotgun_desktop.location import get_location
@@ -67,7 +67,7 @@ class ToolkitDisabledError(Exception):
     """
     This exception notifies the catcher that Toolkit has not been enabled by the user on the site.
     """
-    def __init__(self, toolkit_path):
+    def __init__(self):
         """Constructor"""
         Exception.__init__(
             self,
@@ -231,25 +231,22 @@ def _assert_toolkit_enabled(splash, connection):
     """
     # get the pipeline configuration for the site we are logged into
     while True:
-        try:
-            shotgun_desktop.paths.assert_toolkit_enabled(connection)
+        pc_schema = connection.schema_entity_read().get("PipelineConfiguration")
+        if pc_schema is not None:
             break
-        except shotgun_desktop.paths.NoPipelineConfigEntityError:
-            # Toolkit is not turned on show the dialog that explains what to do
-            splash.hide()
-            dialog = TurnOnToolkit(connection)
-            dialog.show()
-            dialog.raise_()
-            dialog.activateWindow()
-            results = dialog.exec_()
 
-            if results == dialog.Rejected:
-                # dialog was canceled, raise the exception and let the main exception handler deal
-                # with it.
-                raise ToolkitDisabledError()
+        # Toolkit is not turned on show the dialog that explains what to do
+        splash.hide()
+        dialog = TurnOnToolkit(connection)
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
+        results = dialog.exec_()
 
-            # try again
-            continue
+        if results == dialog.Rejected:
+            # dialog was canceled, raise the exception and let the main exception handler deal
+            # with it.
+            raise ToolkitDisabledError()
 
     splash.show()
 
@@ -391,7 +388,7 @@ def __launch_app(app, splash, connection, app_bootstrap):
             # This site config has never been set by anyone, so we're the first.
             # If pipeline configurations are still project entities, we'll have to use the
             # TemplateProject as the project which will host the pipeline configuration.
-            if is_pipeline_configuration_project_entity(connection):
+            if does_pipeline_configuration_require_project(connection):
                 template_project = sg.find_one(
                     "Project",
                     [["name", "is", "Template Project"], ["layout_project", "is", None]])

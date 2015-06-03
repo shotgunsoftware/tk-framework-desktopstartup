@@ -10,4 +10,4 @@
 
 from . import initialize
 from .initialize import initialize
-from .shotgun import is_script_user_required, is_pipeline_configuration_project_entity
+from .shotgun import is_script_user_required, does_pipeline_configuration_require_project

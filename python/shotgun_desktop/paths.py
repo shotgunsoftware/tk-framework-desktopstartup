@@ -11,11 +11,7 @@
 import os
 import sys
 import urlparse
-
-
-class NoPipelineConfigEntityError(Exception):
-    """ Error raised when the PipelineConfiguration entity is not available. """
-    pass
+import logging
 
 
 def get_shotgun_app_root():
@@ -44,19 +40,6 @@ def get_python_path():
     return python
 
 
-def assert_toolkit_enabled(connection):
-    """
-    Makes sure that Toolkit is enabled on the site. If it isn't the
-    NoPipelineConfigEntityError is raised.
-
-    :raises NoPipelineConfigEntityError: Raised if Toolkit is not enabled.
-    """
-    # Toolkit may not have been turned on, check that the PipelineConfiguration entity is available
-    pc_schema = connection.schema_entity_read().get("PipelineConfiguration")
-    if pc_schema is None:
-        raise NoPipelineConfigEntityError()
-
-
 def get_default_site_config_root(connection):
     """ return the path to the default configuration for the site """
     # find what path field from the entity we need
@@ -74,11 +57,11 @@ def get_default_site_config_root(connection):
 
     # Find either the pipeline configuration set with the template project
     # or the one without any project assigned. Note that is the both exist,
-    # it will return the one with the earliest project id. Sorting on project.Project.id
+    # it will first return the one with the earliest project id. Sorting on project.Project.id
     # will first list in ascending project id order pipeline configurations with a project set
     # and then will list the remaining projects with an id. In case there is then
     # multiple pipeline configurations for a given project, we'll always take the first one.
-    pc = connection.find_one(
+    pcs = connection.find(
         "PipelineConfiguration",
         [{
             "filter_operator": "any",
@@ -99,6 +82,18 @@ def get_default_site_config_root(connection):
             {'field_name':'id','direction':'asc'}
         ]
     )
+
+    if len(pcs) == 0:
+        pc = None
+    else:
+        pc = pcs[0]
+        # It is possible to get multiple pipeline configurations due to user error.
+        # Log a warning if there was more than one pipeline configuration found.
+        if len(pcs) > 1:
+            logging.getLogger("tk-desktop.paths").info(
+                "More than one pipeline configuration was found (%s), using %d" %
+                (", ".join([str(p["id"]) for p in pcs]), pc["id"])
+            )
 
     # see if we found a pipeline configuration
     if pc is not None and pc.get(plat_key, ""):

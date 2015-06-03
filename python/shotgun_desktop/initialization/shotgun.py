@@ -48,7 +48,7 @@ def is_script_user_required(connection):
     return get_server_version(connection) < LooseVersion("6.0.2")
 
 
-def is_pipeline_configuration_project_entity(connection):
+def does_pipeline_configuration_require_project(connection):
     """
     Returns if pipeline configurations are project entities or not.
 
@@ -59,11 +59,6 @@ def is_pipeline_configuration_project_entity(connection):
     """
     # Pipepline configurations were made non project entities in 6.0.2
     return get_server_version(connection) < LooseVersion("6.0.2")
-
-
-def is_server_valid(connection):
-    """ Validate the shotgun server """
-    return get_server_version(connection) >= LooseVersion("5.5.1")
 
 
 def get_or_create_script(connection):
