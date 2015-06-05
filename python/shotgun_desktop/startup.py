@@ -156,7 +156,6 @@ def __import_sgtk_from_path(path, app_bootstrap):
 
         dm = sgtk.util.CoreDefaultsManager()
         sg_auth = shotgun_authentication.ShotgunAuthenticator(dm)
-        logger.info("Authentication module imported and instantiated...")
 
         # get the current user
         user = sg_auth.get_default_user()
