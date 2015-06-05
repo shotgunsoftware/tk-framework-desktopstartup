@@ -15,6 +15,7 @@ import urllib2
 from shotgun_api3 import Shotgun
 
 from . import constants
+from distutils.version import LooseVersion
 
 
 def get_server_version(connection):
@@ -29,7 +30,7 @@ def get_server_version(connection):
     sg_minor_ver = connection.server_info["version"][1]
     sg_patch_ver = connection.server_info["version"][2]
 
-    return sg_major_ver, sg_minor_ver, sg_patch_ver
+    return LooseVersion("%d.%d.%d" % (sg_major_ver, sg_minor_ver, sg_patch_ver))
 
 
 def is_script_user_required(connection):
@@ -37,26 +38,27 @@ def is_script_user_required(connection):
     Returns if a site needs to be configured with a script user or if the new
     human user based authentication for Toolkit will work with it.
 
+    :param connection: Connection to the server to test against.
+
     :returns: If the site is not compatible with the new authentication code,
         returns True, False otherwise.
     """
-    major, minor, patch = get_server_version(connection)
-
     # First version to support human based authentication for all operations was
     # 6.0.2.
-    if major < 6 or (major == 6 and minor == 0 and patch <= 1):
-        return True
-    else:
-        return False
+    return get_server_version(connection) < LooseVersion("6.0.2")
 
 
-def is_server_valid(connection):
-    """ Validate the shotgun server """
-    sg_major_ver, sg_minor_ver, _ = get_server_version(connection)
+def does_pipeline_configuration_require_project(connection):
+    """
+    Returns if pipeline configurations are project entities or not.
 
-    if sg_major_ver < 5 or (sg_major_ver == 5 and sg_minor_ver < 1):
-        return False
-    return True
+    :param connection: Connection to the server to test against.
+
+    :returns: True if pipeline configurations are project entities, False
+        otherwise.
+    """
+    # Pipepline configurations were made non project entities in 6.0.2
+    return get_server_version(connection) < LooseVersion("6.0.2")
 
 
 def get_or_create_script(connection):

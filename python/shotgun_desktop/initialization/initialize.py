@@ -22,10 +22,6 @@ def initialize(splash, connection):
     """ initialize toolkit for this computer for a single site """
     logger = logging.getLogger("tk-desktop.initialization")
 
-    # make sure the shotgun server supports toolkit
-    if not shotgun.is_server_valid(connection):
-        raise RuntimeError("Shotgun server is not valid")
-
     # grab the paths that will be used during the install
     temp_dir = tempfile.mkdtemp(prefix="tk-desktop")
     temp_site_root = os.path.join(temp_dir, "site")

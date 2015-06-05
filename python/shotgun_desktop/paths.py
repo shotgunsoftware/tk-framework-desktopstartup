@@ -11,11 +11,7 @@
 import os
 import sys
 import urlparse
-
-
-class NoPipelineConfigEntityError(Exception):
-    """ Error raised when the PipelineConfiguration entity is not available. """
-    pass
+import logging
 
 
 def get_shotgun_app_root():
@@ -57,20 +53,47 @@ def get_default_site_config_root(connection):
         raise RuntimeError("unknown platform: %s" % sys.platform)
 
     # interesting fields to return
-    fields = ["id", "code", "windows_path", "mac_path", "linux_path"]
+    fields = ["id", "code", "windows_path", "mac_path", "linux_path", "project"]
 
-    # Toolkit may not have been turned on, check that the PipelineConfiguration entity is available
-    pc_schema = connection.schema_entity_read().get("PipelineConfiguration")
-    if pc_schema is None:
-        raise NoPipelineConfigEntityError()
-
-    pc = connection.find_one(
+    # Find either the pipeline configuration set with the template project
+    # or the one without any project assigned. Note that is the both exist,
+    # it will first return the one with the earliest project id. Sorting on project.Project.id
+    # will first list in ascending project id order pipeline configurations with a project set
+    # and then will list the remaining projects with an id. In case there is then
+    # multiple pipeline configurations for a given project, we'll always take the first one.
+    pcs = connection.find(
         "PipelineConfiguration",
-        [
-            ["project.Project.name", "is", "Template Project"],
-            ["project.Project.layout_project", "is", None],
-        ],
-        fields=fields)
+        [{
+            "filter_operator": "any",
+            "filters": [
+                ["project", "is", None],
+                {
+                    "filter_operator": "all",
+                    "filters": [
+                        ["project.Project.name", "is", "Template Project"],
+                        ["project.Project.layout_project", "is", None]
+                    ]
+                }
+            ]
+        }],
+        fields=fields,
+        order=[
+            {'field_name':'project.Project.id','direction':'asc'},
+            {'field_name':'id','direction':'asc'}
+        ]
+    )
+
+    if len(pcs) == 0:
+        pc = None
+    else:
+        pc = pcs[0]
+        # It is possible to get multiple pipeline configurations due to user error.
+        # Log a warning if there was more than one pipeline configuration found.
+        if len(pcs) > 1:
+            logging.getLogger("tk-desktop.paths").info(
+                "More than one pipeline configuration was found (%s), using %d" %
+                (", ".join([str(p["id"]) for p in pcs]), pc["id"])
+            )
 
     # see if we found a pipeline configuration
     if pc is not None and pc.get(plat_key, ""):
