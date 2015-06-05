@@ -44,6 +44,23 @@ from shotgun_desktop.errors import (ShotgunDesktopError, RequestRestartException
                                     SitePipelineConfigurationNotFound)
 
 
+class SitePipelineConfigurationNotFound(Exception):
+    """
+    This exception notifiers the catcher that the site's pipeline configuration can't be found.
+    """
+    def __init__(self, site_config_path):
+        """
+        Constructor
+        """
+        Exception.__init__(
+            self,
+            "Can't find your site's pipeline configuration.\n\n"
+            "This can happen if you don't have the permissions to see the Template Project or if "
+            "the site's pipeline configuration id in Shotgun differs from the one at "
+            "%s/config/core/pipeline_configuration.yml." % site_config_path
+        )
+
+
 def __supports_authentication_module(sgtk):
     """
     Tests if the given Toolkit API supports the shotgun_authentication module.
