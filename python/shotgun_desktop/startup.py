@@ -160,7 +160,7 @@ def __import_sgtk_from_path(path, app_bootstrap):
 
         # get the current user
         user = sg_auth.get_default_user()
-        logger.info("Setting current user: %s" % user)
+        logger.info("Setting current user: %r" % user)
         sgtk.set_authenticated_user(user)
 
     return sgtk
