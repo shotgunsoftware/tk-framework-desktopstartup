@@ -290,9 +290,11 @@ def __launch_app(app, splash, connection, app_bootstrap):
 
     # try and import toolkit
     toolkit_imported = False
+    can_wipe = True
     try:
         if os.path.exists(default_site_config):
             if "--reset-site" not in sys.argv:
+                can_wipe = False
                 logger.info("Trying site config from '%s'" % default_site_config)
                 sgtk = __import_sgtk_from_path(default_site_config, app_bootstrap)
                 toolkit_imported = True
@@ -395,6 +397,8 @@ def __launch_app(app, splash, connection, app_bootstrap):
             setup_project.execute(params)
         except Exception, error:
             logger.exception(error)
+            if can_wipe:
+                shutil.rmtree(default_site_config)
             if "CRUD ERROR" in error.message:
                 raise UpdatePermissionsError()
             else:
