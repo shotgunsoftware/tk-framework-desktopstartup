@@ -327,96 +327,107 @@ def __launch_app(app, splash, connection, app_bootstrap):
             else:
                 raise
 
-        # try again after the initialization is done
-        logger.debug("Importing sgtk after initialization")
+        try:
+            # try again after the initialization is done
+            logger.debug("Importing sgtk after initialization")
 
         sgtk = __get_initialized_sgtk(core_path, app_bootstrap)
 
-        if sgtk is None:
-            # Generate a generic error message, which will suggest to contact support.
-            raise Exception("Could not access API post initialization.")
+            if sgtk is None:
+                # Generate a generic error message, which will suggest to contact support.
+                raise Exception("Could not access API post initialization.")
 
-        splash.set_message("Setting up default site configuration...")
+            splash.set_message("Setting up default site configuration...")
 
-        # Install the default site config
-        sg = sgtk.util.shotgun.create_sg_connection()
+            # Install the default site config
+            sg = sgtk.util.shotgun.create_sg_connection()
 
-        # Site config has a none project id.
-        project_id = None
-        # If no pipeline configuration had been found.
-        if not pc:
-            # This site config has never been set by anyone, so we're the first.
-            # If pipeline configurations are still project entities, we'll have to use the
-            # TemplateProject as the project which will host the pipeline configuration.
-            if does_pipeline_configuration_require_project(connection):
-                template_project = sg.find_one(
-                    "Project",
-                    [["name", "is", "Template Project"], ["layout_project", "is", None]])
-                # Can't find template project, so we're effectively done here, we need a project
-                # to create a pipeline configuration.
-                if template_project is None:
-                    # Generate a generic error message, which will suggest to contact support.
-                    raise Exception("Error finding the Template project on your site.")
+            # Site config has a none project id.
+            project_id = None
+            # If no pipeline configuration had been found.
+            if not pc:
+                # This site config has never been set by anyone, so we're the first.
+                # If pipeline configurations are still project entities, we'll have to use the
+                # TemplateProject as the project which will host the pipeline configuration.
+                if does_pipeline_configuration_require_project(connection):
+                    template_project = sg.find_one(
+                        "Project",
+                        [["name", "is", "Template Project"], ["layout_project", "is", None]])
+                    # Can't find template project, so we're effectively done here, we need a project
+                    # to create a pipeline configuration.
+                    if template_project is None:
+                        # Generate a generic error message, which will suggest to contact support.
+                        raise Exception("Error finding the Template project on your site.")
 
-                logger.info("Creating the site config using the template project.")
+                    logger.info("Creating the site config using the template project.")
 
-                # We'll need to use the template project's id to setup the site config in this case.
-                project_id = template_project["id"]
+                    # We'll need to use the template project's id to setup the site config in this case.
+                    project_id = template_project["id"]
+                else:
+                    logger.info("Creating the site config without using a project.")
             else:
-                logger.info("Creating the site config without using a project.")
-        else:
-            # If a project is set in the pipeline configuration, it's an old style site config tied
-            # to the template project, so we have to use it.
-            if pc.get("project") is not None:
-                logger.info("Reusing the site config with a project.")
-                project_id = pc["project"]["id"]
-            else:
-                logger.info("Reusing the site config without a project.")
+                # If a project is set in the pipeline configuration, it's an old style site config tied
+                # to the template project, so we have to use it.
+                if pc.get("project") is not None:
+                    logger.info("Reusing the site config with a project.")
+                    project_id = pc["project"]["id"]
+                else:
+                    logger.info("Reusing the site config without a project.")
 
-        # Create the directory
-        os.makedirs(default_site_config)
+            # Create the directory
+            if not os.path.exists(default_site_config):
+                os.makedirs(default_site_config)
         
-        # Setup the command to create the config
-        if sys.platform == "darwin":
-            path_param = "config_path_mac"
-        elif sys.platform == "win32":
-            path_param = "config_path_win"
-        elif sys.platform.startswith("linux"):
-            path_param = "config_path_linux"
+            # Setup the command to create the config
+            if sys.platform == "darwin":
+                path_param = "config_path_mac"
+            elif sys.platform == "win32":
+                path_param = "config_path_win"
+            elif sys.platform.startswith("linux"):
+                path_param = "config_path_linux"
 
-        # allow the config uri to be overridden for testing
-        config_uri = os.environ.get("SGTK_SITE_CONFIG_DEBUG_LOCATION", "tk-config-site")
+            # allow the config uri to be overridden for testing
+            config_uri = os.environ.get("SGTK_SITE_CONFIG_DEBUG_LOCATION", "tk-config-site")
 
-        params = {
-            "auto_path": True,
-            "config_uri": config_uri,
-            "project_folder_name": "site",
-            "project_id": project_id,
-            path_param: default_site_config,
-        }
-        setup_project = sgtk.get_command("setup_project")
-        setup_project.set_logger(logger)
+            params = {
+                "auto_path": True,
+                "config_uri": config_uri,
+                "project_folder_name": "site",
+                "project_id": project_id,
+                path_param: default_site_config,
+            }
+            setup_project = sgtk.get_command("setup_project")
+            setup_project.set_logger(logger)
 
-        try:
-            setup_project.execute(params)
-        except Exception, error:
-            logger.exception(error)
+            try:
+                setup_project.execute(params)
+            except Exception, error:
+                logger.exception(error)
             if can_wipe:
                 shutil.rmtree(default_site_config)
-            if "CRUD ERROR" in error.message:
-                raise UpdatePermissionsError()
-            else:
-                raise
+                if "CRUD ERROR" in error.message:
+                    raise UpdatePermissionsError()
+                else:
+                    raise
 
-        # and now try to load up sgtk through the config again
+            # and now try to load up sgtk through the config again
         sgtk = __get_initialized_sgtk(default_site_config, app_bootstrap)
-        tk = sgtk.sgtk_from_path(default_site_config)
+            tk = sgtk.sgtk_from_path(default_site_config)
 
-        # now localize the core to the config
-        splash.set_message("Localizing core...")
-        localize = tk.get_command("localize")
-        localize.set_logger(logger)
-        localize.execute({})
+            # now localize the core to the config
+            splash.set_message("Localizing core...")
+            localize = tk.get_command("localize")
+            localize.set_logger(logger)
+            localize.execute({})
+        except Exception:
+            # Something went wrong. Wipe the default site config if we can and
+            # rethrow
+            if can_wipe:
+                logger.error(
+                    "Something went wrong during Toolkit's activation, wiping configuration."
+                )
+                shutil.rmtree(default_site_config)
+            raise
 
     tk = sgtk.sgtk_from_path(default_site_config)
     try:
