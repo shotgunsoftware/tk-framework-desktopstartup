@@ -39,55 +39,9 @@ from shotgun_desktop.location import get_location
 from shotgun_desktop.ui import resources_rc
 import shutil
 
-
-class RequestRestartException(Exception):
-    """
-    Short circuits all the application code for a quick exit. The user
-    wants to reinitialize the app.
-    """
-    pass
-
-
-class UpgradeCoreError(Exception):
-    """
-    This exception notifies the catcher that the site's core needs to be upgraded in order to
-    use this version of the Desktop installer.
-    """
-    def __init__(self, toolkit_path):
-        """Constructor"""
-        Exception.__init__(
-            self,
-            "This version of the Shotgun Desktop only supports Toolkit 0.16.0 and higher. "
-            "Please upgrade your site core by running:\n\n%s core" %
-            os.path.join(toolkit_path, "tank.bat" if sys.platform == "win32" else "tank")
-        )
-
-
-class ToolkitDisabledError(Exception):
-    """
-    This exception notifies the catcher that Toolkit has not been enabled by the user on the site.
-    """
-    def __init__(self):
-        """Constructor"""
-        Exception.__init__(
-            self,
-            "Toolkit has not been activated on your site. Please activate Toolkit before relaunching Shotgun Desktop."
-        )
-
-
-class UpdatePermissionsError(Exception):
-    """
-    This exception notifies the catcher that the site's human user permissions doesn't allow
-    using the Shotgun Desktop.
-    """
-    def __init__(self):
-        """Constructor"""
-        Exception.__init__(
-            self,
-            "Sorry, you do not have enough Shotgun permissions to set up the Shotgun Desktop.\n\n"
-            "Please relaunch Desktop and instead log in as an Admin user.\n\n"
-            "Once the setup is complete, you can log out the Admin user and then log in as yourself."
-        )
+from shotgun_desktop.errors import (ShotgunDesktopError, RequestRestartException,
+                                    ToolkitDisabledError, UpdatePermissionsError, UpgradeCoreError,
+                                    SitePipelineConfigurationNotFound)
 
 
 class SitePipelineConfigurationNotFound(Exception):
@@ -156,7 +110,6 @@ def __import_sgtk_from_path(path, app_bootstrap):
 
         dm = sgtk.util.CoreDefaultsManager()
         sg_auth = shotgun_authentication.ShotgunAuthenticator(dm)
-        logger.info("Authentication module imported and instantiated...")
 
         # get the current user
         user = sg_auth.get_default_user()
@@ -624,7 +577,7 @@ def main(**kwargs):
         splash.hide()
         shotgun_authenticator.clear_default_user()
         return 0
-    except (UpgradeCoreError, UpdatePermissionsError, ToolkitDisabledError), ex:
+    except ShotgunDesktopError, ex:
         # Those are expected errors and the error message will be printed as is.
         __handle_exception(splash, shotgun_authenticator, str(ex))
         return -1

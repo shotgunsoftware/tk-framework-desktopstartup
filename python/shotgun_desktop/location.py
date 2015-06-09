@@ -21,7 +21,7 @@ copyright = """# Copyright (c) 2015 Shotgun Software Inc.
 """
 
 import os
-import json
+from .errors import BundledDescriptorEnvVarError
 
 
 def _get_location_yaml_location(root):
@@ -57,41 +57,29 @@ def get_location(sgtk, app_bootstrap):
     # a dev descriptor.
     if app_bootstrap.get_startup_location_override():
         return dev_descriptor
-
     # If we are running the bundled startup, it is possible to override it's
     # value on first run in order to trigger the system into pulling from
     # another location that the app_store, namely git. This is done through an
     # environment variable. This is also great for testing app_store updates
     # by pretending you have an older version of the code bundled and need an update.
+
+    # Local import since sgtk is lazily loaded.
+    from tank_vendor import yaml
     if app_bootstrap.runs_bundled_startup() and "SGTK_DESKTOP_BUNDLED_DESCRIPTOR" in os.environ:
-        json_data = json.loads(os.environ["SGTK_DESKTOP_BUNDLED_DESCRIPTOR"])
-        desc = {}
-        for k, v in json_data.iteritems():
-            # Make the file more easily readable by removing unicode notation from
-            # it.
-
-            # Keys never need to be unicode.
-            # However, path values need to be kept as is so that paths with non-ascii characters
-            # still work.
-            k = str(k)
-            try:
-                v = str(v)
-            except UnicodeEncodeError:
-                # This happens when the value can't be converted to a regular string, we'll
-                # simply not convert it.
-                pass
-
-            desc[k] = v
-        return desc
+        try:
+            return yaml.load(os.environ["SGTK_DESKTOP_BUNDLED_DESCRIPTOR"])
+        except yaml.YAMLError, e:
+            raise BundledDescriptorEnvVarError(e)
 
     location = _get_location_yaml_location(app_bootstrap.get_startup_path())
-
     # If the file is missing, we're in dev mode.
     if not os.path.exists(location):
-        return dev_descriptor
+        return {
+            "type": "dev",
+            "path": app_bootstrap.get_startup_path()
+        }
 
-    # Read the location.yml file. Local import since sgtk is lazily loaded.
-    from tank_vendor import yaml
+    # Read the location.yml file.
     with open(location, "r") as location_file:
         # If the file is empty, we're in dev mode.
         return yaml.load(location_file) or dev_descriptor
