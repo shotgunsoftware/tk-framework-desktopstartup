@@ -44,23 +44,6 @@ from shotgun_desktop.errors import (ShotgunDesktopError, RequestRestartException
                                     SitePipelineConfigurationNotFound)
 
 
-class SitePipelineConfigurationNotFound(Exception):
-    """
-    This exception notifiers the catcher that the site's pipeline configuration can't be found.
-    """
-    def __init__(self, site_config_path):
-        """
-        Constructor
-        """
-        Exception.__init__(
-            self,
-            "Can't find your site's pipeline configuration.\n\n"
-            "This can happen if you don't have the permissions to see the Template Project or if "
-            "the site's pipeline configuration id in Shotgun differs from the one at "
-            "%s/config/core/pipeline_configuration.yml." % site_config_path
-        )
-
-
 def __supports_authentication_module(sgtk):
     """
     Tests if the given Toolkit API supports the shotgun_authentication module.
@@ -73,13 +56,9 @@ def __supports_authentication_module(sgtk):
     return hasattr(sgtk, "set_authenticated_user")
 
 
-def __import_sgtk_from_path(path, app_bootstrap):
+def __import_sgtk_from_path(path):
     """
-    Imports Toolkit from the given path. If that version of Toolkit supports the shotgun_authentication
-    module, the current user will be set. The Toolkit will not support the shotgun_authentication
-    module if we've just upgraded the Desktop installer and are running a core upgrade for the first
-    time. The first import of the old core will be a pre-0.16 version of the core, therefore it
-    won't support the shotgun_authentication module.
+    Imports Toolkit from the given path.
 
     :param path: Path to import Toolkit from.
 
@@ -100,6 +79,17 @@ def __import_sgtk_from_path(path, app_bootstrap):
     # finally try the import
     import sgtk
     logger.info("SGTK API successfully imported: %s" % sgtk)
+    return sgtk
+
+
+def __initialize_sgtk_authentication(sgtk, app_bootstrap):
+    """
+    Sets the authenticated user if available. Also registers the authentication module's
+    logger with the Desktop's.
+
+    :param sgtk: The Toolkit API handle.
+    :param app_bootstrap: The application bootstrap instance.
+    """
 
     # If the version of Toolkit supports the new authentication mechanism
     if __supports_authentication_module(sgtk):
@@ -116,6 +106,17 @@ def __import_sgtk_from_path(path, app_bootstrap):
         logger.info("Setting current user: %r" % user)
         sgtk.set_authenticated_user(user)
 
+
+def __get_initialized_sgtk(path, app_bootstrap):
+    """
+    Imports Toolkit from the given path. If that version of Toolkit supports the
+    shotgun_authentication module, the authenticated user will be set.
+
+    :param sgtk: The Toolkit API handle.
+    :param app_bootstrap: The application bootstrap instance.
+    """
+    sgtk = __import_sgtk_from_path(path)
+    __initialize_sgtk_authentication(sgtk, app_bootstrap)
     return sgtk
 
 
@@ -296,7 +297,7 @@ def __launch_app(app, splash, connection, app_bootstrap):
             if "--reset-site" not in sys.argv:
                 can_wipe = False
                 logger.info("Trying site config from '%s'" % default_site_config)
-                sgtk = __import_sgtk_from_path(default_site_config, app_bootstrap)
+                sgtk = __import_sgtk_from_path(default_site_config)
                 toolkit_imported = True
             else:
                 logger.info("Resetting site configuration at '%s'" % default_site_config)
@@ -304,6 +305,10 @@ def __launch_app(app, splash, connection, app_bootstrap):
                 shutil.rmtree(default_site_config)
     except Exception:
         pass
+    else:
+        # Toolkit was imported, we need to initialize it now.
+        if toolkit_imported:
+            __initialize_sgtk_authentication(sgtk, app_bootstrap)
 
     if not toolkit_imported:
         # sgtk not available. initialize core
@@ -326,7 +331,7 @@ def __launch_app(app, splash, connection, app_bootstrap):
             # try again after the initialization is done
             logger.debug("Importing sgtk after initialization")
 
-            sgtk = __import_sgtk_from_path(core_path, app_bootstrap)
+            sgtk = __get_initialized_sgtk(core_path, app_bootstrap)
 
             if sgtk is None:
                 # Generate a generic error message, which will suggest to contact support.
@@ -404,7 +409,7 @@ def __launch_app(app, splash, connection, app_bootstrap):
                     raise
 
             # and now try to load up sgtk through the config again
-            sgtk = __import_sgtk_from_path(default_site_config, app_bootstrap)
+            sgtk = __get_initialized_sgtk(default_site_config, app_bootstrap)
             tk = sgtk.sgtk_from_path(default_site_config)
 
             # now localize the core to the config
