@@ -82,7 +82,7 @@ def __import_sgtk_from_path(path):
     return sgtk
 
 
-def __initialize_sgtk(sgtk, app_bootstrap):
+def __initialize_sgtk_authentication(sgtk, app_bootstrap):
     """
     Sets the authenticated user if available. Also registers the authentication module's
     logger with the Desktop's.
@@ -116,7 +116,7 @@ def __get_initialized_sgtk(path, app_bootstrap):
     :param app_bootstrap: The application bootstrap instance.
     """
     sgtk = __import_sgtk_from_path(path)
-    __initialize_sgtk(sgtk, app_bootstrap)
+    __initialize_sgtk_authentication(sgtk, app_bootstrap)
     return sgtk
 
 
@@ -308,7 +308,7 @@ def __launch_app(app, splash, connection, app_bootstrap):
     else:
         # Toolkit was imported, we need to initialize it now.
         if toolkit_imported:
-            __initialize_sgtk(sgtk, app_bootstrap)
+            __initialize_sgtk_authentication(sgtk, app_bootstrap)
 
     if not toolkit_imported:
         # sgtk not available. initialize core
@@ -331,7 +331,7 @@ def __launch_app(app, splash, connection, app_bootstrap):
             # try again after the initialization is done
             logger.debug("Importing sgtk after initialization")
 
-        sgtk = __get_initialized_sgtk(core_path, app_bootstrap)
+            sgtk = __get_initialized_sgtk(core_path, app_bootstrap)
 
             if sgtk is None:
                 # Generate a generic error message, which will suggest to contact support.
@@ -377,7 +377,7 @@ def __launch_app(app, splash, connection, app_bootstrap):
             # Create the directory
             if not os.path.exists(default_site_config):
                 os.makedirs(default_site_config)
-        
+
             # Setup the command to create the config
             if sys.platform == "darwin":
                 path_param = "config_path_mac"
@@ -403,15 +403,13 @@ def __launch_app(app, splash, connection, app_bootstrap):
                 setup_project.execute(params)
             except Exception, error:
                 logger.exception(error)
-            if can_wipe:
-                shutil.rmtree(default_site_config)
                 if "CRUD ERROR" in error.message:
                     raise UpdatePermissionsError()
                 else:
                     raise
 
             # and now try to load up sgtk through the config again
-        sgtk = __get_initialized_sgtk(default_site_config, app_bootstrap)
+            sgtk = __get_initialized_sgtk(default_site_config, app_bootstrap)
             tk = sgtk.sgtk_from_path(default_site_config)
 
             # now localize the core to the config
