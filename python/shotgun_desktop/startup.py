@@ -304,6 +304,7 @@ def __launch_app(app, splash, connection, app_bootstrap):
                 splash.set_message("Resetting site configuration ...")
                 shutil.rmtree(default_site_config)
     except Exception:
+        logger.exception("There was an error importing Toolkit")
         pass
     else:
         # Toolkit was imported, we need to initialize it now.
