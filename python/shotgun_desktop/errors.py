@@ -36,13 +36,14 @@ class UpgradeCoreError(ShotgunDesktopError):
     This exception notifies the catcher that the site's core needs to be upgraded in order to
     use this version of the Desktop installer.
     """
-    def __init__(self, toolkit_path):
+    def __init__(self, core_version, toolkit_path):
         """Constructor"""
         ShotgunDesktopError.__init__(
             self,
-            "This version of the Shotgun Desktop only supports Toolkit 0.16.0 and higher. "
+            "This version of the Shotgun Desktop only supports Toolkit %s and higher. "
             "Please upgrade your site core by running:\n\n%s core" %
-            os.path.join(toolkit_path, "tank.bat" if sys.platform == "win32" else "tank")
+            (core_version,
+             os.path.join(toolkit_path, "tank.bat" if sys.platform == "win32" else "tank"))
         )
 
 
