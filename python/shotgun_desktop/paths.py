@@ -78,7 +78,7 @@ def get_default_site_config_root(connection):
         }],
         fields=fields,
         order=[
-            {'field_name':'project.Project.id','direction':'asc'},
+            {'field_name':'project.Project.id','direction':'desc'},
             {'field_name':'id','direction':'asc'}
         ]
     )

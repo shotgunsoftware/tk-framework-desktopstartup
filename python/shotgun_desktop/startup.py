@@ -457,6 +457,7 @@ def __launch_app(app, splash, connection, app_bootstrap):
         app_bootstrap
     )
 
+    core_updated = False
     if is_auto_path:
         splash.set_message("Getting core and engine updates...")
         logger.info("Getting updates...")
@@ -470,7 +471,6 @@ def __launch_app(app, splash, connection, app_bootstrap):
         if result["status"] == "updated":
             core_updated = True
         else:
-            core_updated = False
             if result["status"] == "update_blocked":
                 # Core update should not be blocked. Warn, because it is not a fatal error.
                 logger.warning("Core update was blocked. Reason: %s" % result["reason"])
