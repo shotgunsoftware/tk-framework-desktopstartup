@@ -41,7 +41,7 @@ import shutil
 
 from shotgun_desktop.errors import (ShotgunDesktopError, RequestRestartException,
                                     ToolkitDisabledError, UpdatePermissionsError, UpgradeCoreError,
-                                    SitePipelineConfigurationNotFound)
+                                    SitePipelineConfigurationNotFound, InvalidPipelineConfiguration)
 
 
 def __supports_authentication_module(sgtk):
@@ -442,6 +442,9 @@ def __launch_app(app, splash, connection, app_bootstrap):
 
     tk = sgtk.sgtk_from_path(default_site_config)
 
+    if pc["id"] != tk.pipeline_configuration.get_shotgun_id():
+        raise InvalidPipelineConfiguration(pc, tk.pipeline_configuration)
+
     try:
         is_auto_path = tk.pipeline_configuration.is_auto_path()
     except sgtk.TankError, error:
@@ -494,7 +497,11 @@ def __launch_app(app, splash, connection, app_bootstrap):
 
         # make sure that the version of core we are using supports the new-style site configuration
         if not __supports_pipeline_configuration_upgrade(tk.pipeline_configuration):
-            raise UpgradeCoreError("0.16.8", default_site_config)
+            raise UpgradeCoreError(
+                "Running the Shotgun Desktop with a migrated pipeline configuration requires "
+                "core 0.16.8.",
+                default_site_config
+            )
 
         # If the configuration on disk is not the site configuration, update it to the site config.
         if not tk.pipeline_configuration.is_site_configuration():
@@ -524,7 +531,10 @@ def __launch_app(app, splash, connection, app_bootstrap):
         os.environ["PYTHONHOME"] = os.environ["SGTK_DESKTOP_ORIGINAL_PYTHONHOME"]
 
     if not __supports_authentication_module(sgtk):
-        raise UpgradeCoreError("0.16.4", default_site_config)
+        raise UpgradeCoreError(
+            "This version of the Shotgun Desktop only supports core 0.16.4 and higher. ",
+            default_site_config
+        )
 
     # and run the engine
     logger.debug("Running tk-desktop")
