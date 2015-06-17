@@ -55,12 +55,19 @@ def get_default_site_config_root(connection):
     # interesting fields to return
     fields = ["id", "code", "windows_path", "mac_path", "linux_path", "project"]
 
-    # Find either the pipeline configuration set with the template project
-    # or the one without any project assigned. Note that is the both exist,
-    # it will first return the one with the earliest project id. Sorting on project.Project.id
-    # will first list in ascending project id order pipeline configurations with a project set
-    # and then will list the remaining projects with an id. In case there is then
-    # multiple pipeline configurations for a given project, we'll always take the first one.
+    # Find the right pipeline configuration. We'll always pick a projectless
+    # one over one with the Template Project. To have a deterministic behaviour,
+    # we'll also always sort the ids. Common sense would dictate that the
+    # sorting needs to be done from low ids to high ids. However, entries with
+    # no project get systematically pushed to the end of the list, no matter
+    # the ordering. Since we want to pick the projectless configuration first,
+    # we'll reverse the sorting order on ids so the last returned result is the
+    # lowest projectless configuration (if available). If no projectless
+    # pipeline configurations are available, then the ones from the Template
+    # project will show up. Once again, because we are sorting configurations
+    # based on decreasing ids, the last entry is still the one with the lowest
+    # id.
+
     pcs = connection.find(
         "PipelineConfiguration",
         [{
@@ -78,15 +85,19 @@ def get_default_site_config_root(connection):
         }],
         fields=fields,
         order=[
-            {'field_name':'project.Project.id','direction':'asc'},
-            {'field_name':'id','direction':'asc'}
+            # Sorting on the project id doesn't actually matter. We want
+            # some sorting simply because this will force grouping between
+            # configurations with a project and those that don't.
+            {'field_name':'project.Project.id','direction':'asc'}, 
+            {'field_name':'id','direction':'desc'}
         ]
     )
 
     if len(pcs) == 0:
         pc = None
     else:
-        pc = pcs[0]
+        # Pick the last result. See the big comment before the Shotgun query to understand.
+        pc = pcs[-1]
         # It is possible to get multiple pipeline configurations due to user error.
         # Log a warning if there was more than one pipeline configuration found.
         if len(pcs) > 1:

@@ -23,6 +23,27 @@ class ShotgunDesktopError(Exception):
     pass
 
 
+class InvalidPipelineConfiguration(ShotgunDesktopError):
+    """
+    This exception notifies the caller that the pipeline configuration id found in Shotgun
+    doesn't match the pipeline configuration found on disk.
+    """
+
+    def __init__(self, pc_entity, site_pc):
+        """Constructor"""
+
+        pc_project_id = pc_entity["project"]["id"] if pc_entity["project"] else None
+        ShotgunDesktopError.__init__(
+            self,
+            "The pipeline configuration retrieved from Shotgun (named \"%s\" "
+            "with id %d and project id %s) does not match the site configuration found on disk "
+            "(named \"%s\" with id %d and project id %s). Please contact "
+            "your Shotgun Administrator." %
+            (pc_entity["code"], pc_entity["id"], pc_project_id,
+             site_pc.get_name(), site_pc.get_shotgun_id(), site_pc.get_project_id())
+        )
+
+
 class RequestRestartException(ShotgunDesktopError):
     """
     Short circuits all the application code for a quick exit. The user
@@ -36,13 +57,12 @@ class UpgradeCoreError(ShotgunDesktopError):
     This exception notifies the catcher that the site's core needs to be upgraded in order to
     use this version of the Desktop installer.
     """
-    def __init__(self, toolkit_path):
+    def __init__(self, reason, toolkit_path):
         """Constructor"""
         ShotgunDesktopError.__init__(
             self,
-            "This version of the Shotgun Desktop only supports Toolkit 0.16.0 and higher. "
-            "Please upgrade your site core by running:\n\n%s core" %
-            os.path.join(toolkit_path, "tank.bat" if sys.platform == "win32" else "tank")
+            "%s Please upgrade your site core by running:\n\n%s core" %
+            (reason, os.path.join(toolkit_path, "tank.bat" if sys.platform == "win32" else "tank"))
         )
 
 

@@ -57,6 +57,14 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
         get_location(sgtk, app_bootstrap)
     )
 
+    # A Dev descriptor means there is nothing to update. Early out so that we don't show
+    # "Getting Shotgun Desktop updates...""
+    if isinstance(current_desc, sgtk.deploy.dev_descriptor.TankDevDescriptor):
+        return False
+
+    splash.set_message("Getting Shotgun Desktop updates...")
+    logger.info("Getting Shotgun Desktop updates...")
+
     latest_descriptor = current_desc.find_latest_version()
 
     # check deprecation

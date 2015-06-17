@@ -41,7 +41,7 @@ import shutil
 
 from shotgun_desktop.errors import (ShotgunDesktopError, RequestRestartException,
                                     ToolkitDisabledError, UpdatePermissionsError, UpgradeCoreError,
-                                    SitePipelineConfigurationNotFound)
+                                    SitePipelineConfigurationNotFound, InvalidPipelineConfiguration)
 
 
 def __supports_authentication_module(sgtk):
@@ -54,6 +54,18 @@ def __supports_authentication_module(sgtk):
     """
     # if the authentication module is not supported, this method won't be present on the core.
     return hasattr(sgtk, "set_authenticated_user")
+
+
+def __supports_pipeline_configuration_upgrade(pipeline_configuration):
+    """
+    Tests if the given pipeline configuration supports the None project id.
+
+    :param sgtk: A pipeline configuration.
+
+    :returns: True if the pipeline configuration can have a None project, False otherwise.
+    """
+    # if the authentication module is not supported, this method won't be present on the core.
+    return hasattr(pipeline_configuration, "convert_to_site_config")
 
 
 def __import_sgtk_from_path(path):
@@ -429,23 +441,30 @@ def __launch_app(app, splash, connection, app_bootstrap):
             raise
 
     tk = sgtk.sgtk_from_path(default_site_config)
+
+    if pc["id"] != tk.pipeline_configuration.get_shotgun_id():
+        raise InvalidPipelineConfiguration(pc, tk.pipeline_configuration)
+
     try:
         is_auto_path = tk.pipeline_configuration.is_auto_path()
     except sgtk.TankError, error:
         logger.exception(error)
         raise SitePipelineConfigurationNotFound(default_site_config)
 
+    # Downloads an upgrade for the startup if available. The startup upgrade is independent from the
+    # auto_path state and has its own logic for auto-updating or not, so move this outside the
+    # if auto_path test.
+    startup_updated = upgrade_startup(
+        splash,
+        sgtk,
+        app_bootstrap
+    )
+
+    core_updated = False
     if is_auto_path:
-        splash.set_message("Getting updates...")
+        splash.set_message("Getting core and engine updates...")
         logger.info("Getting updates...")
         app.processEvents()
-
-        # Downloads an upgrade, if available.
-        startup_updated = upgrade_startup(
-            splash,
-            sgtk,
-            app_bootstrap
-        )
 
         core_update = tk.get_command("core")
         core_update.set_logger(logger)
@@ -455,7 +474,6 @@ def __launch_app(app, splash, connection, app_bootstrap):
         if result["status"] == "updated":
             core_updated = True
         else:
-            core_updated = False
             if result["status"] == "update_blocked":
                 # Core update should not be blocked. Warn, because it is not a fatal error.
                 logger.warning("Core update was blocked. Reason: %s" % result["reason"])
@@ -463,13 +481,33 @@ def __launch_app(app, splash, connection, app_bootstrap):
                 # Core update should not fail. Warn, because it is not a fatal error.
                 logger.warning("Unexpected Core upgrade result: %s" % str(result))
 
-        if core_updated and startup_updated:
-            return __restart_app_with_countdown(splash, "Desktop and Core updated.")
-        elif core_updated:
-            return __restart_app_with_countdown(splash, "Core updated.")
-        elif startup_updated:
-            return __restart_app_with_countdown(splash, "Desktop updated.")
+    # Detect which kind of updates happened and restart the app if necessary
+    if core_updated and startup_updated:
+        return __restart_app_with_countdown(splash, "Shotgun Desktop and core updated.")
+    elif core_updated:
+        return __restart_app_with_countdown(splash, "Core updated.")
+    elif startup_updated:
+        return __restart_app_with_countdown(splash, "Shotgun Desktop updated.")
 
+    # This is important that this happens AFTER the core upgrade so that if there is a bug in the
+    # migration code we can release a new core that fixes it.
+    # If the pipeline configuration we got from Shotgun is not assigned to a project, we might have
+    # some patching to be done to local site configuration.
+    if pc["project"] is None:
+
+        # make sure that the version of core we are using supports the new-style site configuration
+        if not __supports_pipeline_configuration_upgrade(tk.pipeline_configuration):
+            raise UpgradeCoreError(
+                "Running the Shotgun Desktop with a migrated pipeline configuration requires "
+                "core 0.16.8.",
+                default_site_config
+            )
+
+        # If the configuration on disk is not the site configuration, update it to the site config.
+        if not tk.pipeline_configuration.is_site_configuration():
+            tk.pipeline_configuration.convert_to_site_config()
+
+    if is_auto_path:
         updates = tk.get_command("updates")
         updates.set_logger(logger)
         updates.execute({})
@@ -493,7 +531,10 @@ def __launch_app(app, splash, connection, app_bootstrap):
         os.environ["PYTHONHOME"] = os.environ["SGTK_DESKTOP_ORIGINAL_PYTHONHOME"]
 
     if not __supports_authentication_module(sgtk):
-        raise UpgradeCoreError(default_site_config)
+        raise UpgradeCoreError(
+            "This version of the Shotgun Desktop only supports core 0.16.4 and higher. ",
+            default_site_config
+        )
 
     # and run the engine
     logger.debug("Running tk-desktop")
