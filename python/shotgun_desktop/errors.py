@@ -94,8 +94,8 @@ class UnexpectedConfigFound(ShotgunDesktopError):
         """Constructor"""
         ShotgunDesktopError.__init__(
             self,
-            "A pipeline configuration was found at \"%s\" while trying to configure Toolkit when none was expected.\n\n"
-            "This usually happen if you are not assigned to the \"Template Project\". Please contact your Shotgun "
+            "A pipeline configuration was found at \"%s\" but no matching pipeline configuration was found in Shotgun.\n\n"
+            "This can happen if you are not assigned to the \"Template Project\". Please contact your Shotgun "
             "Administrator to see if that is the case." % default_site_config
         )
 
@@ -111,7 +111,8 @@ class UpdatePermissionsError(ShotgunDesktopError):
             self,
             "Sorry, you do not have enough Shotgun permissions to set up the Shotgun Desktop.\n\n"
             "Please relaunch Desktop and instead log in as an Admin user.\n\n"
-            "Once the setup is complete, you can log out the Admin user and then log in as yourself."
+            "Once the setup is complete, you can log out the Admin user and then log in as yourself.\n\n"
+            "Please note that this error can also occur when you haven't been assigned to the \"Template Project\"."
         )
 
 

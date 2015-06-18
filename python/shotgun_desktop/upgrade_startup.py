@@ -58,7 +58,7 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
     # A Dev descriptor means there is nothing to update. Early out so that we don't show
     # "Getting Shotgun Desktop updates...""
     if isinstance(current_desc, sgtk.deploy.dev_descriptor.TankDevDescriptor):
-        logger.info("Fixed startup, skipping update...")
+        logger.info("Desktop startup using a dev descriptor, skipping update...")
         return False
 
     splash.set_message("Getting Shotgun Desktop updates...")

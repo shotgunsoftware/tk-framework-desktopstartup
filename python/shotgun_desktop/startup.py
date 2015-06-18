@@ -94,6 +94,22 @@ def __import_sgtk_from_path(path):
     return sgtk
 
 
+def is_toolkit_already_configured(site_configuration_path):
+    """
+    Checks if there is already a Toolkit configuration at this location.
+    """
+
+    # This logic is lifted from tk-core in setup_project_params.py - validate_configuration_location
+    if not os.path.exists(site_configuration_path):
+        return False
+
+    for folder in ["config", "install"]:
+        if os.path.exists(os.path.join(site_configuration_path, folder)):
+            return True
+
+    return False
+
+
 def __initialize_sgtk_authentication(sgtk, app_bootstrap):
     """
     Sets the authenticated user if available. Also registers the authentication module's
@@ -303,21 +319,27 @@ def __launch_app(app, splash, connection, app_bootstrap):
 
     # try and import toolkit
     toolkit_imported = False
-    config_exists_at_startup = os.path.exists(default_site_config)
+    config_folder_exists_at_startup = os.path.exists(default_site_config)
+
+    # If the config folder exists at startup but the user wants to wipe it, do it.
+    if config_folder_exists_at_startup and "--reset-site" in sys.argv:
+        logger.info("Resetting site configuration at '%s'" % default_site_config)
+        splash.set_message("Resetting site configuration ...")
+        shutil.rmtree(default_site_config)
+        # It doesn't exist anymore, so we can act as if it never existed in the first place
+        config_folder_exists_at_startup = False
+
+    # If there is no pipeline configuration but we found something on disk nonetheless.
+    if not pc and is_toolkit_already_configured(default_site_config):
+        raise UnexpectedConfigFound(default_site_config)
+
     try:
         # In we found a pipeline configuration and the path for the config exists, try to import
         # Toolkit.
-        if pc and config_exists_at_startup:
-            if "--reset-site" not in sys.argv:
-                logger.info("Trying site config from '%s'" % default_site_config)
-                sgtk = __import_sgtk_from_path(default_site_config)
-                toolkit_imported = True
-            else:
-                logger.info("Resetting site configuration at '%s'" % default_site_config)
-                splash.set_message("Resetting site configuration ...")
-                shutil.rmtree(default_site_config)
-                # It doesn't exist anymore, so we can act as if it never existed in the first place
-                config_exists_at_startup = False
+        if config_folder_exists_at_startup:
+            logger.info("Trying site config from '%s'" % default_site_config)
+            sgtk = __import_sgtk_from_path(default_site_config)
+            toolkit_imported = True
     except Exception:
         logger.exception("There was an error importing Toolkit:")
         pass
@@ -421,8 +443,6 @@ def __launch_app(app, splash, connection, app_bootstrap):
                 logger.exception(error)
                 if "CRUD ERROR" in error.message:
                     raise UpdatePermissionsError()
-                elif "already contains a configuration":
-                    raise UnexpectedConfigFound(default_site_config)
                 else:
                     raise
 
@@ -441,7 +461,7 @@ def __launch_app(app, splash, connection, app_bootstrap):
         except Exception:
             # Something went wrong. Wipe the default site config if we can and
             # rethrow
-            if not config_exists_at_startup:
+            if not config_folder_exists_at_startup:
                 logger.error(
                     "Something went wrong during Toolkit's activation, wiping configuration."
                 )
@@ -486,6 +506,9 @@ def __launch_app(app, splash, connection, app_bootstrap):
             elif result["status"] != "up_to_date":
                 # Core update should not fail. Warn, because it is not a fatal error.
                 logger.warning("Unexpected Core upgrade result: %s" % str(result))
+    else:
+        logger.info("Pipeline configuration not in auto path mode, skipping core and engine "
+                    "updates...")
 
     # Detect which kind of updates happened and restart the app if necessary
     if core_updated and startup_updated:
@@ -517,8 +540,7 @@ def __launch_app(app, splash, connection, app_bootstrap):
         updates = tk.get_command("updates")
         updates.set_logger(logger)
         updates.execute({})
-    else:
-        logger.info("Fixed core, skipping updates...")
+
 
     # initialize the tk-desktop engine for an empty context
     splash.set_message("Starting desktop engine.")
