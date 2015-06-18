@@ -41,7 +41,9 @@ import shutil
 
 from shotgun_desktop.errors import (ShotgunDesktopError, RequestRestartException,
                                     ToolkitDisabledError, UpdatePermissionsError, UpgradeCoreError,
-                                    SitePipelineConfigurationNotFound, InvalidPipelineConfiguration)
+                                    InvalidPipelineConfiguration, UnexpectedConfigFound)
+
+RESET_SITE_ARG = "--reset-site"
 
 
 def __supports_authentication_module(sgtk):
@@ -92,6 +94,22 @@ def __import_sgtk_from_path(path):
     import sgtk
     logger.info("SGTK API successfully imported: %s" % sgtk)
     return sgtk
+
+
+def is_toolkit_already_configured(site_configuration_path):
+    """
+    Checks if there is already a Toolkit configuration at this location.
+    """
+
+    # This logic is lifted from tk-core in setup_project_params.py - validate_configuration_location
+    if not os.path.exists(site_configuration_path):
+        return False
+
+    for folder in ["config", "install"]:
+        if os.path.exists(os.path.join(site_configuration_path, folder)):
+            return True
+
+    return False
 
 
 def __initialize_sgtk_authentication(sgtk, app_bootstrap):
@@ -303,20 +321,33 @@ def __launch_app(app, splash, connection, app_bootstrap):
 
     # try and import toolkit
     toolkit_imported = False
-    can_wipe = True
+    config_folder_exists_at_startup = os.path.exists(default_site_config)
+
+    # If the config folder exists at startup but the user wants to wipe it, do it.
+    if config_folder_exists_at_startup and RESET_SITE_ARG in sys.argv:
+        logger.info("Resetting site configuration at '%s'" % default_site_config)
+        splash.set_message("Resetting site configuration ...")
+        shutil.rmtree(default_site_config)
+        # It doesn't exist anymore, so we can act as if it never existed in the first place
+        config_folder_exists_at_startup = False
+        # Remove all occurances of --reset-site so that if we restart the app it doesn't reset it
+        # again.
+        while RESET_SITE_ARG in sys.argv:
+            sys.argv.remove(RESET_SITE_ARG)
+
+    # If there is no pipeline configuration but we found something on disk nonetheless.
+    if not pc and is_toolkit_already_configured(default_site_config):
+        raise UnexpectedConfigFound(default_site_config)
+
     try:
-        if os.path.exists(default_site_config):
-            if "--reset-site" not in sys.argv:
-                can_wipe = False
-                logger.info("Trying site config from '%s'" % default_site_config)
-                sgtk = __import_sgtk_from_path(default_site_config)
-                toolkit_imported = True
-            else:
-                logger.info("Resetting site configuration at '%s'" % default_site_config)
-                splash.set_message("Resetting site configuration ...")
-                shutil.rmtree(default_site_config)
+        # In we found a pipeline configuration and the path for the config exists, try to import
+        # Toolkit.
+        if config_folder_exists_at_startup:
+            logger.info("Trying site config from '%s'" % default_site_config)
+            sgtk = __import_sgtk_from_path(default_site_config)
+            toolkit_imported = True
     except Exception:
-        logger.exception("There was an error importing Toolkit")
+        logger.exception("There was an error importing Toolkit:")
         pass
     else:
         # Toolkit was imported, we need to initialize it now.
@@ -430,26 +461,27 @@ def __launch_app(app, splash, connection, app_bootstrap):
             localize = tk.get_command("localize")
             localize.set_logger(logger)
             localize.execute({})
+
+            # Get back the pipeline configuration, this is expected to be initialized further down.
+            _, pc = shotgun_desktop.paths.get_default_site_config_root(connection)
         except Exception:
             # Something went wrong. Wipe the default site config if we can and
             # rethrow
-            if can_wipe:
+            if not config_folder_exists_at_startup:
                 logger.error(
                     "Something went wrong during Toolkit's activation, wiping configuration."
                 )
                 shutil.rmtree(default_site_config)
             raise
+    else:
+        tk = sgtk.sgtk_from_path(default_site_config)
 
-    tk = sgtk.sgtk_from_path(default_site_config)
-
+    # If the pipeline configuration found in Shotgun doesn't match what we have locally, we have a
+    # problem.
     if pc["id"] != tk.pipeline_configuration.get_shotgun_id():
         raise InvalidPipelineConfiguration(pc, tk.pipeline_configuration)
 
-    try:
-        is_auto_path = tk.pipeline_configuration.is_auto_path()
-    except sgtk.TankError, error:
-        logger.exception(error)
-        raise SitePipelineConfigurationNotFound(default_site_config)
+    is_auto_path = tk.pipeline_configuration.is_auto_path()
 
     # Downloads an upgrade for the startup if available. The startup upgrade is independent from the
     # auto_path state and has its own logic for auto-updating or not, so move this outside the
@@ -480,6 +512,9 @@ def __launch_app(app, splash, connection, app_bootstrap):
             elif result["status"] != "up_to_date":
                 # Core update should not fail. Warn, because it is not a fatal error.
                 logger.warning("Unexpected Core upgrade result: %s" % str(result))
+    else:
+        logger.info("Pipeline configuration not in auto path mode, skipping core and engine "
+                    "updates...")
 
     # Detect which kind of updates happened and restart the app if necessary
     if core_updated and startup_updated:
@@ -498,8 +533,8 @@ def __launch_app(app, splash, connection, app_bootstrap):
         # make sure that the version of core we are using supports the new-style site configuration
         if not __supports_pipeline_configuration_upgrade(tk.pipeline_configuration):
             raise UpgradeCoreError(
-                "Running the Shotgun Desktop with a migrated pipeline configuration requires "
-                "core 0.16.8.",
+                "Running a site configuration without the Template Project requires core v0.16.8 "
+                "or higher.",
                 default_site_config
             )
 
@@ -511,8 +546,7 @@ def __launch_app(app, splash, connection, app_bootstrap):
         updates = tk.get_command("updates")
         updates.set_logger(logger)
         updates.execute({})
-    else:
-        logger.info("Fixed core, skipping updates...")
+
 
     # initialize the tk-desktop engine for an empty context
     splash.set_message("Starting desktop engine.")

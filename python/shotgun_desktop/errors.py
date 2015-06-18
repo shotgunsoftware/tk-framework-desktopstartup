@@ -16,11 +16,28 @@ import os
 import sys
 
 
-class ShotgunDesktopError(Exception):
+# This exception is handled on its own and doesn't have an error message associated to it, compared to other
+# ShotgunDesktop errors, so we can derive from Exception directly.
+class RequestRestartException(Exception):
     """
-    Common base class for Shotgun Desktop errors
+    Short circuits all the application code for a quick exit. The user
+    wants to reinitialize the app.
     """
     pass
+
+
+class ShotgunDesktopError(Exception):
+    """
+    Common base class for Shotgun Desktop errors.
+    """
+    def __init__(self, message):
+        """Constructor"""
+        Exception.__init__(
+            self,
+            "%s\n\n"
+            "If you need help with this issue, please contact our support team at "
+            "support@shotgunsoftware.com." % message
+        )
 
 
 class InvalidPipelineConfiguration(ShotgunDesktopError):
@@ -31,25 +48,16 @@ class InvalidPipelineConfiguration(ShotgunDesktopError):
 
     def __init__(self, pc_entity, site_pc):
         """Constructor"""
-
         pc_project_id = pc_entity["project"]["id"] if pc_entity["project"] else None
         ShotgunDesktopError.__init__(
             self,
             "The pipeline configuration retrieved from Shotgun (named \"%s\" "
             "with id %d and project id %s) does not match the site configuration found on disk "
-            "(named \"%s\" with id %d and project id %s). Please contact "
-            "your Shotgun Administrator." %
+            "(named \"%s\" with id %d and project id %s). Please contact your Shotgun "
+            "Administrator." %
             (pc_entity["code"], pc_entity["id"], pc_project_id,
              site_pc.get_name(), site_pc.get_shotgun_id(), site_pc.get_project_id())
         )
-
-
-class RequestRestartException(ShotgunDesktopError):
-    """
-    Short circuits all the application code for a quick exit. The user
-    wants to reinitialize the app.
-    """
-    pass
 
 
 class UpgradeCoreError(ShotgunDesktopError):
@@ -78,6 +86,20 @@ class ToolkitDisabledError(ShotgunDesktopError):
         )
 
 
+class UnexpectedConfigFound(ShotgunDesktopError):
+    """
+    This exception notifies the catcher that a configuration was found on disk when none was expected.
+    """
+    def __init__(self, default_site_config):
+        """Constructor"""
+        ShotgunDesktopError.__init__(
+            self,
+            "A pipeline configuration was found at \"%s\" but no matching pipeline configuration was found in Shotgun.\n\n"
+            "This can happen if you are not assigned to the \"Template Project\". Please contact your Shotgun "
+            "Administrator to see if that is the case." % default_site_config
+        )
+
+
 class UpdatePermissionsError(ShotgunDesktopError):
     """
     This exception notifies the catcher that the site's human user permissions doesn't allow
@@ -89,7 +111,8 @@ class UpdatePermissionsError(ShotgunDesktopError):
             self,
             "Sorry, you do not have enough Shotgun permissions to set up the Shotgun Desktop.\n\n"
             "Please relaunch Desktop and instead log in as an Admin user.\n\n"
-            "Once the setup is complete, you can log out the Admin user and then log in as yourself."
+            "Once the setup is complete, you can log out the Admin user and then log in as yourself.\n\n"
+            "Please note that this error can also occur when you are not assigned to the \"Template Project\"."
         )
 
 
@@ -102,21 +125,4 @@ class BundledDescriptorEnvVarError(ShotgunDesktopError):
         ShotgunDesktopError.__init__(
             self,
             "Error parsing SGTK_DESKTOP_BUNDLED_DESCRIPTOR: %s" % reason
-        )
-
-
-class SitePipelineConfigurationNotFound(ShotgunDesktopError):
-    """
-    This exception notifiers the catcher that the site's pipeline configuration can't be found.
-    """
-    def __init__(self, site_config_path):
-        """
-        Constructor
-        """
-        Exception.__init__(
-            self,
-            "Can't find your site's pipeline configuration.\n\n"
-            "This can happen if you don't have the permissions to see the Template Project or if "
-            "the site's pipeline configuration id in Shotgun differs from the one at "
-            "%s/config/core/pipeline_configuration.yml." % site_config_path
         )
