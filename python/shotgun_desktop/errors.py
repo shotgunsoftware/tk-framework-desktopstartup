@@ -112,7 +112,7 @@ class UpdatePermissionsError(ShotgunDesktopError):
             "Sorry, you do not have enough Shotgun permissions to set up the Shotgun Desktop.\n\n"
             "Please relaunch Desktop and instead log in as an Admin user.\n\n"
             "Once the setup is complete, you can log out the Admin user and then log in as yourself.\n\n"
-            "Please note that this error can also occur when you haven't been assigned to the \"Template Project\"."
+            "Please note that this error can also occur when you are not assigned to the \"Template Project\"."
         )
 
 

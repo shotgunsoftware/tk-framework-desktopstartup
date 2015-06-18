@@ -43,6 +43,8 @@ from shotgun_desktop.errors import (ShotgunDesktopError, RequestRestartException
                                     ToolkitDisabledError, UpdatePermissionsError, UpgradeCoreError,
                                     InvalidPipelineConfiguration, UnexpectedConfigFound)
 
+RESET_SITE_ARG = "--reset-site"
+
 
 def __supports_authentication_module(sgtk):
     """
@@ -322,12 +324,16 @@ def __launch_app(app, splash, connection, app_bootstrap):
     config_folder_exists_at_startup = os.path.exists(default_site_config)
 
     # If the config folder exists at startup but the user wants to wipe it, do it.
-    if config_folder_exists_at_startup and "--reset-site" in sys.argv:
+    if config_folder_exists_at_startup and RESET_SITE_ARG in sys.argv:
         logger.info("Resetting site configuration at '%s'" % default_site_config)
         splash.set_message("Resetting site configuration ...")
         shutil.rmtree(default_site_config)
         # It doesn't exist anymore, so we can act as if it never existed in the first place
         config_folder_exists_at_startup = False
+        # Remove all occurances of --reset-site so that if we restart the app it doesn't reset it
+        # again.
+        while RESET_SITE_ARG in sys.argv:
+            sys.argv.remove(RESET_SITE_ARG)
 
     # If there is no pipeline configuration but we found something on disk nonetheless.
     if not pc and is_toolkit_already_configured(default_site_config):
