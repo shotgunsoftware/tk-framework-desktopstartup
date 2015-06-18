@@ -41,7 +41,7 @@ import shutil
 
 from shotgun_desktop.errors import (ShotgunDesktopError, RequestRestartException,
                                     ToolkitDisabledError, UpdatePermissionsError, UpgradeCoreError,
-                                    SitePipelineConfigurationNotFound, InvalidPipelineConfiguration)
+                                    InvalidPipelineConfiguration, UnexpectedConfigFound)
 
 
 def __supports_authentication_module(sgtk):
@@ -303,11 +303,12 @@ def __launch_app(app, splash, connection, app_bootstrap):
 
     # try and import toolkit
     toolkit_imported = False
-    can_wipe = True
+    config_exists_at_startup = os.path.exists(default_site_config)
     try:
-        if os.path.exists(default_site_config):
+        # In we found a pipeline configuration and the path for the config exists, try to import
+        # Toolkit.
+        if pc and config_exists_at_startup:
             if "--reset-site" not in sys.argv:
-                can_wipe = False
                 logger.info("Trying site config from '%s'" % default_site_config)
                 sgtk = __import_sgtk_from_path(default_site_config)
                 toolkit_imported = True
@@ -315,8 +316,10 @@ def __launch_app(app, splash, connection, app_bootstrap):
                 logger.info("Resetting site configuration at '%s'" % default_site_config)
                 splash.set_message("Resetting site configuration ...")
                 shutil.rmtree(default_site_config)
+                # It doesn't exist anymore, so we can act as if it never existed in the first place
+                config_exists_at_startup = False
     except Exception:
-        logger.exception("There was an error importing Toolkit")
+        logger.exception("There was an error importing Toolkit:")
         pass
     else:
         # Toolkit was imported, we need to initialize it now.
@@ -418,6 +421,8 @@ def __launch_app(app, splash, connection, app_bootstrap):
                 logger.exception(error)
                 if "CRUD ERROR" in error.message:
                     raise UpdatePermissionsError()
+                elif "already contains a configuration":
+                    raise UnexpectedConfigFound(default_site_config)
                 else:
                     raise
 
@@ -430,26 +435,27 @@ def __launch_app(app, splash, connection, app_bootstrap):
             localize = tk.get_command("localize")
             localize.set_logger(logger)
             localize.execute({})
+
+            # Get back the pipeline configuration, this is expected to be initialized further down.
+            _, pc = shotgun_desktop.paths.get_default_site_config_root(connection)
         except Exception:
             # Something went wrong. Wipe the default site config if we can and
             # rethrow
-            if can_wipe:
+            if not config_exists_at_startup:
                 logger.error(
                     "Something went wrong during Toolkit's activation, wiping configuration."
                 )
                 shutil.rmtree(default_site_config)
             raise
+    else:
+        tk = sgtk.sgtk_from_path(default_site_config)
 
-    tk = sgtk.sgtk_from_path(default_site_config)
-
+    # If the pipeline configuration found in Shotgun doesn't match what we have locally, we have a
+    # problem.
     if pc["id"] != tk.pipeline_configuration.get_shotgun_id():
         raise InvalidPipelineConfiguration(pc, tk.pipeline_configuration)
 
-    try:
-        is_auto_path = tk.pipeline_configuration.is_auto_path()
-    except sgtk.TankError, error:
-        logger.exception(error)
-        raise SitePipelineConfigurationNotFound(default_site_config)
+    is_auto_path = tk.pipeline_configuration.is_auto_path()
 
     # Downloads an upgrade for the startup if available. The startup upgrade is independent from the
     # auto_path state and has its own logic for auto-updating or not, so move this outside the
@@ -498,8 +504,8 @@ def __launch_app(app, splash, connection, app_bootstrap):
         # make sure that the version of core we are using supports the new-style site configuration
         if not __supports_pipeline_configuration_upgrade(tk.pipeline_configuration):
             raise UpgradeCoreError(
-                "Running the Shotgun Desktop with a migrated pipeline configuration requires "
-                "core 0.16.8.",
+                "Running a site configuration without the Template Project requires core v0.16.8 "
+                "or higher.",
                 default_site_config
             )
 

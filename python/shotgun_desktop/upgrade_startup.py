@@ -46,8 +46,6 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
     if not _supports_get_from_location_and_paths(sgtk):
         return False
 
-    logger.info("Upgrading startup code.")
-
     current_desc = sgtk.deploy.descriptor.get_from_location_and_paths(
         sgtk.deploy.descriptor.AppDescriptor.FRAMEWORK,
         app_bootstrap.get_shotgun_desktop_cache_location(),
@@ -60,6 +58,7 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
     # A Dev descriptor means there is nothing to update. Early out so that we don't show
     # "Getting Shotgun Desktop updates...""
     if isinstance(current_desc, sgtk.deploy.dev_descriptor.TankDevDescriptor):
+        logger.info("Fixed startup, skipping update...")
         return False
 
     splash.set_message("Getting Shotgun Desktop updates...")
