@@ -40,6 +40,30 @@ def get_python_path():
     return python
 
 
+def get_local_site_config_path(connection):
+    """
+    Computes the local site config path
+
+    :param connection: Connection to the Shotgun site.
+
+    :returns: Path inside the user folder.
+    """
+
+    # get operating system specific root
+    if sys.platform == "darwin":
+        pc_root = os.path.expanduser("~/Library/Application Support/Shotgun")
+    elif sys.platform == "win32":
+        pc_root = os.path.join(os.environ["APPDATA"], "Shotgun")
+    elif sys.platform.startswith("linux"):
+        pc_root = os.path.expanduser("~/.shotgun")
+
+    # add on site specific postfix
+    site = __get_site_from_connection(connection)
+    pc_root = os.path.join(pc_root, site, "site")
+
+    return str(pc_root)
+
+
 def get_default_site_config_root(connection):
     """ return the path to the default configuration for the site """
     # find what path field from the entity we need
@@ -111,19 +135,7 @@ def get_default_site_config_root(connection):
         # path is already set for us, just return it
         return (str(pc[plat_key]), pc)
 
-    # get operating system specific root
-    if sys.platform == "darwin":
-        pc_root = os.path.expanduser("~/Library/Application Support/Shotgun")
-    elif sys.platform == "win32":
-        pc_root = os.path.join(os.environ["APPDATA"], "Shotgun")
-    elif sys.platform.startswith("linux"):
-        pc_root = os.path.expanduser("~/.shotgun")
-
-    # add on site specific postfix
-    site = __get_site_from_connection(connection)
-    pc_root = os.path.join(pc_root, site, "site")
-
-    return (str(pc_root), pc)
+    return (get_local_site_config_path(connection), pc)
 
 
 def __get_site_from_connection(connection):
