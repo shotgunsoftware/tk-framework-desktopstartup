@@ -167,7 +167,6 @@ class TestShotgun610(TestCase):
         :returns: Tuple of (exception type, exception message)
         """
         stdout, _ = process.communicate()
-        print stdout
         res = self.EXCEPTION_RE.match(stdout)
         if not res:
             return None
@@ -196,7 +195,7 @@ class TestShotgun610(TestCase):
             "code": "Primary"
         })
 
-    def _assert_exception(self, process, exception_type, exception_regexp):
+    def _assert_exception(self, process, exception_type, exception_regexp=None):
         """
         Asserts that no exceptions were thrown by the process.
 
@@ -298,7 +297,7 @@ class TestShotgun610(TestCase):
         """
         Tests a non auto path setup that shouldn't upgrade.
         """
-        # Set up the site like it should work with a 0.15.3 site.
+        # Create a site configuration that is non auto updating.
         pc = self._create_pipeline_configuration_for_template_project()
         self._setup_site_configuration("0.16.4", pc, auto_path=False)
 
@@ -310,3 +309,16 @@ class TestShotgun610(TestCase):
         process = self._launch_slave_process()
         # No request to startup should be made.
         self._assert_no_exception(process)
+
+    def test_too_old_for_no_template(self):
+        # Create a site configuration that can't migrate the site configuration.
+        pc = self._create_pipeline_configuration_for_template_project()
+        self._setup_site_configuration("0.16.4", pc, auto_path=False)
+        # Zap the pipeline configuration's project is to cause a migration
+        # of site configuration.
+        self.sg.update("PipelineConfiguration", pc["id"], {"project": None})
+
+        # Launch Desktop
+        process = self._launch_slave_process()
+        # startup should Restart after upgrading the core.
+        self._assert_exception(process, "UpgradeCoreError", "v0.16.8")
