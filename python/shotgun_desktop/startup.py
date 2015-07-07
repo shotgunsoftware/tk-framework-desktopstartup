@@ -564,6 +564,7 @@ def __launch_app(app, splash, connection, app_bootstrap):
 
         # If the configuration on disk is not the site configuration, update it to the site config.
         if not tk.pipeline_configuration.is_site_configuration():
+            logger.debug("Migrating pipeline configuration...")
             tk.pipeline_configuration.convert_to_site_config()
 
     if is_auto_path:

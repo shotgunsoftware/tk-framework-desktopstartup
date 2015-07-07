@@ -103,7 +103,7 @@ class TestShotgun610(TestCase):
         """
         return os.path.join(self._fixtures_path, "core", version)
 
-    def _setup_site_configuration(self, version, pc=None, auto_path=True):
+    def _setup_site_configuration(self, version=None, pc=None, auto_path=True):
         """
         Sets up a site configuration for the current test
 
@@ -118,7 +118,9 @@ class TestShotgun610(TestCase):
         # Also, we are relying on the startup to pick up pc and not this parameter.
         process = self._launch_slave_process()
         self._assert_no_exception(process)
-        self._upgrade_core(version)
+
+        if version:
+            self._upgrade_core(version)
 
         # If not in auto path mode, update the pipeline configuration to lock this
         # config.
@@ -322,3 +324,25 @@ class TestShotgun610(TestCase):
         process = self._launch_slave_process()
         # startup should Restart after upgrading the core.
         self._assert_exception(process, "UpgradeCoreError", "v0.16.8")
+
+    def test_can_migrate(self):
+        # Create a site configuration that can't migrate the site configuration.
+        pc = self._create_pipeline_configuration_for_template_project()
+        self._setup_site_configuration(pc=pc)
+        # Zap the pipeline configuration's project is to cause a migration
+        # of site configuration.
+        self.sg.update("PipelineConfiguration", pc["id"], {"project": None})
+
+        # Launch Desktop
+        process = self._launch_slave_process()
+        # startup should Restart after upgrading the core.
+        self._assert_no_exception(process)
+
+    def test_setup_project_as_an_artist(self):
+        pass
+
+    def test_non_matching_pipeline_ids(self):
+        pass
+
+    def cant_find_template_project(self):
+        pass
