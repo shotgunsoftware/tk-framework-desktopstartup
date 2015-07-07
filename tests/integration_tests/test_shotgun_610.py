@@ -12,14 +12,17 @@ import subprocess
 from unittest2 import TestCase
 import os
 import sys
+import logging
 
 import tempfile
 import shutil
 import re
 
+from tank_vendor import yaml
 from tank_vendor.shotgun_authentication import ShotgunAuthenticator
 import shotgun_desktop.paths
 import shotgun_desktop.startup
+from shotgun_desktop.initialization import initialize
 import sgtk
 
 
@@ -27,7 +30,11 @@ class TestShotgun610(TestCase):
 
     def setUp(self):
         """
-        Makes sure we are logged in to the site for unit testing
+        - Makes sure we are logged in to the site for unit testing.
+        - Caches template project link
+        - caches the site configuration folder
+        - clears all site configurations from shotgun
+        - clears the unit test output folder (caches, site, logs)
         """
         # Make sure we are logged in to set up the test on the server side.
         self.user = ShotgunAuthenticator().get_user()
@@ -35,31 +42,25 @@ class TestShotgun610(TestCase):
         sgtk.set_authenticated_user(self.user)
 
         # Find the template project
-        self._template_project_link = self.sg.find_one("Project", [["name", "is", "Template Project"]], ["id"])
+        self.template_project_link = self.sg.find_one("Project", [["name", "is", "Template Project"]], ["id"])
 
         self._remove_site_configurations()
 
         # Path to the folder for this test.
-        self._test_folder = os.path.join(tempfile.gettempdir(), "shotgun_desktop_integration_tests", self._testMethodName)
-
-        # Clear the test folder (previous's run site configuration and logs)
-        if os.path.exists(self._test_folder):
-            shutil.rmtree(self._test_folder)
-        os.makedirs(self._test_folder)
-
-        test_project_name = "ShotgunDesktopIntegrationTests"
-
-        self._project_link = self.sg.find_one("Project", [["name", "is", test_project_name]])
-        if not self._project_link:
-            self._project_link = self.sg.create("Project", {"name": test_project_name})
-
-        self.site_config_folder = os.path.join(self._test_folder, "site")
-
-        self._fixtures_path = os.path.join(
+        self.test_folder = os.path.join(tempfile.gettempdir(), "shotgun_desktop_integration_tests", self._testMethodName)
+        # Path to the site configuration.
+        self.site_config_folder = os.path.join(self.test_folder, "site")
+        # Path to the fixtures root.
+        self.fixtures_root = os.path.join(
             os.path.dirname(__file__),
             "..",
             "fixtures"
         )
+
+        # Clear the test folder (previous's run site configuration and logs)
+        if os.path.exists(self.test_folder):
+            shutil.rmtree(self.test_folder)
+        os.makedirs(self.test_folder)
 
     def _remove_site_configurations(self):
         """
@@ -101,7 +102,7 @@ class TestShotgun610(TestCase):
 
         :returns: Path to the version of the core requested.
         """
-        return os.path.join(self._fixtures_path, "core", version)
+        return os.path.join(self.fixtures_root, "core", version)
 
     def _setup_site_configuration(self, version=None, pc=None, auto_path=True):
         """
@@ -110,17 +111,27 @@ class TestShotgun610(TestCase):
         :param version: Version of the core to use to setup the site.
         :param pc: Pipeline configuration to use with this site configuration.
         """
-        # This is super not efficient. We should check in a site configuration
-        # which would be copied into the site config location and then patched
-        #  - shotgun.yml should point to the right site
-        #  - pipeline_configuration.yml should point to the right ids and project
-        #  - core should be of the right version
-        # Also, we are relying on the startup to pick up pc and not this parameter.
-        process = self._launch_slave_process()
-        self._assert_no_exception(process)
+
+        if not pc:
+            pc = self.sg.create("PipelineConfiguration", {"project": None, "code": "Primary"})
+
+        class MockSplash(object):
+            def show(self):
+                pass
+
+            def set_message(self, *args):
+                pass
+
+            details = None
 
         if version:
-            self._upgrade_core(version)
+            os.environ["SGTK_CORE_DEBUG_LOCATION"] = self._get_core_fixture_path(version)
+
+        try:
+            initialize(MockSplash(), self.sg, self.site_config_folder)
+        finally:
+            if version:
+                del os.environ["SGTK_CORE_DEBUG_LOCATION"]
 
         # If not in auto path mode, update the pipeline configuration to lock this
         # config.
@@ -128,6 +139,26 @@ class TestShotgun610(TestCase):
             self.sg.update("PipelineConfiguration", pc["id"], {
                 shotgun_desktop.paths.get_path_field_for_platform(): self.site_config_folder
             })
+
+        # Write the pipeline configuration file
+        self._write_config_file(["core", "pipeline_configuration.yml"], {
+            "pc_id": pc["id"],
+            "pc_name": pc["code"],
+            "project_id": None if not pc["project"] else pc["project"]["id"],
+            "project_name": "site",
+            "published_file_entity_type": "PublishedFile",
+            "use_shotgun_path_cache": True
+        })
+
+        self._write_config_file(["core", "roots.yml"], {})
+
+    def _write_config_file(self, location_tokens, data):
+        """
+        Writes a configuration file inside the site configuration
+        """
+        location = os.path.join(*([self.site_config_folder, "config"] + location_tokens))
+        with open(location, "w") as f:
+            yaml.dump(data, f)
 
     def _launch_slave_process(self):
         """
@@ -137,20 +168,16 @@ class TestShotgun610(TestCase):
             os.path.split(__file__)[0],
             "mockdesktop.py"
         )
-        env = {
-            "PYTHONPATH": os.path.pathsep.join(sys.path),
-        }
 
         sub_process = subprocess.Popen(
             [
                 sys.executable,
                 mockdesktop_script,
-                "--test-folder", self._test_folder,
+                "--test-folder", self.test_folder,
                 "--test-name", self._testMethodName
             ],
             stderr=subprocess.STDOUT,
-            stdout=subprocess.PIPE,
-            env=env
+            stdout=subprocess.PIPE
         )
 
         return sub_process
@@ -193,7 +220,7 @@ class TestShotgun610(TestCase):
         """
         # Create Pipeline configuration on template project.
         return self.sg.create("PipelineConfiguration", {
-            "project": self._template_project_link,
+            "project": self.template_project_link,
             "code": "Primary"
         })
 
@@ -263,7 +290,7 @@ class TestShotgun610(TestCase):
         tk = sgtk.sgtk_from_path(self.site_config_folder)
         # is_site_configuration is True only for a True site configuration, i.e. project_id is None
         self.assertFalse(tk.pipeline_configuration.is_site_configuration())
-        self.assertEqual(tk.pipeline_configuration.get_project_id(), self._template_project_link["id"])
+        self.assertEqual(tk.pipeline_configuration.get_project_id(), self.template_project_link["id"])
         self.assertEqual(tk.pipeline_configuration.get_shotgun_id(), pc["id"])
 
         # This should be able to reuse the config.
@@ -275,7 +302,10 @@ class TestShotgun610(TestCase):
         Tests startup with a site configured locally but nothing in Shotgun.
         """
         # Let's fake a toolkit install
-        os.makedirs(os.path.join(self._test_folder, "site", "config"))
+        self._setup_site_configuration("0.16.4")
+        # Clean up all site configurations so this is unexpected.
+        self._remove_site_configurations()
+
         process = self._launch_slave_process()
         # startup should complain about an unexpected config.
         self._assert_exception(process, "UnexpectedConfigFound")
@@ -326,9 +356,9 @@ class TestShotgun610(TestCase):
         self._assert_exception(process, "UpgradeCoreError", "v0.16.8")
 
     def test_can_migrate(self):
-        # Create a site configuration that can't migrate the site configuration.
+        # Create a site configuration that can migrate the site configuration.
         pc = self._create_pipeline_configuration_for_template_project()
-        self._setup_site_configuration(pc=pc)
+        self._setup_site_configuration("0.16.12", pc=pc)
         # Zap the pipeline configuration's project is to cause a migration
         # of site configuration.
         self.sg.update("PipelineConfiguration", pc["id"], {"project": None})
@@ -342,7 +372,4 @@ class TestShotgun610(TestCase):
         pass
 
     def test_non_matching_pipeline_ids(self):
-        pass
-
-    def cant_find_template_project(self):
         pass

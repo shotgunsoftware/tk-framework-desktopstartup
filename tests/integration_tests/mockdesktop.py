@@ -11,7 +11,7 @@
 from optparse import OptionParser
 import os
 import logging
-
+import sys
 
 class IntegrationTestBootstrap(object):
 
@@ -83,16 +83,28 @@ def main():
     (options, args) = parser.parse_args()
 
     bootstrap = IntegrationTestBootstrap(options.test_folder)
+    sg_auth = shotgun_desktop.startup.import_shotgun_authentication_from_path(bootstrap)
+
     app, splash = shotgun_desktop.startup.__init_app()
 
-    shotgun_desktop.startup.__launch_app(app, splash, ShotgunAuthenticator().get_user().create_sg_connection(), bootstrap)
+    connection = sg_auth.ShotgunAuthenticator().get_user().create_sg_connection()
+
+    try:
+        shotgun_desktop.startup.__launch_app(app, splash, connection, bootstrap)
+    except:
+        bootstrap._logger.exception("Exception thrown!")
+        raise
 
 
 if __name__ == '__main__':
     try:
+        sys.path.insert(
+            0,
+            os.path.join(os.path.dirname(__file__), "..", "..", "python")
+        )
         import shotgun_desktop.paths
         import shotgun_desktop.startup
-        from tank_vendor.shotgun_authentication import ShotgunAuthenticator
+
         main()
     except Exception, e:
         print "Exception:%s,%s" % (e.__class__.__name__, e.message.encode("base64"))

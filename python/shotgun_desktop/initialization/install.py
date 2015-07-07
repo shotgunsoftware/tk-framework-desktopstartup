@@ -9,13 +9,13 @@
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
 import os
-import sys
 import uuid
 import errno
 import shutil
 import logging
 import tempfile
 import traceback
+import imp
 
 from .zipfilehelper import unzip_file
 from distutils.version import LooseVersion
@@ -204,7 +204,6 @@ class InstallThread(QtCore.QThread):
 
         self.stepDone.emit("Now installing Shotgun Pipeline Toolkit Core")
         self._logger.debug("Now installing Shotgun Pipeline Toolkit Core")
-        sys.path.insert(0, core_path)
         try:
             class EmitLogger(object):
                 def __init__(self, host, debug=False):
@@ -224,8 +223,11 @@ class InstallThread(QtCore.QThread):
                 def error(self, msg):
                     self.host.stepError.emit(msg)
 
-            import _core_upgrader
             sgtk_install_folder = os.path.join(self._sgtk_folder, "install")
+            # uuid load the script so we can core upgrade multiple cores with the same process.
+            # this is vital in unit tests.
+            core_upgrader_script = os.path.join(core_path, "_core_upgrader.py")
+            _core_upgrader = imp.load_source("%s_core_upgrader" % uuid.uuid4(), core_upgrader_script)
             _core_upgrader.upgrade_tank(sgtk_install_folder, EmitLogger(self, debug=False))
         except Exception, e:
             self._logger.exception("Could not run upgrade script! Error reported: %s" % e)

@@ -18,15 +18,16 @@ from . import shotgun
 from .. import paths
 
 
-def initialize(splash, connection):
+def initialize(splash, connection, site_root=None):
     """ initialize toolkit for this computer for a single site """
     logger = logging.getLogger("tk-desktop.initialization")
 
-    # grab the paths that will be used during the install
-    temp_dir = tempfile.mkdtemp(prefix="tk-desktop")
-    temp_site_root = os.path.join(temp_dir, "site")
+    if not site_root:
+        # grab the paths that will be used during the install
+        temp_dir = tempfile.mkdtemp(prefix="tk-desktop")
+        site_root = os.path.join(temp_dir, "site")
 
-    logger.debug("temp site install: %s", temp_site_root)
+    logger.debug("temp site install: %s", site_root)
     splash.show()
     splash.set_message("Getting site details...")
 
@@ -58,7 +59,7 @@ def initialize(splash, connection):
         "Windows": "",
         "Linux": "",
     }
-    locations[current_plat_name] = temp_site_root
+    locations[current_plat_name] = site_root
 
     executables = {
         "Darwin": "/Applications/Shotgun.app/Contents/Frameworks/Python/bin/python",
@@ -70,7 +71,7 @@ def initialize(splash, connection):
     # have all info, pass it to the installer thread
     splash.details = "Installing Toolkit core..."
     installer = install.InstallThread()
-    installer.set_install_folder(temp_site_root)
+    installer.set_install_folder(site_root)
     installer.set_shotgun_info(
         connection,
         toolkit_script
@@ -87,4 +88,4 @@ def initialize(splash, connection):
     installer.start()
     installer.wait()
 
-    return temp_site_root
+    return site_root

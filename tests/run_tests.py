@@ -10,7 +10,10 @@
 
 import sys
 import os
+import logging
 from optparse import OptionParser
+
+logging.getLogger("tk-desktop").addHandler(logging.StreamHandler())
 
 
 def add_to_python_path(location_name, folder):
