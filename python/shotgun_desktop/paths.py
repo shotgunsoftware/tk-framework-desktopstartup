@@ -115,17 +115,24 @@ def get_default_site_config_roots(connection, fields):
     )
 
 
+def get_path_field_for_platform():
+    """
+    Returns the Shotgun path field for the current platform.
+    """
+    if sys.platform == "darwin":
+        return "mac_path"
+    elif sys.platform == "win32":
+        return "windows_path"
+    elif sys.platform.startswith("linux"):
+        return "linux_path"
+    else:
+        raise RuntimeError("unknown platform: %s" % sys.platform)
+
+
 def get_default_site_config_root(connection):
     """ return the path to the default configuration for the site """
     # find what path field from the entity we need
-    if sys.platform == "darwin":
-        plat_key = "mac_path"
-    elif sys.platform == "win32":
-        plat_key = "windows_path"
-    elif sys.platform.startswith("linux"):
-        plat_key = "linux_path"
-    else:
-        raise RuntimeError("unknown platform: %s" % sys.platform)
+    plat_key = get_path_field_for_platform()
 
     pcs = get_default_site_config_roots(
         connection,

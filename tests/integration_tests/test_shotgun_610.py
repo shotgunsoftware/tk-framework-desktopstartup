@@ -32,6 +32,7 @@ class TestShotgun610(TestCase):
         # Make sure we are logged in to set up the test on the server side.
         self.user = ShotgunAuthenticator().get_user()
         self.sg = self.user.create_sg_connection()
+        sgtk.set_authenticated_user(self.user)
 
         # Find the template project
         self._template_project_link = self.sg.find_one("Project", [["name", "is", "Template Project"]], ["id"])
@@ -72,10 +73,61 @@ class TestShotgun610(TestCase):
             pc in pcs
         ])
 
+    def _upgrade_core(self, version):
+        """
+        Upgrades the core for the current site to a specific version.
+
+        :param version: Version of the core to upgrade to.
+        """
+        core_to_upgrade = os.path.join(self.site_config_folder, "install")
+        core_upgrader = os.path.join(self._get_core_fixture_path(version), "_core_upgrader.py")
+        with open(os.devnull, "w") as f:
+            subprocess.check_call(
+                [
+                    sys.executable,
+                    core_upgrader,
+                    "migrate",
+                    core_to_upgrade
+                ],
+                stdout=f,
+                stderr=f
+            )
+
     def _get_core_fixture_path(self, version):
+        """
+        Returns the path to one of the cores used for testing.
+
+        :param version: Version of the core requested.
+
+        :returns: Path to the version of the core requested.
+        """
         return os.path.join(self._fixtures_path, "core", version)
 
-    def _launch_slave_process(self, core_version=None):
+    def _setup_site_configuration(self, version, pc=None, auto_path=True):
+        """
+        Sets up a site configuration for the current test
+
+        :param version: Version of the core to use to setup the site.
+        :param pc: Pipeline configuration to use with this site configuration.
+        """
+        # This is super not efficient. We should check in a site configuration
+        # which would be copied into the site config location and then patched
+        #  - shotgun.yml should point to the right site
+        #  - pipeline_configuration.yml should point to the right ids and project
+        #  - core should be of the right version
+        # Also, we are relying on the startup to pick up pc and not this parameter.
+        process = self._launch_slave_process()
+        self._assert_no_exception(process)
+        self._upgrade_core(version)
+
+        # If not in auto path mode, update the pipeline configuration to lock this
+        # config.
+        if not auto_path:
+            self.sg.update("PipelineConfiguration", pc["id"], {
+                shotgun_desktop.paths.get_path_field_for_platform(): self.site_config_folder
+            })
+
+    def _launch_slave_process(self):
         """
         Launches the MockDesktop script
         """
@@ -86,9 +138,6 @@ class TestShotgun610(TestCase):
         env = {
             "PYTHONPATH": os.path.pathsep.join(sys.path),
         }
-
-        if core_version:
-            env["SGTK_CORE_DEBUG_LOCATION"] = self._get_core_fixture_path(core_version)
 
         sub_process = subprocess.Popen(
             [
@@ -110,7 +159,15 @@ class TestShotgun610(TestCase):
     EXCEPTION_RE = re.compile(r"Exception:(.*),([a-zA-Z0-9\n]*={1,2}|)")
 
     def _extract_exception(self, process):
+        """
+        Extract an exception from the subprocess output.
+
+        :param process: Process handle.
+
+        :returns: Tuple of (exception type, exception message)
+        """
         stdout, _ = process.communicate()
+        print stdout
         res = self.EXCEPTION_RE.match(stdout)
         if not res:
             return None
@@ -118,20 +175,43 @@ class TestShotgun610(TestCase):
         return groups[0], groups[1].decode("base64")
 
     def _assert_no_exception(self, process):
+        """
+        Asserts that no exceptions were thrown by the process.
+
+        :param process: Process handle
+        """
         ex = self._extract_exception(process)
         if ex:
             print "Exception was thrown!"
             print "%s: %s" % ex
         self.assertIsNone(ex)
 
-    def _assert_exception(self, process, ex_type):
+    def _create_pipeline_configuration_for_template_project(self):
+        """
+        Creates a PipelineConfiguration for the Template Project.
+        """
+        # Create Pipeline configuration on template project.
+        return self.sg.create("PipelineConfiguration", {
+            "project": self._template_project_link,
+            "code": "Primary"
+        })
+
+    def _assert_exception(self, process, exception_type, exception_regexp):
+        """
+        Asserts that no exceptions were thrown by the process.
+
+        :param process: Process handle
+        :param ex_type: Expected exception type
+        """
         ex = self._extract_exception(process)
         if not ex:
-            print "Expecting %s exception, but nothing was found!" % ex_type
+            print "Expecting %s exception, but nothing was found!" % exception_type
             self.assertIsNotNone(ex)
-        elif ex[0] != ex_type:
-            print "Expecting %s exception, got %s instead!" % (ex_type, ex)
-        self.assertEqual(ex[0], ex_type)
+        elif ex[0] != exception_type:
+            print "Expecting %s exception, got %s instead!" % (exception_type, ex)
+        self.assertEqual(ex[0], exception_type)
+        if exception_regexp:
+            self.assertRegexpMatches(ex[1], exception_regexp)
 
     def test_create_with_no_template(self):
         """
@@ -173,11 +253,7 @@ class TestShotgun610(TestCase):
         """
         Tests startup with a pipeline configuration already configured with the template project.
         """
-        # Create Pipeline configuration on template project.
-        pc = self.sg.create("PipelineConfiguration", {
-            "project": self._template_project_link,
-            "code": "Primary"
-        })
+        pc = self._create_pipeline_configuration_for_template_project()
 
         # This will setup the site from scratch.
         process = self._launch_slave_process()
@@ -203,31 +279,34 @@ class TestShotgun610(TestCase):
         # startup should complain about an unexpected config.
         self._assert_exception(process, "UnexpectedConfigFound")
 
-    def _upgrade_core(self, version):
-        core_to_upgrade = os.path.join(self.site_config_folder, "install")
-        core_upgrader = os.path.join(self._get_core_fixture_path(version), "_core_upgrader.py")
-        with open(os.devnull, "w") as f:
-            subprocess.check_call(
-                [
-                    sys.executable,
-                    core_upgrader,
-                    "migrate",
-                    core_to_upgrade
-                ],
-                stdout=f,
-                stderr=f
-            )
-
-    def test_engine_update_reboot(self):
+    def test_core_update_reboot(self):
         """
         Tests startup with a site configured locally but nothing in Shotgun.
         """
-        # Install Toolkit
-        process = self._launch_slave_process()
-        self._assert_no_exception(process)
-        # Downgrade the core so that the next time we launch we are getting upgraded
-        self._upgrade_core("0.16.4")
-        # Start again
+        self._setup_site_configuration("0.16.4")
+
+        # An auto path setup should be upgradable
+        tk = sgtk.sgtk_from_path(self.site_config_folder)
+        self.assertTrue(tk.pipeline_configuration.is_auto_path())
+
+        # Launch Desktop
         process = self._launch_slave_process()
         # startup should Restart after upgrading the core.
         self._assert_exception(process, "RequestRestartException")
+
+    def test_non_auto_path_doesnt_upgrade(self):
+        """
+        Tests a non auto path setup that shouldn't upgrade.
+        """
+        # Set up the site like it should work with a 0.15.3 site.
+        pc = self._create_pipeline_configuration_for_template_project()
+        self._setup_site_configuration("0.16.4", pc, auto_path=False)
+
+        # A non auto path setup should not be upgradable.
+        tk = sgtk.sgtk_from_path(self.site_config_folder)
+        self.assertFalse(tk.pipeline_configuration.is_auto_path())
+
+        # Launch Desktop
+        process = self._launch_slave_process()
+        # No request to startup should be made.
+        self._assert_no_exception(process)

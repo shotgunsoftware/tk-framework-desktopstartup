@@ -20,10 +20,7 @@ class IntegrationTestBootstrap(object):
         self._test_folder = test_folder
 
         # Set up logging
-        self._handlers = [
-            logging.StreamHandler(),
-            logging.FileHandler(self.get_logfile_location(), "w")
-        ]
+        self._handler = logging.FileHandler(self.get_logfile_location())
         self._logger = logging.getLogger("tk-desktop")
         self.add_logger_to_logfile(self._logger)
 
@@ -48,9 +45,8 @@ class IntegrationTestBootstrap(object):
         )
 
     def add_logger_to_logfile(self, logger):
-        for h in self._handlers:
-            logger.addHandler(h)
-        logger.setLevel(logging.ERROR)
+        logger.addHandler(self._handler)
+        logger.setLevel(logging.DEBUG)
 
     def get_startup_location_override(self):
         return None
