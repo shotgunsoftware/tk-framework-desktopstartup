@@ -372,4 +372,14 @@ class TestShotgun610(TestCase):
         pass
 
     def test_non_matching_pipeline_ids(self):
-        pass
+        # set up the site configuration.
+        self._setup_site_configuration()
+        # remove all site configs from Shotgun
+        self._remove_site_configurations()
+        # Create a new one, which will not match with the one on disk.
+        self._create_pipeline_configuration_for_template_project()
+
+        # Launch Desktop
+        process = self._launch_slave_process()
+        # startup should Restart after upgrading the core.
+        self._assert_exception(process, "InvalidPipelineConfiguration")
