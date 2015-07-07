@@ -195,7 +195,6 @@ class TestShotgun610(TestCase):
         :returns: Tuple of (exception type, exception message)
         """
         stdout, _ = process.communicate()
-        print stdout
         res = self.EXCEPTION_RE.search(stdout)
         if not res:
             return None, None, stdout
@@ -250,7 +249,7 @@ class TestShotgun610(TestCase):
         """
         # This will setup the site from scratch
         process = self._launch_slave_process()
-        self._assert_no_exception(process)
+        self._assert_no_exception(process, "Creating the site config without using a project")
 
         tk = sgtk.sgtk_from_path(self.site_config_folder)
         self.assertTrue(tk.pipeline_configuration.is_site_configuration())
@@ -268,7 +267,7 @@ class TestShotgun610(TestCase):
         })
         # This will setup the site from scratch
         process = self._launch_slave_process()
-        self._assert_no_exception(process)
+        self._assert_no_exception(process, "Reusing the site config without a project")
 
         tk = sgtk.sgtk_from_path(self.site_config_folder)
 
@@ -287,7 +286,7 @@ class TestShotgun610(TestCase):
 
         # This will setup the site from scratch.
         process = self._launch_slave_process()
-        self._assert_no_exception(process)
+        self._assert_no_exception(process, "Reusing the site config with a project.")
 
         tk = sgtk.sgtk_from_path(self.site_config_folder)
         # is_site_configuration is True only for a True site configuration, i.e. project_id is None
@@ -342,7 +341,7 @@ class TestShotgun610(TestCase):
         # Launch Desktop
         process = self._launch_slave_process()
         # No request to startup should be made.
-        self._assert_no_exception(process)
+        self._assert_no_exception(process, "Pipeline configuration not in auto path mode")
 
     def test_too_old_for_no_template(self):
         """
@@ -362,6 +361,9 @@ class TestShotgun610(TestCase):
         self._assert_exception(process, "UpgradeCoreError", "v0.16.8")
 
     def test_can_migrate(self):
+        """
+        Tests that we can migrate a site configuration with the newer core.
+        """
         # Create a site configuration that can migrate the site configuration.
         pc = self._create_pipeline_configuration_for_template_project()
         self._setup_site_configuration(pc=pc)
@@ -374,10 +376,10 @@ class TestShotgun610(TestCase):
         # startup should Restart after upgrading the core.
         self._assert_no_exception(process, "Migrating pipeline configuration")
 
-    def test_setup_project_as_an_artist(self):
-        pass
-
     def test_non_matching_pipeline_ids(self):
+        """
+        Tests that non matching pipelines ids are detected.
+        """
         # set up the site configuration.
         self._setup_site_configuration()
         # remove all site configs from Shotgun
