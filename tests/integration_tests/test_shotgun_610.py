@@ -12,7 +12,6 @@ import subprocess
 from unittest2 import TestCase
 import os
 import sys
-import logging
 
 import tempfile
 import shutil
@@ -187,7 +186,7 @@ class TestShotgun610(TestCase):
     # If \n are present in the output buffer, those will be matched as well.
     EXCEPTION_RE = re.compile(r"Exception:(.*),([a-zA-Z0-9\n]*={1,2}|)")
 
-    def _extract_exception(self, process):
+    def _process_output(self, process):
         """
         Extract an exception from the subprocess output.
 
@@ -196,23 +195,26 @@ class TestShotgun610(TestCase):
         :returns: Tuple of (exception type, exception message)
         """
         stdout, _ = process.communicate()
-        res = self.EXCEPTION_RE.match(stdout)
+        print stdout
+        res = self.EXCEPTION_RE.search(stdout)
         if not res:
-            return None
+            return None, None, stdout
         groups = res.groups()
-        return groups[0], groups[1].decode("base64")
+        return groups[0], groups[1].decode("base64"), stdout
 
-    def _assert_no_exception(self, process):
+    def _assert_no_exception(self, process, output_regexp=None):
         """
         Asserts that no exceptions were thrown by the process.
 
         :param process: Process handle
         """
-        ex = self._extract_exception(process)
-        if ex:
+        ex_type, ex_msg, output = self._process_output(process)
+        if ex_type:
             print "Exception was thrown!"
-            print "%s: %s" % ex
-        self.assertIsNone(ex)
+            print "%s: %s" % (ex_type, ex_msg)
+        if output_regexp:
+            self.assertRegexpMatches(output, output_regexp)
+        self.assertIsNone(ex_type)
 
     def _create_pipeline_configuration_for_template_project(self):
         """
@@ -231,15 +233,15 @@ class TestShotgun610(TestCase):
         :param process: Process handle
         :param ex_type: Expected exception type
         """
-        ex = self._extract_exception(process)
-        if not ex:
+        ex_type, ex_msg, _ = self._process_output(process)
+        if not ex_type:
             print "Expecting %s exception, but nothing was found!" % exception_type
-            self.assertIsNotNone(ex)
-        elif ex[0] != exception_type:
-            print "Expecting %s exception, got %s instead!" % (exception_type, ex)
-        self.assertEqual(ex[0], exception_type)
+            self.assertIsNotNone(ex_type)
+        elif ex_type != exception_type:
+            print "Expecting %s exception, got %s instead!" % (exception_type, ex_type)
+        self.assertEqual(ex_type, exception_type)
         if exception_regexp:
-            self.assertRegexpMatches(ex[1], exception_regexp)
+            self.assertRegexpMatches(ex_msg, exception_regexp)
 
     def test_create_with_no_template(self):
         """
@@ -343,22 +345,26 @@ class TestShotgun610(TestCase):
         self._assert_no_exception(process)
 
     def test_too_old_for_no_template(self):
+        """
+        Tests a core that is to old to migrate from the pipeline configuration attached
+        to the template project.
+        """
         # Create a site configuration that can't migrate the site configuration.
         pc = self._create_pipeline_configuration_for_template_project()
         self._setup_site_configuration("0.16.4", pc, auto_path=False)
-        # Zap the pipeline configuration's project is to cause a migration
-        # of site configuration.
+        # Zap the pipeline configuration's project id to cause a migration
+        # of site configuration when launching the Desktop.
         self.sg.update("PipelineConfiguration", pc["id"], {"project": None})
 
         # Launch Desktop
         process = self._launch_slave_process()
-        # startup should Restart after upgrading the core.
+        # The desktop should complain that you need 0.16.8 or higher.
         self._assert_exception(process, "UpgradeCoreError", "v0.16.8")
 
     def test_can_migrate(self):
         # Create a site configuration that can migrate the site configuration.
         pc = self._create_pipeline_configuration_for_template_project()
-        self._setup_site_configuration("0.16.12", pc=pc)
+        self._setup_site_configuration(pc=pc)
         # Zap the pipeline configuration's project is to cause a migration
         # of site configuration.
         self.sg.update("PipelineConfiguration", pc["id"], {"project": None})
@@ -366,7 +372,7 @@ class TestShotgun610(TestCase):
         # Launch Desktop
         process = self._launch_slave_process()
         # startup should Restart after upgrading the core.
-        self._assert_no_exception(process)
+        self._assert_no_exception(process, "Migrating pipeline configuration")
 
     def test_setup_project_as_an_artist(self):
         pass

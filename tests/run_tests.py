@@ -13,7 +13,10 @@ import os
 import logging
 from optparse import OptionParser
 
-logging.getLogger("tk-desktop").addHandler(logging.StreamHandler())
+# Make sure that code invoked directly from the destkop traces it's errors out.
+logger = logging.getLogger("tk-desktop")
+logger.addHandler(logging.StreamHandler())
+logger.setLevel(logging.ERROR)
 
 
 def add_to_python_path(location_name, folder):

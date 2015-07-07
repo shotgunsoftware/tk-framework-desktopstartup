@@ -13,17 +13,21 @@ import os
 import logging
 import sys
 
+# Set up logging
+_handlers = [
+    logging.StreamHandler()
+]
+_logger = logging.getLogger("tk-desktop")
+_logger.addHandler(_handlers[0])
+
+
 class IntegrationTestBootstrap(object):
 
     def __init__(self, test_folder):
         # Make sure test folder is clean
         self._test_folder = test_folder
-
-        # Set up logging
-        self._handler = logging.FileHandler(self.get_logfile_location(), "w")
-        self._logger = logging.getLogger("tk-desktop")
-        self.add_logger_to_logfile(self._logger)
-
+        _handlers.append(logging.FileHandler(self.get_logfile_location(), "w"))
+        self.add_logger_to_logfile(_logger)
         # Mock some code from the shotgun_desktop to control where files are written.
         shotgun_desktop.paths.get_local_site_config_path = lambda x: os.path.join(
             self._test_folder,
@@ -45,7 +49,10 @@ class IntegrationTestBootstrap(object):
         )
 
     def add_logger_to_logfile(self, logger):
-        logger.addHandler(self._handler)
+        global _handlers
+        for h in _handlers:
+            if h not in logger.handlers:
+                logger.addHandler(h)
         logger.setLevel(logging.DEBUG)
 
     def get_startup_location_override(self):
@@ -79,20 +86,17 @@ def main():
     parser.add_option("--test-folder", help="folder where the test will read data from", dest="test_folder")
     parser.add_option("--test-name", help="name of the test being executed.", dest="test_name")
     parser.add_option("--reset-site", help="site configuration will be reset.")
-
     (options, args) = parser.parse_args()
 
     bootstrap = IntegrationTestBootstrap(options.test_folder)
     sg_auth = shotgun_desktop.startup.import_shotgun_authentication_from_path(bootstrap)
 
     app, splash = shotgun_desktop.startup.__init_app()
-
     connection = sg_auth.ShotgunAuthenticator().get_user().create_sg_connection()
-
     try:
         shotgun_desktop.startup.__launch_app(app, splash, connection, bootstrap)
     except:
-        bootstrap._logger.exception("Exception thrown!")
+        _logger.exception("Exception thrown!")
         raise
 
 
@@ -107,4 +111,4 @@ if __name__ == '__main__':
 
         main()
     except Exception, e:
-        print "Exception:%s,%s" % (e.__class__.__name__, e.message.encode("base64"))
+        _logger.debug("Exception:%s,%s" % (e.__class__.__name__, e.message.encode("base64")))
