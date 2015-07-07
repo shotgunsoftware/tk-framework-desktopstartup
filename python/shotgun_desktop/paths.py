@@ -64,20 +64,15 @@ def get_local_site_config_path(connection):
     return str(pc_root)
 
 
-def get_default_site_config_root(connection):
-    """ return the path to the default configuration for the site """
-    # find what path field from the entity we need
-    if sys.platform == "darwin":
-        plat_key = "mac_path"
-    elif sys.platform == "win32":
-        plat_key = "windows_path"
-    elif sys.platform.startswith("linux"):
-        plat_key = "linux_path"
-    else:
-        raise RuntimeError("unknown platform: %s" % sys.platform)
+def get_default_site_config_roots(connection, fields):
+    """
+    Returns all the pipeline configurations that would be a site configuration.
 
-    # interesting fields to return
-    fields = ["id", "code", "windows_path", "mac_path", "linux_path", "project"]
+    :param connection: Shotgun instance.
+    :param fields: Name of fields that should be retrieved from each pipeline configuration.
+
+    :returns: Array of pipeline configurations dictionaries.
+    """
 
     # Find the right pipeline configuration. We'll always pick a projectless
     # one over one with the Template Project. To have a deterministic behaviour,
@@ -92,7 +87,9 @@ def get_default_site_config_root(connection):
     # based on decreasing ids, the last entry is still the one with the lowest
     # id.
 
-    pcs = connection.find(
+    # interesting fields to return
+
+    return connection.find(
         "PipelineConfiguration",
         [{
             "filter_operator": "any",
@@ -112,9 +109,27 @@ def get_default_site_config_root(connection):
             # Sorting on the project id doesn't actually matter. We want
             # some sorting simply because this will force grouping between
             # configurations with a project and those that don't.
-            {'field_name':'project.Project.id','direction':'asc'}, 
+            {'field_name':'project.Project.id','direction':'asc'},
             {'field_name':'id','direction':'desc'}
         ]
+    )
+
+
+def get_default_site_config_root(connection):
+    """ return the path to the default configuration for the site """
+    # find what path field from the entity we need
+    if sys.platform == "darwin":
+        plat_key = "mac_path"
+    elif sys.platform == "win32":
+        plat_key = "windows_path"
+    elif sys.platform.startswith("linux"):
+        plat_key = "linux_path"
+    else:
+        raise RuntimeError("unknown platform: %s" % sys.platform)
+
+    pcs = get_default_site_config_roots(
+        connection,
+        ["id", "code", "windows_path", "mac_path", "linux_path", "project"]
     )
 
     if len(pcs) == 0:

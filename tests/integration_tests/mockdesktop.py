@@ -12,10 +12,6 @@ from optparse import OptionParser
 import os
 import logging
 
-import shotgun_desktop.paths
-import shotgun_desktop.startup
-from tank_vendor.shotgun_authentication import ShotgunAuthenticator
-
 
 class IntegrationTestBootstrap(object):
 
@@ -36,10 +32,6 @@ class IntegrationTestBootstrap(object):
             self._test_folder,
             "site"
         )
-
-        # Do not allow the startup code to log out on failure otherwise this will
-        # break the unit test flow.
-        ShotgunAuthenticator.clear_default_user = lambda: None
 
         # Do not actually launch the engine ui
         shotgun_desktop.startup._run_engine = lambda *args: None
@@ -95,7 +87,15 @@ def main():
 
     bootstrap = IntegrationTestBootstrap(options.test_folder)
     app, splash = shotgun_desktop.startup.__init_app()
+
     shotgun_desktop.startup.__launch_app(app, splash, ShotgunAuthenticator().get_user().create_sg_connection(), bootstrap)
 
+
 if __name__ == '__main__':
-    main()
+    try:
+        import shotgun_desktop.paths
+        import shotgun_desktop.startup
+        from tank_vendor.shotgun_authentication import ShotgunAuthenticator
+        main()
+    except Exception, e:
+        print "Exception:%s,%s" % (e.__class__.__name__, e.message.encode("base64"))
