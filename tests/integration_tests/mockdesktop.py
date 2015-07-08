@@ -84,8 +84,6 @@ def main():
 
     parser = OptionParser()
     parser.add_option("--test-folder", help="folder where the test will read data from", dest="test_folder")
-    parser.add_option("--test-name", help="name of the test being executed.", dest="test_name")
-    parser.add_option("--reset-site", help="site configuration will be reset.")
     (options, args) = parser.parse_args()
 
     bootstrap = IntegrationTestBootstrap(options.test_folder)
