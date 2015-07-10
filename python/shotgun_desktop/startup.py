@@ -16,7 +16,7 @@ import time
 import subprocess
 
 # Add shotgun_api3 bundled with tk-core to the path.
-sys.path.insert(0, os.path.join(os.path.split(__file__)[0], "..", "tk-core", "python", "tank_vendor"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tk-core", "python", "tank_vendor"))
 
 # initialize logging
 import logging
@@ -84,7 +84,7 @@ def __import_sgtk_from_path(path):
 
     # update sys.path with the install
     if python_path not in sys.path:
-        sys.path.insert(1, python_path)
+        sys.path.insert(0, python_path)
 
     # clear the importer cache since the path could have been created
     # since the last attempt to import toolkit
@@ -120,7 +120,6 @@ def __initialize_sgtk_authentication(sgtk, app_bootstrap):
     :param sgtk: The Toolkit API handle.
     :param app_bootstrap: The application bootstrap instance.
     """
-
     # If the version of Toolkit supports the new authentication mechanism
     if __supports_authentication_module(sgtk):
         # import authentication
@@ -169,7 +168,7 @@ def __uuid_import(module, path):
     return module
 
 
-def __import_shotgun_authentication_from_path(app_bootstrap):
+def import_shotgun_authentication_from_path(app_bootstrap):
     """
     Imports bundled Shotgun authentication module with a decorated name so
     another instance can be loaded later on. If SGTK_CORE_DEBUG_LOCATION
@@ -294,6 +293,30 @@ def __restart_app_with_countdown(splash, reason):
         splash.set_message("%s Restarting in %d seconds..." % (reason, i))
         time.sleep(1)
     raise RequestRestartException()
+
+
+def _run_engine(splash, app, tk, sgtk, app_bootstrap):
+
+    # initialize the tk-desktop engine for an empty context
+    splash.set_message("Starting desktop engine.")
+    app.processEvents()
+
+    ctx = tk.context_empty()
+    engine = sgtk.platform.start_engine("tk-desktop", tk, ctx)
+
+    # engine will take over logging
+    app_bootstrap.tear_down_logging()
+
+    # reset PYTHONPATH and PYTHONHOME if they were overridden by the application
+    if "SGTK_DESKTOP_ORIGINAL_PYTHONPATH" in os.environ:
+        os.environ["PYTHONPATH"] = os.environ["SGTK_DESKTOP_ORIGINAL_PYTHONPATH"]
+    if "SGTK_DESKTOP_ORIGINAL_PYTHONHOME" in os.environ:
+        os.environ["PYTHONHOME"] = os.environ["SGTK_DESKTOP_ORIGINAL_PYTHONHOME"]
+
+    # and run the engine
+    logger.debug("Running tk-desktop")
+    startup_version = get_location(sgtk, app_bootstrap).get("version") or "Undefined"
+    return engine.run(splash, version=app_bootstrap.get_version(), startup_version=startup_version)
 
 
 def __launch_app(app, splash, connection, app_bootstrap):
@@ -540,6 +563,7 @@ def __launch_app(app, splash, connection, app_bootstrap):
 
         # If the configuration on disk is not the site configuration, update it to the site config.
         if not tk.pipeline_configuration.is_site_configuration():
+            logger.debug("Migrating pipeline configuration...")
             tk.pipeline_configuration.convert_to_site_config()
 
     if is_auto_path:
@@ -547,33 +571,13 @@ def __launch_app(app, splash, connection, app_bootstrap):
         updates.set_logger(logger)
         updates.execute({})
 
-
-    # initialize the tk-desktop engine for an empty context
-    splash.set_message("Starting desktop engine.")
-    app.processEvents()
-
-    ctx = tk.context_empty()
-    engine = sgtk.platform.start_engine("tk-desktop", tk, ctx)
-
-    # engine will take over logging
-    app_bootstrap.tear_down_logging()
-
-    # reset PYTHONPATH and PYTHONHOME if they were overridden by the application
-    if "SGTK_DESKTOP_ORIGINAL_PYTHONPATH" in os.environ:
-        os.environ["PYTHONPATH"] = os.environ["SGTK_DESKTOP_ORIGINAL_PYTHONPATH"]
-    if "SGTK_DESKTOP_ORIGINAL_PYTHONHOME" in os.environ:
-        os.environ["PYTHONHOME"] = os.environ["SGTK_DESKTOP_ORIGINAL_PYTHONHOME"]
-
     if not __supports_authentication_module(sgtk):
         raise UpgradeCoreError(
             "This version of the Shotgun Desktop only supports core 0.16.4 and higher. ",
             default_site_config
         )
 
-    # and run the engine
-    logger.debug("Running tk-desktop")
-    startup_version = get_location(sgtk, app_bootstrap).get("version") or "Undefined"
-    return engine.run(splash, version=app_bootstrap.get_version(), startup_version=startup_version)
+    return _run_engine(splash, app, tk, sgtk, app_bootstrap)
 
 
 def __handle_exception(splash, shotgun_authenticator, error_message):
@@ -640,7 +644,7 @@ def main(**kwargs):
 
     try:
         # get the shotgun authentication module.
-        shotgun_authentication = __import_shotgun_authentication_from_path(app_bootstrap)
+        shotgun_authentication = import_shotgun_authentication_from_path(app_bootstrap)
     except:
         __handle_unexpected_exception(splash, shotgun_authenticator)
 

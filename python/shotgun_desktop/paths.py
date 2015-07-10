@@ -40,20 +40,39 @@ def get_python_path():
     return python
 
 
-def get_default_site_config_root(connection):
-    """ return the path to the default configuration for the site """
-    # find what path field from the entity we need
-    if sys.platform == "darwin":
-        plat_key = "mac_path"
-    elif sys.platform == "win32":
-        plat_key = "windows_path"
-    elif sys.platform.startswith("linux"):
-        plat_key = "linux_path"
-    else:
-        raise RuntimeError("unknown platform: %s" % sys.platform)
+def get_local_site_config_path(connection):
+    """
+    Computes the local site config path
 
-    # interesting fields to return
-    fields = ["id", "code", "windows_path", "mac_path", "linux_path", "project"]
+    :param connection: Connection to the Shotgun site.
+
+    :returns: Path inside the user folder.
+    """
+
+    # get operating system specific root
+    if sys.platform == "darwin":
+        pc_root = os.path.expanduser("~/Library/Application Support/Shotgun")
+    elif sys.platform == "win32":
+        pc_root = os.path.join(os.environ["APPDATA"], "Shotgun")
+    elif sys.platform.startswith("linux"):
+        pc_root = os.path.expanduser("~/.shotgun")
+
+    # add on site specific postfix
+    site = __get_site_from_connection(connection)
+    pc_root = os.path.join(pc_root, site, "site")
+
+    return str(pc_root)
+
+
+def get_default_site_config_roots(connection, fields):
+    """
+    Returns all the pipeline configurations that would be a site configuration.
+
+    :param connection: Shotgun instance.
+    :param fields: Name of fields that should be retrieved from each pipeline configuration.
+
+    :returns: Array of pipeline configurations dictionaries.
+    """
 
     # Find the right pipeline configuration. We'll always pick a projectless
     # one over one with the Template Project. To have a deterministic behaviour,
@@ -68,7 +87,9 @@ def get_default_site_config_root(connection):
     # based on decreasing ids, the last entry is still the one with the lowest
     # id.
 
-    pcs = connection.find(
+    # interesting fields to return
+
+    return connection.find(
         "PipelineConfiguration",
         [{
             "filter_operator": "any",
@@ -88,9 +109,34 @@ def get_default_site_config_root(connection):
             # Sorting on the project id doesn't actually matter. We want
             # some sorting simply because this will force grouping between
             # configurations with a project and those that don't.
-            {'field_name':'project.Project.id','direction':'asc'}, 
+            {'field_name':'project.Project.id','direction':'asc'},
             {'field_name':'id','direction':'desc'}
         ]
+    )
+
+
+def get_path_field_for_platform():
+    """
+    Returns the Shotgun path field for the current platform.
+    """
+    if sys.platform == "darwin":
+        return "mac_path"
+    elif sys.platform == "win32":
+        return "windows_path"
+    elif sys.platform.startswith("linux"):
+        return "linux_path"
+    else:
+        raise RuntimeError("unknown platform: %s" % sys.platform)
+
+
+def get_default_site_config_root(connection):
+    """ return the path to the default configuration for the site """
+    # find what path field from the entity we need
+    plat_key = get_path_field_for_platform()
+
+    pcs = get_default_site_config_roots(
+        connection,
+        ["id", "code", "windows_path", "mac_path", "linux_path", "project"]
     )
 
     if len(pcs) == 0:
@@ -111,19 +157,7 @@ def get_default_site_config_root(connection):
         # path is already set for us, just return it
         return (str(pc[plat_key]), pc)
 
-    # get operating system specific root
-    if sys.platform == "darwin":
-        pc_root = os.path.expanduser("~/Library/Application Support/Shotgun")
-    elif sys.platform == "win32":
-        pc_root = os.path.join(os.environ["APPDATA"], "Shotgun")
-    elif sys.platform.startswith("linux"):
-        pc_root = os.path.expanduser("~/.shotgun")
-
-    # add on site specific postfix
-    site = __get_site_from_connection(connection)
-    pc_root = os.path.join(pc_root, site, "site")
-
-    return (str(pc_root), pc)
+    return (get_local_site_config_path(connection), pc)
 
 
 def __get_site_from_connection(connection):
