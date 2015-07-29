@@ -35,6 +35,7 @@ from shotgun_desktop.initialization import initialize, does_pipeline_configurati
 from shotgun_desktop import authenticator
 from shotgun_desktop.upgrade_startup import upgrade_startup
 from shotgun_desktop.location import get_location
+from shotgun_desktop.systray_icon import ShotgunSystemTrayIcon
 
 from shotgun_desktop.ui import resources_rc
 import shutil
@@ -243,10 +244,28 @@ def __init_app():
     """
     logger.debug("Creating QApp and splash screen")
     # start up our QApp now
-    return QtGui.QApplication(sys.argv), shotgun_desktop.splash.Splash()
+    qApp = QtGui.QApplication(sys.argv)
+    splash = shotgun_desktop.splash.Splash()
+    systray = ShotgunSystemTrayIcon()
+    systray.show()
+    return qApp, splash, systray
 
 
-def __do_login(splash, shotgun_authentication, app_bootstrap):
+class SystrayEventLoop(QtCore.QEventLoop):
+
+    def __init__(self, systray, parent=None):
+        QtCore.QEventLoop.__init__(self, parent)
+        systray.clicked.connect(self._systray_clicked)
+
+    def _systray_clicked(self):
+        self.exit()
+
+
+def __wait_for_systray_clicked(systray):
+    SystrayEventLoop(systray).exec_()
+
+
+def __do_login(splash, shotgun_authentication, app_bootstrap, systray):
     """
     Asks for the credentials of the user or automatically logs the user in if the credentials are
     cached on disk.
@@ -265,13 +284,15 @@ def __do_login(splash, shotgun_authentication, app_bootstrap):
         __restart_app_with_countdown(splash, "Desktop has been reinitialized.")
 
     logger.debug("Retrieving credentials")
-    try:
-        user = shotgun_authenticator.get_user()
-    except shotgun_authentication.AuthenticationCancelled:
-        return None, None
-    else:
+    user = None
+    while not user:
+        try:
+            user = shotgun_authenticator.get_user()
+        except shotgun_authentication.AuthenticationCancelled:
+            __wait_for_systray_clicked(systray)
+            continue
         connection = user.create_sg_connection()
-    return shotgun_authenticator, connection
+        return shotgun_authenticator, connection
 
 
 def __restart_app_with_countdown(splash, reason):
@@ -296,7 +317,7 @@ def __restart_app_with_countdown(splash, reason):
     raise RequestRestartException()
 
 
-def __launch_app(app, splash, connection, app_bootstrap):
+def __launch_app(app, splash, connection, app_bootstrap, systray):
     """
     Shows the splash screen, optionally downloads and configures Toolkit, imports it, optionally
     updates it and then launches the desktop engine.
@@ -552,6 +573,9 @@ def __launch_app(app, splash, connection, app_bootstrap):
     splash.set_message("Starting desktop engine.")
     app.processEvents()
 
+    systray.hide()
+    del systray
+
     ctx = tk.context_empty()
     engine = sgtk.platform.start_engine("tk-desktop", tk, ctx)
 
@@ -628,7 +652,7 @@ def main(**kwargs):
     """
     logger.debug("Running main from %s" % __file__)
     # Create some ui related objects
-    app, splash = __init_app()
+    app, splash, systray = __init_app()
 
     # We might crash before even initializing the authenticator, so instantiate
     # it right away.
@@ -647,7 +671,7 @@ def main(**kwargs):
     # We have gui and the authentication module, now do the rest.
     try:
         # Authenticate
-        shotgun_authenticator, connection = __do_login(splash, shotgun_authentication, app_bootstrap)
+        shotgun_authenticator, connection = __do_login(splash, shotgun_authentication, app_bootstrap, systray)
         # If we didn't authenticate a user
         if not connection:
             # We're done for the day.
@@ -660,7 +684,8 @@ def main(**kwargs):
                 app,
                 splash,
                 connection,
-                app_bootstrap
+                app_bootstrap,
+                systray
             )
     except RequestRestartException:
         subprocess.Popen(sys.argv)
