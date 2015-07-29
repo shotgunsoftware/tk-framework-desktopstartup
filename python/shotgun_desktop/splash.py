@@ -26,3 +26,8 @@ class Splash(QtGui.QDialog):
     def set_message(self, text):
         self.ui.message.setText(text)
         QtGui.QApplication.instance().processEvents()
+
+    def show(self):
+        QtGui.QDialog.show(self)
+        self.raise_()
+        self.activateWindow()

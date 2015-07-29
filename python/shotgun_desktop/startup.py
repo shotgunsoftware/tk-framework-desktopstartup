@@ -17,6 +17,7 @@ import subprocess
 
 # Add shotgun_api3 bundled with tk-core to the path.
 sys.path.insert(0, os.path.join(os.path.split(__file__)[0], "..", "tk-core", "python", "tank_vendor"))
+sys.path.insert(0, os.path.join(os.path.split(__file__)[0], "..", "tk-framework-desktopserver", "python"))
 
 # initialize logging
 import logging
@@ -36,6 +37,8 @@ from shotgun_desktop import authenticator
 from shotgun_desktop.upgrade_startup import upgrade_startup
 from shotgun_desktop.location import get_location
 from shotgun_desktop.systray_icon import ShotgunSystemTrayIcon
+
+import tk_server
 
 from shotgun_desktop.ui import resources_rc
 import shutil
@@ -330,8 +333,6 @@ def __launch_app(app, splash, connection, app_bootstrap, systray):
     """
     # show the splash screen
     splash.show()
-    splash.raise_()
-    splash.activateWindow()
     splash.set_message("Looking up site configuration.")
     app.processEvents()
 
@@ -640,6 +641,19 @@ def __handle_unexpected_exception(splash, shotgun_authenticator):
     raise
 
 
+__server = None
+
+
+def __init_websockets(splash):
+    splash.show()
+    splash.set_message("Initializing websockets server")
+    global __server
+    key_path = os.path.join(os.path.dirname(tk_server.__file__), "../../resources/keys")
+    __server = tk_server.Server()
+    __server.start(True, key_path, True)
+    splash.hide()
+
+
 def main(**kwargs):
     """
     Main
@@ -653,6 +667,8 @@ def main(**kwargs):
     logger.debug("Running main from %s" % __file__)
     # Create some ui related objects
     app, splash, systray = __init_app()
+
+    __init_websockets(splash)
 
     # We might crash before even initializing the authenticator, so instantiate
     # it right away.
