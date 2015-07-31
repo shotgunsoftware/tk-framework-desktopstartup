@@ -13,9 +13,8 @@ from PySide import QtCore, QtGui
 
 class ShotgunSystemTrayIcon(QtGui.QSystemTrayIcon):
     """ wrapper around system tray icon """
-    clicked = QtCore.Signal()
-    double_clicked = QtCore.Signal()
-    right_clicked = QtCore.Signal()
+    login = QtCore.Signal()
+    quit = QtCore.Signal()
 
     def __init__(self, parent=None):
         QtGui.QSystemTrayIcon.__init__(self, parent)
@@ -25,13 +24,17 @@ class ShotgunSystemTrayIcon(QtGui.QSystemTrayIcon):
         self.setIcon(icon)
         self.setToolTip("Shotgun")
 
-        # connect up signal handlers
-        self.activated.connect(self.__activated)
+        self._systray_menu = QtGui.QMenu()
+        self._login_action = self._systray_menu.addAction("Login")
+        self._about_action = self._systray_menu.addAction("About")
+        self._systray_menu.addSeparator()
+        self._quit_action = self._systray_menu.addAction("Quit")
 
-    def __activated(self, reason):
-        if reason == QtGui.QSystemTrayIcon.Trigger:
-            self.clicked.emit()
-        elif reason == QtGui.QSystemTrayIcon.DoubleClick:
-            self.double_clicked.emit()
-        elif reason == QtGui.QSystemTrayIcon.Context:
-            self.right_clicked.emit()
+        # connect up signal handlers
+        self._login_action.triggered.connect(self.login)
+        self._about_action.triggered.connect(self._about)
+        self._quit_action.triggered.connect(self.quit)
+        self.setContextMenu(self._systray_menu)
+
+    def _about(self):
+        QtGui.QDesktopServices.openUrl("https://support.shotgunsoftware.com/entries/95402178")
