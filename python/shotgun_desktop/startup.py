@@ -17,7 +17,12 @@ import subprocess
 
 # Add shotgun_api3 bundled with tk-core to the path.
 sys.path.insert(0, os.path.join(os.path.split(__file__)[0], "..", "tk-core", "python", "tank_vendor"))
-sys.path.insert(0, os.path.join(os.path.split(__file__)[0], "..", "tk-framework-desktopserver", "python"))
+# Add the Shotgun Desktop Server source to the Python path
+if "SGKT_DESKTOP_SERVER_LOCATION" in os.environ:
+    desktop_server_root = os.environ["SGKT_DESKTOP_SERVER_LOCATION"]
+else:
+    desktop_server_root = os.path.join(os.path.split(__file__)[0], "..", "tk-framework-desktopserver")
+sys.path.insert(0, os.path.join(desktop_server_root, "python"))
 
 # initialize logging
 import logging
