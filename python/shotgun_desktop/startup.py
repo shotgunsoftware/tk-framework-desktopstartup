@@ -68,6 +68,9 @@ def __desktop_engine_supports_authentication_module(engine):
 
     :returns: True if the engine supports the authentication module, False otherwise.
     """
+    if engine.version.lower() == 'undefined':
+        logger.warning("The version of the tk-desktop engine is undefined.")
+        return True
     return LooseVersion(engine.version) >= "v2.0.0"
 
 
