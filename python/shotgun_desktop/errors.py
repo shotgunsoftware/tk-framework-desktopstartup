@@ -74,6 +74,20 @@ class UpgradeCoreError(ShotgunDesktopError):
         )
 
 
+class UpgradeEngineError(ShotgunDesktopError):
+    """
+    This exception notifies the catcher that the site's desktop engine needs to be upgraded in order
+    to use this version of the Desktop installer.
+    """
+    def __init__(self, reason, toolkit_path):
+        """Constructor"""
+        ShotgunDesktopError.__init__(
+            self,
+            "%s Please upgrade your site engine by running:\n\n%s updates site" %
+            (reason, os.path.join(toolkit_path, "tank.bat" if sys.platform == "win32" else "tank"))
+        )
+
+
 class ToolkitDisabledError(ShotgunDesktopError):
     """
     This exception notifies the catcher that Toolkit has not been enabled by the user on the site.

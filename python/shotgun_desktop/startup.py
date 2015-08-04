@@ -42,18 +42,19 @@ from shotgun_desktop import authenticator
 from shotgun_desktop.upgrade_startup import upgrade_startup
 from shotgun_desktop.location import get_location
 from shotgun_desktop.systray_icon import ShotgunSystemTrayIcon
+from distutils.version import LooseVersion
 
 from shotgun_desktop.ui import resources_rc
 import shutil
 
-from shotgun_desktop.errors import (ShotgunDesktopError, RequestRestartException,
+from shotgun_desktop.errors import (ShotgunDesktopError, RequestRestartException, UpgradeEngineError,
                                     ToolkitDisabledError, UpdatePermissionsError, UpgradeCoreError,
                                     InvalidPipelineConfiguration, UnexpectedConfigFound)
 
 RESET_SITE_ARG = "--reset-site"
 
 
-def __supports_authentication_module(sgtk):
+def __toolkit_supports_authentication_module(sgtk):
     """
     Tests if the given Toolkit API supports the shotgun_authentication module.
 
@@ -63,6 +64,18 @@ def __supports_authentication_module(sgtk):
     """
     # if the authentication module is not supported, this method won't be present on the core.
     return hasattr(sgtk, "set_authenticated_user")
+
+
+def __desktop_engine_supports_authentication_module(engine):
+    """
+    Tests if the engine supports the login based authentication. All versions above 2.0.0 supports
+    login based authentication.
+
+    :param engine: The desktop engine to test.
+
+    :returns: True if the engine supports the authentication module, False otherwise.
+    """
+    return LooseVersion(engine.version) >= "v2.0.0"
 
 
 def __supports_pipeline_configuration_upgrade(pipeline_configuration):
@@ -129,7 +142,7 @@ def __initialize_sgtk_authentication(sgtk, app_bootstrap):
     """
 
     # If the version of Toolkit supports the new authentication mechanism
-    if __supports_authentication_module(sgtk):
+    if __toolkit_supports_authentication_module(sgtk):
         # import authentication
         from tank_vendor import shotgun_authentication
         # Add the module to the log file.
@@ -575,12 +588,23 @@ def __launch_app(app, splash, connection, app_bootstrap):
         updates.set_logger(logger)
         updates.execute({})
 
+    if not __toolkit_supports_authentication_module(sgtk):
+        raise UpgradeCoreError(
+            "This version of the Shotgun Desktop only supports core 0.16.4 and higher.",
+            default_site_config
+        )
     # initialize the tk-desktop engine for an empty context
     splash.set_message("Starting desktop engine.")
     app.processEvents()
 
     ctx = tk.context_empty()
     engine = sgtk.platform.start_engine("tk-desktop", tk, ctx)
+
+    if not __desktop_engine_supports_authentication_module(engine):
+        raise UpgradeEngineError(
+            "This version of the Shotgun Desktop only supports tk-desktop engine 2.0.0 and higher.",
+            default_site_config
+        )
 
     # engine will take over logging
     app_bootstrap.tear_down_logging()
@@ -590,12 +614,6 @@ def __launch_app(app, splash, connection, app_bootstrap):
         os.environ["PYTHONPATH"] = os.environ["SGTK_DESKTOP_ORIGINAL_PYTHONPATH"]
     if "SGTK_DESKTOP_ORIGINAL_PYTHONHOME" in os.environ:
         os.environ["PYTHONHOME"] = os.environ["SGTK_DESKTOP_ORIGINAL_PYTHONHOME"]
-
-    if not __supports_authentication_module(sgtk):
-        raise UpgradeCoreError(
-            "This version of the Shotgun Desktop only supports core 0.16.4 and higher. ",
-            default_site_config
-        )
 
     # and run the engine
     logger.debug("Running tk-desktop")
