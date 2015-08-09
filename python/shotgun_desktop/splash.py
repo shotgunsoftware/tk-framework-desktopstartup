@@ -31,3 +31,9 @@ class Splash(QtGui.QDialog):
         QtGui.QDialog.show(self)
         self.raise_()
         self.activateWindow()
+
+    def hide(self):
+        # There's no sense showing the previous message when we show the
+        # splash next time.
+        self.set_message("")
+        QtGui.QDialog.hide(self)

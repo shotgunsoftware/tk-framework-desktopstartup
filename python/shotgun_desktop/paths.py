@@ -17,8 +17,7 @@ import logging
 def get_shotgun_app_root():
     """ returns where the shotgun app is installed """
     if sys.platform == "darwin":
-        args = [os.path.dirname(__file__)] + [".."] * 5
-        shotgun_root = os.path.abspath(os.path.join(*args))
+        shotgun_root = os.path.abspath(os.path.join(os.path.dirname(sys.prefix), "..", ".."))
     elif sys.platform == "win32":
         shotgun_root = os.path.abspath(os.path.dirname(sys.prefix))
     elif sys.platform.startswith("linux"):

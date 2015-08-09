@@ -41,6 +41,7 @@ from shotgun_desktop.initialization import initialize, does_pipeline_configurati
 from shotgun_desktop import authenticator
 from shotgun_desktop.upgrade_startup import upgrade_startup
 from shotgun_desktop.location import get_location
+from shotgun_desktop.settings import Settings
 from shotgun_desktop.systray_icon import ShotgunSystemTrayIcon
 from distutils.version import LooseVersion
 
@@ -267,27 +268,45 @@ def __init_app():
 
 
 class SystrayEventLoop(QtCore.QEventLoop):
+    """
+    Local event loop for the system tray. The return value of _exec() indicates what the user picked in the
+    menu.
+    """
 
-    CLOSE_APP = 1
-    LOGIN = 0
+    CLOSE_APP, LOGIN = range(0, 2)
 
     def __init__(self, systray, parent=None):
+        """
+        Constructor
+        """
         QtCore.QEventLoop.__init__(self, parent)
         systray.login.connect(self._login)
         systray.quit.connect(self._quit)
 
     def _login(self):
+        """
+        Called when "Login" is selected. Exits the loop.
+        """
         self.exit(self.LOGIN)
 
     def _quit(self):
+        """
+        Called when "Quit" is selected. Exits the loop.
+        """
         self.exit(self.CLOSE_APP)
 
 
 def __run_with_systray():
+    """
+    Creates a systray and runs a local event loop to process events for that systray.
+
+    :returns: SystrayEventLoop.LOGIN if the user clicked Login, SystrayEventLoop.CLOSE_APP
+        is the user clicked Quit.
+    """
     systray = ShotgunSystemTrayIcon()
     systray.show()
-    res = SystrayEventLoop(systray).exec_()
-    return res == SystrayEventLoop.LOGIN
+    # Executes until user clicks on the systray and chooses Login or Quit.
+    return SystrayEventLoop(systray).exec_()
 
 
 def __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootstrap):
@@ -338,7 +357,7 @@ def __restart_app_with_countdown(splash, reason):
     raise RequestRestartException()
 
 
-def __launch_app(app, splash, connection, app_bootstrap):
+def __launch_app(app, splash, connection, app_bootstrap, server):
     """
     Shows the splash screen, optionally downloads and configures Toolkit, imports it, optionally
     updates it and then launches the desktop engine.
@@ -346,6 +365,7 @@ def __launch_app(app, splash, connection, app_bootstrap):
     :param app: Application object for event processing.
     :param splash: Splash dialog to update user on what is currently going on
     :param connection: Connection to the Shotgun server.
+    :param server: The tk_server.Server instance.
 
     :returns: The error code to return to the shell.
     """
@@ -660,20 +680,46 @@ def __handle_unexpected_exception(splash, shotgun_authenticator):
     # Let the bootstrap catch this error and handle it.
     raise
 
-__server = None
 
+def __init_websockets(tk_server, splash, app_bootstrap, settings):
+    """
+    Initializes the local websocket server.
 
-def __init_websockets(tk_server, splash, bootstrap):
+    :param tk_server: tk_server module handle.
+    :pram splash: Splash widget.
+    :param app_bootstrap: The application bootstrap instance.
+    :param settings: The application's settings.
 
-    global __server
-
+    :returns: The tk_server.Server instance.
+    """
     key_path = os.path.join(
-        bootstrap.get_shotgun_desktop_cache_location(),
+        app_bootstrap.get_shotgun_desktop_cache_location(),
         "config",
         "certificates"
     )
-    __server = tk_server.Server()
-    __server.start(True, key_path, True)
+    server = tk_server.Server(
+        port=settings.integration_port,
+        debug=True,
+        keys_path=key_path
+    )
+    server.start(start_reactor=True)
+
+    return server
+
+
+def __import_tk_server(splash, settings):
+    # Show progress
+    splash.show()
+    splash.set_message("Initializing Desktop Integration server")
+
+    # try to import
+    tk_server = None
+    if settings.integration_enabled:
+        try:
+            import tk_server
+        except:
+            __handle_unexpected_exception(splash, None)
+    return tk_server
 
 
 def main(**kwargs):
@@ -689,39 +735,40 @@ def main(**kwargs):
     logger.debug("Running main from %s" % __file__)
     app_bootstrap = kwargs["app_bootstrap"]
 
+    settings = Settings()
+
     # Create some ui related objects
     app, splash = __init_app()
 
     # We might crash before even initializing the authenticator, so instantiate
     # it right away.
     shotgun_authenticator = None
+
     # We have to import this in a separate try catch block because we'll be using
     # shotgun_authentication in the following catch statements.
-
     try:
         # get the shotgun authentication module.
         shotgun_authentication = __import_shotgun_authentication_from_path(app_bootstrap)
     except:
-        __handle_unexpected_exception(splash, shotgun_authenticator)
-
-    try:
-        splash.show()
-        splash.set_message("Initializing websockets server")
-        import tk_server
-    except:
-        __handle_unexpected_exception(splash, shotgun_authenticator)
+        __handle_unexpected_exception(splash, None)
+        return -1
 
     # We have gui, websocket library and the authentication module, now do the rest.
     try:
-        __init_websockets(tk_server, splash, app_bootstrap)
+        tk_server = __import_tk_server(splash, settings)
+        if tk_server:
+            server = __init_websockets(tk_server, splash, app_bootstrap, settings)
+        else:
+            logger.warning("Skipped Desktop Integration initialization...")
+            server = None
         splash.hide()
 
         shotgun_authenticator = authenticator.get_configured_shotgun_authenticator(
-            shotgun_authentication
+            shotgun_authentication, settings
         )
         # If the user has never logged in, start the Desktop in minimalist mode.
         if not shotgun_authenticator.get_default_host():
-            if not __run_with_systray():
+            if not __run_with_systray() == SystrayEventLoop.CLOSE_APP:
                 return 0
 
         # Authenticate
@@ -738,7 +785,8 @@ def main(**kwargs):
                 app,
                 splash,
                 connection,
-                app_bootstrap
+                app_bootstrap,
+                server
             )
     except RequestRestartException:
         subprocess.Popen(sys.argv)
@@ -754,3 +802,4 @@ def main(**kwargs):
         return -1
     except:
         __handle_unexpected_exception(splash, shotgun_authenticator)
+        return -1
