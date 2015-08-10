@@ -8,7 +8,8 @@
 # agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
-import os, sys
+import os
+import sys
 python_path = os.path.join(os.path.dirname(__file__), "../../resources/python")
 sys.path.append(os.path.join(python_path, "common"))
 

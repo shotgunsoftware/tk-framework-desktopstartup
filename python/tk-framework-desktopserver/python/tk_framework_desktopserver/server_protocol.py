@@ -31,14 +31,27 @@ class ServerProtocol(WebSocketServerProtocol):
     Server Protocol
     """
 
-    _DEFAULT_DOMAIN_RESTRICTION = "*.shotgunstudio.com,localhost"
+    _DEFAULT_DOMAIN_RESTRICTION = "localhost"
 
     # Server protocol version
     PROTOCOL_VERSION = 1
 
     def __init__(self):
         self.process_manager = ProcessManager.create()
-        self._logger = logging.getLogger("tk-desktop.preferences")
+
+    @property
+    def _logger(self):
+        """
+        Returns a logger instance.
+
+        :returns: A python logger instance.
+        """
+        # Protocol factories can't pass arguments to the protocol, but they do set the
+        # factory reference back on the protocol after creation, so retrieve the python_logger
+        # from there.
+        if hasattr(self.factory, "python_logger"):
+            return self.factory.python_logger
+        return logging.getLogger("tk-framework-desktopserver")
 
     def onClose(self, wasClean, code, reason):
         pass

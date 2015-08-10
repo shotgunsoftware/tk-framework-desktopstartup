@@ -11,6 +11,7 @@
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
 import sys
+import os
 import optparse
 import itertools
 
@@ -57,10 +58,8 @@ if __name__ == '__main__':
     """
     sys.path.append("../python")
 
-    from tk_server import Server
-    from tk_server import shotgun_api
-
-    from twisted.python import log
+    from tk_framework_desktopserver import Server
+    from tk_framework_desktopserver import shotgun_api
 
     parser = optparse.OptionParser()
     parser.add_option(
@@ -108,13 +107,12 @@ if __name__ == '__main__':
 
     shotgun_api.ShotgunAPI = ShotgunAPIProxy
 
-    if options.debug:
-        log.startLogging(sys.stdout)
-
-    keys_folder = "../resources/keys"
-
-    server = Server()
-    server.start(options.debug, keys_folder, True)
+    server = Server(
+        debug=options.debug,
+        keys_path=os.environ.get("TANK_DESKTOP_INTEGRATION_CERTIFICATE", "../resources/keys"),
+        port=os.environ.get("TANK_DESKTOP_INTEGRATION_PORT", 9000)
+    )
+    server.start(start_reactor=True)
 
     # Enables CTRL-C to kill this process even tough Qt doesn't know how to play nice with Python.
     # As per this stack overflow comment

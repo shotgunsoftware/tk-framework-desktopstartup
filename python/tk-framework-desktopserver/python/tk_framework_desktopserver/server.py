@@ -19,10 +19,20 @@ from twisted.python import log
 
 from autobahn.twisted.websocket import WebSocketServerFactory, listenWS
 
-
 class Server:
     _DEFAULT_PORT = 9000
-    _DEFAULT_PORT_STATUS = 9001
+    _DEFAULT_KEYS_PATH = "../resources/keys"
+
+    def __init__(self, port=None, debug=True, keys_path=None):
+        """
+        Constructor.
+        """
+        self._port = port or self._DEFAULT_PORT
+        self._keys_path = keys_path or self._DEFAULT_KEYS_PATH
+
+        if debug:
+            log.startLogging(sys.stdout)
+        self._debug = debug
 
     def _raise_if_missing_certificate(self, certificate_path):
         """
@@ -35,18 +45,15 @@ class Server:
         if not os.path.exists(certificate_path):
             raise Exception("Missing certificate file: %s" % certificate_path)
 
-    def _start_server(self, debug=False, keys_path="resources/keys"):
+    def _start_server(self):
         """
         Start shotgun web server, listening to websocket connections.
 
         :param debug: Boolean Show debug output. Will also Start local web server to test client pages.
         """
 
-        ws_port = os.environ.get("TANK_PORT", Server._DEFAULT_PORT)
-        keys_path = os.environ.get("TANK_DESKTOP_CERTIFICATE", keys_path)
-
-        cert_key_path = os.path.join(keys_path, "server.key")
-        cert_crt_path = os.path.join(keys_path, "server.crt")
+        cert_key_path = os.path.join(self._keys_path, "server.key")
+        cert_crt_path = os.path.join(self._keys_path, "server.crt")
 
         self._raise_if_missing_certificate(cert_key_path)
         self._raise_if_missing_certificate(cert_crt_path)
@@ -55,13 +62,25 @@ class Server:
         self.context_factory = ssl.DefaultOpenSSLContextFactory(cert_key_path,
                                                                 cert_crt_path)
 
-        self.factory = WebSocketServerFactory("wss://localhost:%d" % ws_port, debug=debug, debugCodePaths=debug)
+        self.factory = WebSocketServerFactory(
+            "wss://localhost:%d" % self._port, debug=self._debug, debugCodePaths=self._debug
+        )
 
         self.factory.protocol = ServerProtocol
         self.factory.setProtocolOptions(allowHixie76=True, echoCloseCodeReason=True)
         self.listener = listenWS(self.factory, self.context_factory)
 
-    def start(self, debug=False, keys_path="resources/keys", start_reactor=False):
+    def _start_reactor(self):
+        """
+        Starts the reactor in a Python thread.
+        """
+        def start():
+            reactor.run(installSignalHandlers=0)
+
+        t = threading.Thread(target=start)
+        t.start()
+
+    def start(self, start_reactor=False):
         """
         Start shotgun web server, listening to websocket connections.
 
@@ -69,17 +88,12 @@ class Server:
         :param keys_path: Path to the certificate files (.crt and .key).
         :param start_reactor: Boolean Start threaded reactor
         """
-        if debug:
-            log.startLogging(sys.stdout)
-
-        self._start_server(debug, keys_path)
-
+        self._start_server()
         if start_reactor:
-            def start():
-                reactor.run(installSignalHandlers=0)
-
-            t = threading.Thread(target=start)
-            t.start()
+            self._start_reactor()
 
     def stop(self):
+        """
+        Stops the serverreactor.
+        """
         reactor.callFromThread(reactor.stop)
