@@ -795,7 +795,7 @@ def main(**kwargs):
         )
         # If the user has never logged in, start the Desktop in minimalist mode.
         if not shotgun_authenticator.get_default_host():
-            if not __run_with_systray() == SystrayEventLoop.CLOSE_APP:
+            if __run_with_systray() == SystrayEventLoop.CLOSE_APP:
                 return 0
 
         # Authenticate
