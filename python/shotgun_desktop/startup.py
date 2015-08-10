@@ -14,6 +14,7 @@ import os
 import sys
 import time
 import subprocess
+import struct
 
 # Add shotgun_api3 bundled with tk-core to the path.
 sys.path.insert(0, os.path.join(os.path.split(__file__)[0], "..", "tk-core", "python", "tank_vendor"))
@@ -53,6 +54,13 @@ from shotgun_desktop.errors import (ShotgunDesktopError, RequestRestartException
                                     InvalidPipelineConfiguration, UnexpectedConfigFound)
 
 RESET_SITE_ARG = "--reset-site"
+
+
+def __is_64bit_python():
+    """
+    :returns: True if 64-bit Python, False otherwise.
+    """
+    return struct.calcsize("P") == 8
 
 
 def __toolkit_supports_authentication_module(sgtk):
@@ -719,17 +727,25 @@ def __import_tk_framework_desktopserver(splash, settings):
 
     :returns: Handle to the tk-framework-desktopserver module.
     """
+    # Do not import if Python is not 64-bits
+    if not __is_64bit_python():
+        logger.warning("Interpreter is not 64-bits.")
+        return None
+
+    # Do not import if server is disabled.
+    if not settings.integration_enabled:
+        return None
+
     # Show progress
     splash.show()
     splash.set_message("Initializing Desktop Integration server")
 
     # try to import
     tk_framework_desktopserver = None
-    if settings.integration_enabled:
-        try:
-            import tk_framework_desktopserver
-        except:
-            __handle_unexpected_exception(splash, None)
+    try:
+        import tk_framework_desktopserver
+    except:
+        __handle_unexpected_exception(splash, None)
     return tk_framework_desktopserver
 
 
