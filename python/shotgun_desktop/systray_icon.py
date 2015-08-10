@@ -1,4 +1,4 @@
-# Copyright (c) 2013 Shotgun Software Inc.
+# Copyright (c) 2015 Shotgun Software Inc.
 #
 # CONFIDENTIAL AND PROPRIETARY
 #
@@ -12,11 +12,16 @@ from PySide import QtCore, QtGui
 
 
 class ShotgunSystemTrayIcon(QtGui.QSystemTrayIcon):
-    """ wrapper around system tray icon """
+    """
+    Shows a systray icon with Login, About and Quit.
+    """
     login = QtCore.Signal()
     quit = QtCore.Signal()
 
     def __init__(self, parent=None):
+        """
+        Constructor.
+        """
         QtGui.QSystemTrayIcon.__init__(self, parent)
 
         # configure the system tray icon
@@ -37,4 +42,7 @@ class ShotgunSystemTrayIcon(QtGui.QSystemTrayIcon):
         self.setContextMenu(self._systray_menu)
 
     def _about(self):
+        """
+        When About is selected, launch the Shotgun Desktop integration support page.
+        """
         QtGui.QDesktopServices.openUrl("https://support.shotgunsoftware.com/entries/95402178")

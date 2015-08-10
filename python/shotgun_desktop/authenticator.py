@@ -13,9 +13,13 @@ import os
 
 def get_configured_shotgun_authenticator(sg_auth_module, settings):
     """
-    Returns a Shotgun Authenticator configured to read the optional config.ini file stored in the
-    install to provide default host and login for first time users of the app as well as configuring
-    the http proxy.
+    Returns a Shotgun Authenticator configured with the application settings to provide default
+    host and login for first time users of the app as well as configuring the http proxy.
+
+    :param sg_auth_module: Handle to the shotgun_authentication module.
+    :param settings: The Desktop Settings instance.
+
+    :returns: A ShotgunAuthenticator instance.
     """
 
     # Since the shotgun_authenticatioin module is uuid-loaded, it needs to be passed as a parameter
@@ -26,8 +30,10 @@ def get_configured_shotgun_authenticator(sg_auth_module, settings):
         Provides default host and login for first time users of the Desktop application as well as
         an http proxy.
         """
-
         def __init__(self):
+            """
+            Constructor.
+            """
             super(DesktopAuthenticationManager, self).__init__()
             self._default_login = settings.default_login
             self._default_host = settings.default_site

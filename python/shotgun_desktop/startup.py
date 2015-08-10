@@ -365,7 +365,7 @@ def __launch_app(app, splash, connection, app_bootstrap, server):
     :param app: Application object for event processing.
     :param splash: Splash dialog to update user on what is currently going on
     :param connection: Connection to the Shotgun server.
-    :param server: The tk_server.Server instance.
+    :param server: The tk_framework_desktopserver.Server instance.
 
     :returns: The error code to return to the shell.
     """
@@ -681,23 +681,23 @@ def __handle_unexpected_exception(splash, shotgun_authenticator):
     raise
 
 
-def __init_websockets(tk_server, splash, app_bootstrap, settings):
+def __init_websockets(tk_framework_desktopserver, splash, app_bootstrap, settings):
     """
     Initializes the local websocket server.
 
-    :param tk_server: tk_server module handle.
+    :param tk_framework_desktopserver: tk_framework_desktopserver module handle.
     :pram splash: Splash widget.
     :param app_bootstrap: The application bootstrap instance.
     :param settings: The application's settings.
 
-    :returns: The tk_server.Server instance.
+    :returns: The tk_framework_desktopserver.Server instance.
     """
     key_path = os.path.join(
         app_bootstrap.get_shotgun_desktop_cache_location(),
         "config",
         "certificates"
     )
-    server = tk_server.Server(
+    server = tk_framework_desktopserver.Server(
         port=settings.integration_port,
         debug=True,
         keys_path=key_path
@@ -707,19 +707,27 @@ def __init_websockets(tk_server, splash, app_bootstrap, settings):
     return server
 
 
-def __import_tk_server(splash, settings):
+def __import_tk_framework_desktopserver(splash, settings):
+    """
+    Imports the tk-framework-desktopserver module.
+
+    :param splash: Splash widget.
+    :param settings: Desktop application settings
+
+    :returns: Handle to the tk-framework-desktopserver module.
+    """
     # Show progress
     splash.show()
     splash.set_message("Initializing Desktop Integration server")
 
     # try to import
-    tk_server = None
+    tk_framework_desktopserver = None
     if settings.integration_enabled:
         try:
-            import tk_server
+            import tk_framework_desktopserver
         except:
             __handle_unexpected_exception(splash, None)
-    return tk_server
+    return tk_framework_desktopserver
 
 
 def main(**kwargs):
@@ -755,9 +763,9 @@ def main(**kwargs):
 
     # We have gui, websocket library and the authentication module, now do the rest.
     try:
-        tk_server = __import_tk_server(splash, settings)
-        if tk_server:
-            server = __init_websockets(tk_server, splash, app_bootstrap, settings)
+        tk_framework_desktopserver = __import_tk_framework_desktopserver(splash, settings)
+        if tk_framework_desktopserver:
+            server = __init_websockets(tk_framework_desktopserver, splash, app_bootstrap, settings)
         else:
             logger.warning("Skipped Desktop Integration initialization...")
             server = None
