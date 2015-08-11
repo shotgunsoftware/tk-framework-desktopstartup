@@ -271,7 +271,7 @@ def __do_login(splash, shotgun_authentication, app_bootstrap):
         server).
     """
     shotgun_authenticator = authenticator.get_configured_shotgun_authenticator(
-        shotgun_authentication
+        shotgun_authentication, app_bootstrap
     )
     # If the application was launched holding the alt key, log the user out.
     if (QtGui.QApplication.queryKeyboardModifiers() & QtCore.Qt.AltModifier) == QtCore.Qt.AltModifier:
@@ -637,6 +637,46 @@ def __handle_unexpected_exception(splash, shotgun_authenticator):
     raise
 
 
+class BootstrapProxy(object):
+    """
+    Wraps the application bootstrap code to add functionality that should have been present
+    on it.
+    """
+    def __init__(self, app_bootstrap):
+        """
+        Constructor
+
+        :param app_bootstrap: Application bootstrap instance.
+        """
+        self._app_bootstrap = app_bootstrap
+
+    def __getattr__(self, name):
+        """
+        Retrieves an attribute on the proxied instance.
+
+        :param name: Name of the attribute.
+
+        :returns: The attribute instance.
+        """
+        # Python hasn't found the requested attribute on this class, so let's look for it on the
+        # proxied class.
+        return getattr(self._app_bootstrap, name)
+
+    def get_app_root(self):
+        """
+        Retrieves the application root.
+
+        :returns: Path to the root of the installation directory.
+        """
+        # If the bootstrap now has the method, forward the call to it.
+        if hasattr(self._app_bootstrap, "get_app_root"):
+            return self._app_bootstrap.get_app_root()
+        # Otherwise retrieve the bootstrap.py module (which can't be imported manually since it
+        # isn't in the Python path
+        bootstrap_module = sys.modules[self._app_bootstrap.__module__]
+        return bootstrap_module.SHOTGUN_APP_ROOT
+
+
 def main(**kwargs):
     """
     Main
@@ -654,11 +694,11 @@ def main(**kwargs):
     # We might crash before even initializing the authenticator, so instantiate
     # it right away.
     shotgun_authenticator = None
+
+    app_bootstrap = BootstrapProxy(kwargs["app_bootstrap"])
+
     # We have to import this in a separate try catch block because we'll be using
     # shotgun_authentication in the following catch statements.
-
-    app_bootstrap = kwargs["app_bootstrap"]
-
     try:
         # get the shotgun authentication module.
         shotgun_authentication = __import_shotgun_authentication_from_path(app_bootstrap)
