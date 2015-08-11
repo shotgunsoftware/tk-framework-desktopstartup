@@ -262,7 +262,7 @@ def __init_app():
     return QtGui.QApplication(sys.argv), shotgun_desktop.splash.Splash()
 
 
-def __do_login(splash, shotgun_authentication, app_bootstrap):
+def __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootstrap):
     """
     Asks for the credentials of the user or automatically logs the user in if the credentials are
     cached on disk.
@@ -270,9 +270,6 @@ def __do_login(splash, shotgun_authentication, app_bootstrap):
     :returns: The tuple (ShotgunAuthenticator instance used to login, Shotgun connection to the
         server).
     """
-    shotgun_authenticator = authenticator.get_configured_shotgun_authenticator(
-        shotgun_authentication, app_bootstrap
-    )
     # If the application was launched holding the alt key, log the user out.
     if (QtGui.QApplication.queryKeyboardModifiers() & QtCore.Qt.AltModifier) == QtCore.Qt.AltModifier:
         logger.info("Alt was pressed, clearing default user and startup descriptor")
@@ -284,10 +281,10 @@ def __do_login(splash, shotgun_authentication, app_bootstrap):
     try:
         user = shotgun_authenticator.get_user()
     except shotgun_authentication.AuthenticationCancelled:
-        return None, None
+        return None
     else:
         connection = user.create_sg_connection()
-    return shotgun_authenticator, connection
+    return connection
 
 
 def __restart_app_with_countdown(splash, reason):
@@ -637,7 +634,7 @@ def __handle_unexpected_exception(splash, shotgun_authenticator):
     raise
 
 
-class BootstrapProxy(object):
+class _BootstrapProxy(object):
     """
     Wraps the application bootstrap code to add functionality that should have been present
     on it.
@@ -671,9 +668,11 @@ class BootstrapProxy(object):
         # If the bootstrap now has the method, forward the call to it.
         if hasattr(self._app_bootstrap, "get_app_root"):
             return self._app_bootstrap.get_app_root()
-        # Otherwise retrieve the bootstrap.py module (which can't be imported manually since it
-        # isn't in the Python path
+        # Otherwise retrieve the bootstrap.py module from tk-desktop-internal (which can't be imported manually since it
+        # isn't in the Python path.
         bootstrap_module = sys.modules[self._app_bootstrap.__module__]
+        # Pick the SHOTGUN_APP_ROOT:
+        # https://github.com/shotgunsoftware/tk-desktop-internal/blob/a31e9339b7e438cd111fb8f4a2b0436e77c98a17/Common/Shotgun/python/bootstrap.py#L80
         return bootstrap_module.SHOTGUN_APP_ROOT
 
 
@@ -683,7 +682,8 @@ def main(**kwargs):
 
     :params app_bootstrap: AppBootstrap instance, used to get information from
         the installed application as well as updating the startup description
-        location.
+        location. See https://github.com/shotgunsoftware/tk-desktop-internal/blob/a31e9339b7e438cd111fb8f4a2b0436e77c98a17/Common/Shotgun/python/bootstrap.py#L133
+        for more info.
 
     :returns: Error code for the process.
     """
@@ -695,7 +695,7 @@ def main(**kwargs):
     # it right away.
     shotgun_authenticator = None
 
-    app_bootstrap = BootstrapProxy(kwargs["app_bootstrap"])
+    app_bootstrap = _BootstrapProxy(kwargs["app_bootstrap"])
 
     # We have to import this in a separate try catch block because we'll be using
     # shotgun_authentication in the following catch statements.
@@ -707,8 +707,14 @@ def main(**kwargs):
 
     # We have gui and the authentication module, now do the rest.
     try:
+        # It is very important to decouple logging in from creating the shotgun authenticator.
+        # If there is an error during auto login, for example proxy settings changed and you
+        # can't connect anymore, we need to be able to log the user out.
+        shotgun_authenticator = authenticator.get_configured_shotgun_authenticator(
+            shotgun_authentication, app_bootstrap
+        )
         # Authenticate
-        shotgun_authenticator, connection = __do_login(splash, shotgun_authentication, app_bootstrap)
+        connection = __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootstrap)
         # If we didn't authenticate a user
         if not connection:
             # We're done for the day.
@@ -737,3 +743,4 @@ def main(**kwargs):
         return -1
     except:
         __handle_unexpected_exception(splash, shotgun_authenticator)
+        return -1
