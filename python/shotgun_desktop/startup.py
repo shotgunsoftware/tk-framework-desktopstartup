@@ -729,11 +729,12 @@ def __import_tk_framework_desktopserver(splash, settings):
     """
     # Do not import if Python is not 64-bits
     if not __is_64bit_python():
-        logger.warning("Interpreter is not 64-bits.")
+        logger.warning("Interpreter is not 64-bits, can't load desktop server")
         return None
 
     # Do not import if server is disabled.
     if not settings.integration_enabled:
+        logger.info("Integration was disabled in config.ini.")
         return None
 
     # Show progress
@@ -786,7 +787,6 @@ def main(**kwargs):
         if tk_framework_desktopserver:
             server = __init_websockets(tk_framework_desktopserver, splash, app_bootstrap, settings)
         else:
-            logger.warning("Skipped Desktop Integration initialization...")
             server = None
         splash.hide()
 
