@@ -11,8 +11,11 @@
 import sys
 import os
 import ConfigParser
+import logging
 
 import shotgun_desktop
+
+logger = logging.getLogger("tk-desktop.settings")
 
 
 class Settings(object):
@@ -28,8 +31,8 @@ class Settings(object):
     http_proxy=http://www.someproxy.com:3128
     [BrowserIntegration]
     port=9000
-    whitelist=*.shotgunstudio.com
     enabled=1
+    whitelist=*.shotgunstudio.com
     """
 
     _LOGIN = "Login"
@@ -39,7 +42,9 @@ class Settings(object):
         """
         Constructor.
         """
-        self._global_config = self._load_config(self._get_global_config_location())
+        path = self._get_global_config_location()
+        logger.info("Reading global settings from %s" % path)
+        self._global_config = self._load_config(path)
 
     def _get_global_config_location(self):
         """
@@ -68,33 +73,65 @@ class Settings(object):
     @property
     def default_http_proxy(self):
         """
-        :returns: The default proxy
+        :returns: The default proxy.
         """
         return self._get_value(self._LOGIN, "http_proxy")
 
     @property
     def default_site(self):
+        """
+        :returns: The default site.
+        """
         return self._get_value(self._LOGIN, "default_site")
 
     @property
     def default_login(self):
+        """
+        :returns: The default login.
+        """
         return self._get_value(self._LOGIN, "default_login")
 
     @property
     def integration_port(self):
+        """
+        :returns: The port to listen on for incoming websocket requests.
+        """
         return self._get_value(self._BROWSER_INTEGRATION, "port", int, 9000)
 
     @property
     def integration_enabled(self):
+        """
+        :returns: True if the websocket should run, False otherwise.
+        """
         # Any non empty string is True, so convert it to int, which will accept 0 or 1 and then
         # we'll cast the return value to a boolean.
         return bool(self._get_value(self._BROWSER_INTEGRATION, "enabled", int, True))
+
+    @property
+    def integration_debug(self):
+        """
+        :returns: True if the server should run in debug mode.
+        """
+        # Any non empty string is True, so convert it to int, which will accept 0 or 1 and then
+        # we'll cast the return value to a boolean.
+        return bool(self._get_value(self._BROWSER_INTEGRATION, "debug", int, True))
 
     @property
     def integration_whitelist(self):
         return self._get_value(self._BROWSER_INTEGRATION, "whitelist", default="*.shotgunstudio.com")
 
     def _get_value(self, section, key, type_cast=str, default=None):
+        """
+        Retrieves a value from the config.ini file. If the value is not set, returns the default.
+        Since all values are strings inside the file, you can optionally cast the data to another type.
+
+        :param section: Section (name between brackets) of the setting.
+        :param key: Name of the setting within a section.
+        ;param type_cast: Casts the value to the passed in type. Defaults to str.
+        :param default: If the value is not found, returns this default value. Defauts to None.
+
+        :returns: The appropriately type casted value if the value is found, default otherwise.
+        """
         if not self._global_config.has_section(section):
             return default
         elif not self._global_config.has_option(section, key):

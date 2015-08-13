@@ -16,21 +16,25 @@ import time
 import subprocess
 import struct
 
-# Add shotgun_api3 bundled with tk-core to the path.
-sys.path.insert(0, os.path.join(os.path.split(__file__)[0], "..", "tk-core", "python", "tank_vendor"))
-# Add the Shotgun Desktop Server source to the Python path
-if "SGKT_DESKTOP_SERVER_LOCATION" in os.environ:
-    desktop_server_root = os.environ["SGKT_DESKTOP_SERVER_LOCATION"]
-else:
-    desktop_server_root = os.path.join(os.path.split(__file__)[0], "..", "tk-framework-desktopserver")
-sys.path.insert(0, os.path.join(desktop_server_root, "python"))
-
 # initialize logging
 import logging
 import shotgun_desktop.splash
 
 logger = logging.getLogger("tk-desktop.startup")
 logger.info("------------------ Desktop Engine Startup ------------------")
+
+# Add shotgun_api3 bundled with tk-core to the path.
+shotgun_api3_path = os.path.join(os.path.split(__file__)[0], "..", "tk-core", "python", "tank_vendor")
+sys.path.insert(0, shotgun_api3_path)
+logger.info("Using shotgun_api3 from '%s'" % shotgun_api3_path)
+# Add the Shotgun Desktop Server source to the Python path
+if "SGTK_DESKTOP_SERVER_LOCATION" in os.environ:
+    desktop_server_root = os.environ["SGTK_DESKTOP_SERVER_LOCATION"]
+else:
+    desktop_server_root = os.path.join(os.path.split(__file__)[0], "..", "tk-framework-desktopserver")
+sys.path.insert(0, os.path.join(desktop_server_root, "python"))
+logger.info("Using desktop integration from '%s'" % desktop_server_root)
+
 
 # now proceed with non builtin imports
 from PySide import QtCore, QtGui
@@ -692,6 +696,78 @@ def __handle_unexpected_exception(splash, shotgun_authenticator):
     raise
 
 
+def once(func):
+    def decorated(*args, **kwargs):
+        try:
+            return decorated._once_result
+        except AttributeError:
+            decorated._once_result = func(*args, **kwargs)
+            return decorated._once_result
+    return decorated
+
+
+@once
+def __can_update_certificates():
+    if sys.platform == "darwin":
+        return QtGui.QMessageBox.information(
+            None,
+            "Shotgun Desktop Integration",
+            "The Shotgun Desktop Integration needs to update your keychain.\n\n"
+            "You will be prompted to enter your keychain credentials by Keychain Access in order "
+            "to update they keychain.",
+            QtGui.QMessageBox.Ok | QtGui.QMessageBox.Abort
+        ) == QtGui.QMessageBox.Ok
+    elif sys.platform == "win32":
+        return QtGui.QMessageBox.information(
+            None,
+            "Shotgun Desktop Integration",
+            "The Shotgun Desktop Integration needs to update your Windows certificate list.\n\n"
+            "Windows will now prompt you to update the certificate list.",
+            QtGui.QMessageBox.Ok | QtGui.QMessageBox.Abort
+        ) == QtGui.QMessageBox.Ok
+    else:
+        return True
+
+
+def __ensure_certificate_ready(app_bootstrap, tk_framework_desktopserver, certificate_folder):
+    cert_path = os.path.join(certificate_folder, "server.crt")
+    key_path = os.path.join(certificate_folder, "server.key")
+
+    cert_interface = tk_framework_desktopserver.get_certificate_handler()
+
+    # FIXME: There should probably be a try catch here checking that if something went wrong
+    # everything else was skipped. It would be best if the certificate interface threw an exception
+    # like CerfitifateError with some text. This would simplify the error handling I think.
+
+    # Make sure the certificates exist.
+    if not os.path.exists(cert_path) or not os.path.exists(key_path):
+        logger.info("Certificate doesn't exist.")
+        # Start by unregistering certificates from the keychains, this can happen if the user
+        # wiped his shotgun/desktop/config/certificates folder.
+        if cert_interface.is_registered():
+            if __can_update_certificates():
+                cert_interface.unregister(cert_path)
+            else:
+                return
+        # Create the certificate files
+        cert_interface.create(cert_path, key_path)
+    else:
+        logger.info("Certificates already exist.")
+
+    # Check if the certificates are registered with the keychain.
+    if not cert_interface.is_registered():
+        logger.info("Certificate not registered.")
+
+        # On MacOSX we'll be prompted for our credentials because that's what MacOS does.
+        if __can_update_certificates():
+            # register certificate.
+            cert_interface.register(cert_path)
+        else:
+            return
+    else:
+        logger.info("Certificates already registered.")
+
+
 def __init_websockets(tk_framework_desktopserver, splash, app_bootstrap, settings):
     """
     Initializes the local websocket server.
@@ -708,9 +784,13 @@ def __init_websockets(tk_framework_desktopserver, splash, app_bootstrap, setting
         "config",
         "certificates"
     )
+
+    __ensure_certificate_ready(app_bootstrap, tk_framework_desktopserver, key_path)
+
     server = tk_framework_desktopserver.Server(
         port=settings.integration_port,
-        debug=True,
+        debug=settings.integration_debug,
+        whitelist=settings.integration_whitelist,
         keys_path=key_path
     )
     server.start(start_reactor=True)
@@ -718,10 +798,11 @@ def __init_websockets(tk_framework_desktopserver, splash, app_bootstrap, setting
     return server
 
 
-def __import_tk_framework_desktopserver(splash, settings):
+def __import_tk_framework_desktopserver(app_bootstrap, splash, settings):
     """
     Imports the tk-framework-desktopserver module.
 
+    :param app_bootstrap: Application bootstrap.
     :param splash: Splash widget.
     :param settings: Desktop application settings
 
@@ -745,6 +826,7 @@ def __import_tk_framework_desktopserver(splash, settings):
     tk_framework_desktopserver = None
     try:
         import tk_framework_desktopserver
+        app_bootstrap.add_logger_to_logfile(tk_framework_desktopserver.get_logger())
     except:
         __handle_unexpected_exception(splash, None)
     return tk_framework_desktopserver
@@ -783,7 +865,7 @@ def main(**kwargs):
 
     # We have gui, websocket library and the authentication module, now do the rest.
     try:
-        tk_framework_desktopserver = __import_tk_framework_desktopserver(splash, settings)
+        tk_framework_desktopserver = __import_tk_framework_desktopserver(app_bootstrap, splash, settings)
         if tk_framework_desktopserver:
             server = __init_websockets(tk_framework_desktopserver, splash, app_bootstrap, settings)
         else:

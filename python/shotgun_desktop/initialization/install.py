@@ -37,7 +37,7 @@ class InstallThread(QtCore.QThread):
     def __init__(self):
         QtCore.QThread.__init__(self)
         self._auth = None
-        self._logger = logging.getLogger("tk-desktop.initialization.install")
+        self._logger = logging.getLogger("tk-framework-desktopstartup.initialization.install")
 
     def set_install_folder(self, folder):
         self._sgtk_folder = folder
