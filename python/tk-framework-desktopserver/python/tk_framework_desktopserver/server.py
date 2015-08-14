@@ -19,20 +19,25 @@ from twisted.python import log
 
 from autobahn.twisted.websocket import WebSocketServerFactory, listenWS
 
+from .errors import MissingCertificate
+
+
 class Server:
     _DEFAULT_PORT = 9000
     _DEFAULT_KEYS_PATH = "../resources/keys"
+    _DEFAULT_WHITELIST = "*.shotgunstudio.com"
 
-    def __init__(self, port=None, debug=True, keys_path=None):
+    def __init__(self, port=None, debug=True, whitelist=None, keys_path=None):
         """
         Constructor.
         """
         self._port = port or self._DEFAULT_PORT
         self._keys_path = keys_path or self._DEFAULT_KEYS_PATH
-
-        if debug:
-            log.startLogging(sys.stdout)
+        self._whitelist = whitelist or self._DEFAULT_WHITELIST
         self._debug = debug
+
+        if self._debug:
+            log.startLogging(sys.stdout)
 
     def _raise_if_missing_certificate(self, certificate_path):
         """
@@ -43,7 +48,7 @@ class Server:
         :raises Exception: Thrown if the certificate file is missing.
         """
         if not os.path.exists(certificate_path):
-            raise Exception("Missing certificate file: %s" % certificate_path)
+            raise MissingCertificate("Missing certificate file: %s" % certificate_path)
 
     def _start_server(self):
         """
@@ -67,6 +72,7 @@ class Server:
         )
 
         self.factory.protocol = ServerProtocol
+        self.factory.websocket_server_whitelist = self._whitelist
         self.factory.setProtocolOptions(allowHixie76=True, echoCloseCodeReason=True)
         self.listener = listenWS(self.factory, self.context_factory)
 

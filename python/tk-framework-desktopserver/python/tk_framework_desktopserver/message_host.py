@@ -8,7 +8,8 @@
 # agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
-from message import Message
+from .message import Message
+from .logger import get_logger
 from twisted.internet import reactor
 
 
@@ -51,7 +52,7 @@ class MessageHost(object):
         :param error_message: String error message
         :param data: Optional object data to send in reply
         """
-
+        get_logger().info("Websocket client error: %s" % error_message)
         message = Message(self._message["id"], self._host.PROTOCOL_VERSION)
         message.error(error_message, error_data)
 

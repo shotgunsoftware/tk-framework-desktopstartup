@@ -10,6 +10,7 @@
 
 import os
 import sys
+
 python_path = os.path.join(os.path.dirname(__file__), "../../resources/python")
 sys.path.append(os.path.join(python_path, "common"))
 
@@ -21,5 +22,7 @@ elif os.name == "nt":
 elif os.name == "posix":
     sys.path.append(os.path.join(distributions_path, "linux"))
 
-from server import Server
-from process_manager import ProcessManager
+from .server import Server
+from .process_manager import ProcessManager
+from .certificates import get_certificate_handler
+from .logger import get_logger

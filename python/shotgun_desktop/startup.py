@@ -720,6 +720,7 @@ def __warn_for_prompt():
             "Windows will now prompt you to update the certificate list.",
             QtGui.QMessageBox.Ok
         )
+    # On Linux there's no need to prompt. It's all silent.
 
 
 def __ensure_certificate_ready(app_bootstrap, tk_framework_desktopserver, certificate_folder):

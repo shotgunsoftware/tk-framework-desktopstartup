@@ -17,9 +17,10 @@ import OpenSSL
 import logging
 
 import shotgun_api
-from message_host import MessageHost
-from status_server_protocol import StatusServerProtocol
-from process_manager import ProcessManager
+from .message_host import MessageHost
+from .status_server_protocol import StatusServerProtocol
+from .process_manager import ProcessManager
+from .logger import get_logger
 
 from autobahn import websocket
 from autobahn.twisted.websocket import WebSocketServerProtocol
@@ -31,27 +32,12 @@ class ServerProtocol(WebSocketServerProtocol):
     Server Protocol
     """
 
-    _DEFAULT_DOMAIN_RESTRICTION = "localhost"
-
     # Server protocol version
     PROTOCOL_VERSION = 1
 
     def __init__(self):
+        self._logger = get_logger()
         self.process_manager = ProcessManager.create()
-
-    @property
-    def _logger(self):
-        """
-        Returns a logger instance.
-
-        :returns: A python logger instance.
-        """
-        # Protocol factories can't pass arguments to the protocol, but they do set the
-        # factory reference back on the protocol after creation, so retrieve the python_logger
-        # from there.
-        if hasattr(self.factory, "python_logger"):
-            return self.factory.python_logger
-        return logging.getLogger("tk-framework-desktopserver")
 
     def onClose(self, wasClean, code, reason):
         pass
@@ -71,11 +57,13 @@ class ServerProtocol(WebSocketServerProtocol):
             certificate_error |= bool(reason.check(error.CertificateError))
 
             if certificate_error:
-                print "Invalid certificate!"
+                self._logger.info("Certificate error!")
                 StatusServerProtocol.serverStatus = StatusServerProtocol.SSL_CERTIFICATE_INVALID
             else:
+                self._logger.info("Connection lost!")
                 StatusServerProtocol.serverStatus = StatusServerProtocol.CONNECTION_LOST
         except Exception:
+            self._logger.exception()
             StatusServerProtocol.serverStatus = StatusServerProtocol.CONNECTION_LOST
 
     def onConnect(self, response):
@@ -91,22 +79,13 @@ class ServerProtocol(WebSocketServerProtocol):
 
         domain_valid = False
         try:
-            # response.origin: http://localhost:8080
-            origin_str = response.origin
-
-            # No origin would be a local html file
-            origin_localhost = response.host == "localhost" or origin_str == "file://"
-            if origin_localhost:
-                origin_str = "http://localhost"
-            else:
-                raise Exception("Invalid or unknown origin.")
-
-            domain_valid = self._is_domain_valid(origin_str)
-        except Exception, e:
-            # Otherwise errors get swallowed by outer blocks
-            self._logger.warning("Domain validation failed: " + e.message)
+            # response.origin: xyz.shotgunstudio.com
+            domain_valid = self._is_domain_valid(response.origin)
+        except:
+            self._logger.exception()
 
         if not domain_valid:
+            self._logger.info("Invalid domain: %s" % response.origin)
             # Don't accept connection
             raise websocket.http.HttpException(403, "Domain origin was rejected by server.")
 
@@ -261,7 +240,7 @@ class ServerProtocol(WebSocketServerProtocol):
         :param origin_str: Domain origin string (ex: http://localhost:8080)
         :return: True if domain is accepted, False otherwise
         """
-        domain_env = os.environ.get("SHOTGUN_PLUGIN_DOMAIN_RESTRICTION", ServerProtocol._DEFAULT_DOMAIN_RESTRICTION)
+        domain_env = os.environ.get("SHOTGUN_PLUGIN_DOMAIN_RESTRICTION", self.factory.websocket_server_whitelist)
 
         origin = urlparse(origin_str)
 
