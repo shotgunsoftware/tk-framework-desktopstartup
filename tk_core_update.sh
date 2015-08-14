@@ -49,7 +49,8 @@ git clone $SRC_REPO $DEST_REPO
 # Generate the zip
 git archive --format zip --output $ZIP --remote $DEST_REPO $1
 # Unzip the files except for the tests.
-unzip $ZIP -d $DEST -x tests/*
+unzip $ZIP -d $DEST
+rm -rf $DEST/tests
 # Move to the git repo to generate the sha and write it to the $DEST
 pushd $DEST_REPO
 git rev-parse HEAD > $DEST/commit_id
