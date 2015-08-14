@@ -653,6 +653,9 @@ def __launch_app(app, splash, connection, app_bootstrap, server):
     # and run the engine
     logger.debug("Running tk-desktop")
     startup_version = get_location(sgtk, app_bootstrap).get("version") or "Undefined"
+
+    # FIXME: We need to pass the server into the run method so that the eagine can tear it down on shutdown
+    # before relaunching the Desktop when logging out.
     return engine.run(splash, version=app_bootstrap.get_version(), startup_version=startup_version)
 
 
@@ -696,76 +699,74 @@ def __handle_unexpected_exception(splash, shotgun_authenticator):
     raise
 
 
-def once(func):
-    def decorated(*args, **kwargs):
-        try:
-            return decorated._once_result
-        except AttributeError:
-            decorated._once_result = func(*args, **kwargs)
-            return decorated._once_result
-    return decorated
-
-
-@once
-def __can_update_certificates():
+def __warn_for_prompt():
+    """
+    Warn the user he will be prompted.
+    """
     if sys.platform == "darwin":
-        return QtGui.QMessageBox.information(
+        QtGui.QMessageBox.information(
             None,
             "Shotgun Desktop Integration",
             "The Shotgun Desktop Integration needs to update your keychain.\n\n"
             "You will be prompted to enter your keychain credentials by Keychain Access in order "
             "to update they keychain.",
-            QtGui.QMessageBox.Ok | QtGui.QMessageBox.Abort
+            QtGui.QMessageBox.Ok
         ) == QtGui.QMessageBox.Ok
     elif sys.platform == "win32":
-        return QtGui.QMessageBox.information(
+        QtGui.QMessageBox.information(
             None,
             "Shotgun Desktop Integration",
             "The Shotgun Desktop Integration needs to update your Windows certificate list.\n\n"
             "Windows will now prompt you to update the certificate list.",
-            QtGui.QMessageBox.Ok | QtGui.QMessageBox.Abort
-        ) == QtGui.QMessageBox.Ok
-    else:
-        return True
+            QtGui.QMessageBox.Ok
+        )
 
 
 def __ensure_certificate_ready(app_bootstrap, tk_framework_desktopserver, certificate_folder):
-    cert_path = os.path.join(certificate_folder, "server.crt")
-    key_path = os.path.join(certificate_folder, "server.key")
+    """
+    Ensures that the certificates are created and registered. If something is amiss, then the
+    configuration is fixed.
 
-    cert_interface = tk_framework_desktopserver.get_certificate_handler()
+    :params app_bootstrap: The application bootstrap.
+    :param tk_framework_desktopserver: The desktopserver framework.
+    :param certificate_folder: Folder where the certificates are stored.
 
-    # FIXME: There should probably be a try catch here checking that if something went wrong
-    # everything else was skipped. It would be best if the certificate interface threw an exception
-    # like CerfitifateError with some text. This would simplify the error handling I think.
+    :returns: True is the certificate is ready, False otherwise.
+    """
+    cert_handler = tk_framework_desktopserver.get_certificate_handler(certificate_folder)
 
-    # Make sure the certificates exist.
-    if not os.path.exists(cert_path) or not os.path.exists(key_path):
-        logger.info("Certificate doesn't exist.")
-        # Start by unregistering certificates from the keychains, this can happen if the user
-        # wiped his shotgun/desktop/config/certificates folder.
-        if cert_interface.is_registered():
-            if __can_update_certificates():
-                cert_interface.unregister(cert_path)
-            else:
-                return
-        # Create the certificate files
-        cert_interface.create(cert_path, key_path)
-    else:
-        logger.info("Certificates already exist.")
-
-    # Check if the certificates are registered with the keychain.
-    if not cert_interface.is_registered():
-        logger.info("Certificate not registered.")
-
-        # On MacOSX we'll be prompted for our credentials because that's what MacOS does.
-        if __can_update_certificates():
-            # register certificate.
-            cert_interface.register(cert_path)
+    try:
+        # We only warn once.
+        warned = False
+        # Make sure the certificates exist.
+        if not cert_handler.exists():
+            logger.info("Certificate doesn't exist.")
+            # Start by unregistering certificates from the keychains, this can happen if the user
+            # wiped his shotgun/desktop/config/certificates folder.
+            if cert_handler.is_registered():
+                # Warn once.
+                __warn_for_prompt()
+                warned = True
+                cert_handler.unregister()
+            # Create the certificate files
+            cert_handler.create()
         else:
-            return
-    else:
-        logger.info("Certificates already registered.")
+            logger.info("Certificate already exist.")
+
+        # Check if the certificates are registered with the keychain.
+        if not cert_handler.is_registered():
+            logger.info("Certificate not registered.")
+
+            # Only if we've never been warned before.
+            if not warned:
+                __warn_for_prompt()
+            cert_handler.register()
+        else:
+            logger.info("Certificates already registered.")
+        return True
+    except:
+        logger.error("There was a problem registering the certificates. Skipping this step.")
+        return False
 
 
 def __init_websockets(tk_framework_desktopserver, splash, app_bootstrap, settings):
@@ -785,7 +786,8 @@ def __init_websockets(tk_framework_desktopserver, splash, app_bootstrap, setting
         "certificates"
     )
 
-    __ensure_certificate_ready(app_bootstrap, tk_framework_desktopserver, key_path)
+    if not __ensure_certificate_ready(app_bootstrap, tk_framework_desktopserver, key_path):
+        return None
 
     server = tk_framework_desktopserver.Server(
         port=settings.integration_port,
