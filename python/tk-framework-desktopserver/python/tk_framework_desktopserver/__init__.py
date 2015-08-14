@@ -11,7 +11,7 @@
 import os
 import sys
 
-python_path = os.path.join(os.path.dirname(__file__), "../../resources/python")
+python_path = os.path.normpath(os.path.join(os.path.dirname(__file__), "../../resources/python"))
 sys.path.append(os.path.join(python_path, "common"))
 
 distributions_path = os.path.join(python_path, "distributions")
