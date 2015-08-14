@@ -14,21 +14,6 @@ import urlparse
 import logging
 
 
-def get_shotgun_app_root():
-    """ returns where the shotgun app is installed """
-    if sys.platform == "darwin":
-        args = [os.path.dirname(__file__)] + [".."] * 5
-        shotgun_root = os.path.abspath(os.path.join(*args))
-    elif sys.platform == "win32":
-        shotgun_root = os.path.abspath(os.path.dirname(sys.prefix))
-    elif sys.platform.startswith("linux"):
-        shotgun_root = os.path.abspath(os.path.dirname(sys.prefix))
-    else:
-        raise NotImplementedError("Unsupported platform: %s" % sys.platform)
-
-    return shotgun_root
-
-
 def get_python_path():
     """ returns the path to the default python interpreter """
     if sys.platform == "darwin":

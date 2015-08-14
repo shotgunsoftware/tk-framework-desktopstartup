@@ -10,11 +10,10 @@
 
 import os
 import sys
-import shotgun_desktop.paths
 import ConfigParser
 
 
-def get_configured_shotgun_authenticator(sg_auth_module):
+def get_configured_shotgun_authenticator(sg_auth_module, app_bootstrap):
     """
     Returns a Shotgun Authenticator configured to read the optional config.ini file stored in the
     install to provide default host and login for first time users of the app as well as configuring
@@ -52,9 +51,9 @@ def get_configured_shotgun_authenticator(sg_auth_module):
             if "SGTK_DEFAULT_LOGIN_DEBUG_LOCATION" in os.environ:
                 login_config = os.environ["SGTK_DEFAULT_LOGIN_DEBUG_LOCATION"]
             elif sys.platform == "darwin":
-                login_config = os.path.join(shotgun_desktop.paths.get_shotgun_app_root(), "Contents", "Resources", "config.ini")
+                login_config = os.path.join(app_bootstrap.get_app_root(), "Contents", "Resources", "config.ini")
             else:
-                login_config = os.path.join(shotgun_desktop.paths.get_shotgun_app_root(), "config.ini")
+                login_config = os.path.join(app_bootstrap.get_app_root(), "config.ini")
             if os.path.exists(login_config):
                 # Try to load default login, site, and proxy from config
                 config = ConfigParser.SafeConfigParser({"default_login": None, "default_site": None, "http_proxy": None})
