@@ -24,7 +24,7 @@ logger = logging.getLogger("tk-desktop.startup")
 logger.info("------------------ Desktop Engine Startup ------------------")
 
 # Add shotgun_api3 bundled with tk-core to the path.
-shotgun_api3_path = os.path.join(os.path.split(__file__)[0], "..", "tk-core", "python", "tank_vendor")
+shotgun_api3_path = os.path.normpath(os.path.join(os.path.split(__file__)[0], "..", "tk-core", "python", "tank_vendor"))
 sys.path.insert(0, shotgun_api3_path)
 logger.info("Using shotgun_api3 from '%s'" % shotgun_api3_path)
 # Add the Shotgun Desktop Server source to the Python path
@@ -32,7 +32,7 @@ if "SGTK_DESKTOP_SERVER_LOCATION" in os.environ:
     desktop_server_root = os.environ["SGTK_DESKTOP_SERVER_LOCATION"]
 else:
     desktop_server_root = os.path.join(os.path.split(__file__)[0], "..", "tk-framework-desktopserver")
-sys.path.insert(0, os.path.join(desktop_server_root, "python"))
+sys.path.insert(0, os.path.normpath(os.path.join(desktop_server_root, "python")))
 logger.info("Using desktop integration from '%s'" % desktop_server_root)
 
 
@@ -120,7 +120,7 @@ def __import_sgtk_from_path(path):
 
     # update sys.path with the install
     if python_path not in sys.path:
-        sys.path.insert(1, python_path)
+        sys.path.insert(1, os.path.normpath(python_path))
 
     # clear the importer cache since the path could have been created
     # since the last attempt to import toolkit
@@ -231,7 +231,7 @@ def __import_shotgun_authentication_from_path(app_bootstrap):
 
     # update sys.path with the install
     if python_path not in sys.path:
-        sys.path.insert(1, python_path)
+        sys.path.insert(1, os.path.normpath(python_path))
 
     # clear the importer cache since the path could have been created
     # since the last attempt to import toolkit
@@ -745,12 +745,15 @@ def __ensure_certificate_ready(app_bootstrap, tk_framework_desktopserver, certif
             # Start by unregistering certificates from the keychains, this can happen if the user
             # wiped his shotgun/desktop/config/certificates folder.
             if cert_handler.is_registered():
+                logger.info("Unregistering lingering certificate.")
                 # Warn once.
                 __warn_for_prompt()
                 warned = True
                 cert_handler.unregister()
+                logger.info("Unregistered.")
             # Create the certificate files
             cert_handler.create()
+            logger.info("Certificate created.")
         else:
             logger.info("Certificate already exist.")
 
@@ -762,6 +765,7 @@ def __ensure_certificate_ready(app_bootstrap, tk_framework_desktopserver, certif
             if not warned:
                 __warn_for_prompt()
             cert_handler.register()
+            logger.info("Certificate registered.")
         else:
             logger.info("Certificates already registered.")
         return True
