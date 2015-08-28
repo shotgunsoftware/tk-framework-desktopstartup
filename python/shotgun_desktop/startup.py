@@ -872,11 +872,15 @@ def main(**kwargs):
 
     # We have gui, websocket library and the authentication module, now do the rest.
     try:
-        tk_framework_desktopserver = __import_tk_framework_desktopserver(app_bootstrap, splash, settings)
-        if tk_framework_desktopserver:
-            server = __init_websockets(tk_framework_desktopserver, splash, app_bootstrap, settings)
-        else:
+        # For now let the Desktop keep running even if the server cannot start
+        try:
             server = None
+            tk_framework_desktopserver = __import_tk_framework_desktopserver(app_bootstrap, splash, settings)
+            if tk_framework_desktopserver:
+                server = __init_websockets(tk_framework_desktopserver, splash, app_bootstrap, settings)
+        except Exception, e:
+            logger.error("Error starting the desktop server: %s" % str(e))
+
         splash.hide()
 
         shotgun_authenticator = authenticator.get_configured_shotgun_authenticator(
