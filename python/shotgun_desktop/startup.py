@@ -879,7 +879,12 @@ def main(**kwargs):
             if tk_framework_desktopserver:
                 server = __init_websockets(tk_framework_desktopserver, splash, app_bootstrap, settings)
         except Exception, e:
-            logger.error("Error starting the desktop server: %s" % str(e))
+            msg = "Could not start the desktop server: %s" % str(e)
+            logger.error(msg)
+            splash.set_message(msg)
+            splash.show()
+            app.processEvents()
+            time.sleep(3)
 
         splash.hide()
 
