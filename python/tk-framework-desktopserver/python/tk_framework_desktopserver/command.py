@@ -8,6 +8,7 @@
 # agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
+import os
 import subprocess
 from threading import Thread
 from Queue import Queue
@@ -50,10 +51,25 @@ class Command(object):
                 startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
             else:
                 startupinfo = None
+
+            # The commands that are being run are probably being launched from Desktop, which would
+            # have a TANK_CURRENT_PC environment variable set to the site configuration. Since we
+            # preserve that value for subprocesses (which is usually the behavior we want), the DCCs
+            # being launched would try to run in the project environment and would get an error due
+            # to the conflict.
+            #
+            # Clean up the environment to prevent that from happening.
+            env = os.environ.copy()
+            vars_to_remove = ["TANK_CURRENT_PC"]
+            for var in vars_to_remove:
+                if var in env:
+                    del env[var]
+
             process = subprocess.Popen(
                 args,
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                startupinfo=startupinfo
+                startupinfo=startupinfo,
+                env=env,
             )
             process.stdin.close()
 

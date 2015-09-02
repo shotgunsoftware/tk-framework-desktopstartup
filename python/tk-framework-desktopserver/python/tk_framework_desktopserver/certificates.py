@@ -247,7 +247,7 @@ class _WindowsCertificateHandler(_CertificateHandler):
         # have the same name. Maybe we should write the sha to disk and delete using that as
         # a query (certutil -user -delstore root sha1).
         return self._check_call(
-            "registering certificate",
+            "unregistering certificate",
             ("certutil", "-user", "-delstore", "root", "localhost")
         )
 
