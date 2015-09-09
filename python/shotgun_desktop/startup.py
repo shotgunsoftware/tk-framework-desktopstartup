@@ -14,9 +14,7 @@ import os
 import sys
 import time
 import subprocess
-
-# Add shotgun_api3 bundled with tk-core to the path.
-sys.path.insert(0, os.path.join(os.path.split(__file__)[0], "..", "tk-core", "python", "tank_vendor"))
+import struct
 
 # initialize logging
 import logging
@@ -24,6 +22,19 @@ import shotgun_desktop.splash
 
 logger = logging.getLogger("tk-desktop.startup")
 logger.info("------------------ Desktop Engine Startup ------------------")
+
+# Add shotgun_api3 bundled with tk-core to the path.
+shotgun_api3_path = os.path.normpath(os.path.join(os.path.split(__file__)[0], "..", "tk-core", "python", "tank_vendor"))
+sys.path.insert(0, shotgun_api3_path)
+logger.info("Using shotgun_api3 from '%s'" % shotgun_api3_path)
+# Add the Shotgun Desktop Server source to the Python path
+if "SGTK_DESKTOP_SERVER_LOCATION" in os.environ:
+    desktop_server_root = os.environ["SGTK_DESKTOP_SERVER_LOCATION"]
+else:
+    desktop_server_root = os.path.join(os.path.split(__file__)[0], "..", "tk-framework-desktopserver")
+sys.path.insert(0, os.path.normpath(os.path.join(desktop_server_root, "python")))
+logger.info("Using desktop integration from '%s'" % desktop_server_root)
+
 
 # now proceed with non builtin imports
 from PySide import QtCore, QtGui
@@ -35,6 +46,8 @@ from shotgun_desktop.initialization import initialize, does_pipeline_configurati
 from shotgun_desktop import authenticator
 from shotgun_desktop.upgrade_startup import upgrade_startup
 from shotgun_desktop.location import get_location
+from shotgun_desktop.settings import Settings
+from shotgun_desktop.systray_icon import ShotgunSystemTrayIcon
 from distutils.version import LooseVersion
 
 from shotgun_desktop.ui import resources_rc
@@ -45,6 +58,13 @@ from shotgun_desktop.errors import (ShotgunDesktopError, RequestRestartException
                                     InvalidPipelineConfiguration, UnexpectedConfigFound)
 
 RESET_SITE_ARG = "--reset-site"
+
+
+def __is_64bit_python():
+    """
+    :returns: True if 64-bit Python, False otherwise.
+    """
+    return struct.calcsize("P") == 8
 
 
 def __toolkit_supports_authentication_module(sgtk):
@@ -100,7 +120,7 @@ def __import_sgtk_from_path(path):
 
     # update sys.path with the install
     if python_path not in sys.path:
-        sys.path.insert(1, python_path)
+        sys.path.insert(1, os.path.normpath(python_path))
 
     # clear the importer cache since the path could have been created
     # since the last attempt to import toolkit
@@ -211,7 +231,7 @@ def __import_shotgun_authentication_from_path(app_bootstrap):
 
     # update sys.path with the install
     if python_path not in sys.path:
-        sys.path.insert(1, python_path)
+        sys.path.insert(1, os.path.normpath(python_path))
 
     # clear the importer cache since the path could have been created
     # since the last attempt to import toolkit
@@ -262,6 +282,48 @@ def __init_app():
     return QtGui.QApplication(sys.argv), shotgun_desktop.splash.Splash()
 
 
+class SystrayEventLoop(QtCore.QEventLoop):
+    """
+    Local event loop for the system tray. The return value of _exec() indicates what the user picked in the
+    menu.
+    """
+
+    CLOSE_APP, LOGIN = range(0, 2)
+
+    def __init__(self, systray, parent=None):
+        """
+        Constructor
+        """
+        QtCore.QEventLoop.__init__(self, parent)
+        systray.login.connect(self._login)
+        systray.quit.connect(self._quit)
+
+    def _login(self):
+        """
+        Called when "Login" is selected. Exits the loop.
+        """
+        self.exit(self.LOGIN)
+
+    def _quit(self):
+        """
+        Called when "Quit" is selected. Exits the loop.
+        """
+        self.exit(self.CLOSE_APP)
+
+
+def __run_with_systray():
+    """
+    Creates a systray and runs a local event loop to process events for that systray.
+
+    :returns: SystrayEventLoop.LOGIN if the user clicked Login, SystrayEventLoop.CLOSE_APP
+        is the user clicked Quit.
+    """
+    systray = ShotgunSystemTrayIcon()
+    systray.show()
+    # Executes until user clicks on the systray and chooses Login or Quit.
+    return SystrayEventLoop(systray).exec_()
+
+
 def __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootstrap):
     """
     Asks for the credentials of the user or automatically logs the user in if the credentials are
@@ -270,6 +332,7 @@ def __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootst
     :returns: The tuple (ShotgunAuthenticator instance used to login, Shotgun connection to the
         server).
     """
+
     # If the application was launched holding the alt key, log the user out.
     if (QtGui.QApplication.queryKeyboardModifiers() & QtCore.Qt.AltModifier) == QtCore.Qt.AltModifier:
         logger.info("Alt was pressed, clearing default user and startup descriptor")
@@ -309,7 +372,7 @@ def __restart_app_with_countdown(splash, reason):
     raise RequestRestartException()
 
 
-def __launch_app(app, splash, connection, app_bootstrap):
+def __launch_app(app, splash, connection, app_bootstrap, server):
     """
     Shows the splash screen, optionally downloads and configures Toolkit, imports it, optionally
     updates it and then launches the desktop engine.
@@ -317,13 +380,12 @@ def __launch_app(app, splash, connection, app_bootstrap):
     :param app: Application object for event processing.
     :param splash: Splash dialog to update user on what is currently going on
     :param connection: Connection to the Shotgun server.
+    :param server: The tk_framework_desktopserver.Server instance.
 
     :returns: The error code to return to the shell.
     """
     # show the splash screen
     splash.show()
-    splash.raise_()
-    splash.activateWindow()
     splash.set_message("Looking up site configuration.")
     app.processEvents()
 
@@ -484,7 +546,8 @@ def __launch_app(app, splash, connection, app_bootstrap):
                 logger.error(
                     "Something went wrong during Toolkit's activation, wiping configuration."
                 )
-                shutil.rmtree(default_site_config)
+                if os.path.exists(default_site_config):
+                    shutil.rmtree(default_site_config)
             raise
     else:
         tk = sgtk.sgtk_from_path(default_site_config)
@@ -565,7 +628,6 @@ def __launch_app(app, splash, connection, app_bootstrap):
             "This version of the Shotgun Desktop only supports core 0.16.4 and higher.",
             default_site_config
         )
-
     # initialize the tk-desktop engine for an empty context
     splash.set_message("Starting desktop engine.")
     app.processEvents()
@@ -591,6 +653,9 @@ def __launch_app(app, splash, connection, app_bootstrap):
     # and run the engine
     logger.debug("Running tk-desktop")
     startup_version = get_location(sgtk, app_bootstrap).get("version") or "Undefined"
+
+    # FIXME: We need to pass the server into the run method so that the eagine can tear it down on shutdown
+    # before relaunching the Desktop when logging out.
     return engine.run(splash, version=app_bootstrap.get_version(), startup_version=startup_version)
 
 
@@ -634,6 +699,145 @@ def __handle_unexpected_exception(splash, shotgun_authenticator):
     raise
 
 
+def __warn_for_prompt():
+    """
+    Warn the user he will be prompted.
+    """
+    if sys.platform == "darwin":
+        QtGui.QMessageBox.information(
+            None,
+            "Shotgun Desktop Integration",
+            "The Shotgun Desktop Integration needs to update your keychain.\n\n"
+            "You will be prompted to enter your keychain credentials by Keychain Access in order "
+            "to update they keychain.",
+            QtGui.QMessageBox.Ok
+        ) == QtGui.QMessageBox.Ok
+    elif sys.platform == "win32":
+        QtGui.QMessageBox.information(
+            None,
+            "Shotgun Desktop Integration",
+            "The Shotgun Desktop Integration needs to update your Windows certificate list.\n\n"
+            "Windows will now prompt you to update the certificate list.",
+            QtGui.QMessageBox.Ok
+        )
+    # On Linux there's no need to prompt. It's all silent.
+
+
+def __ensure_certificate_ready(app_bootstrap, tk_framework_desktopserver, certificate_folder):
+    """
+    Ensures that the certificates are created and registered. If something is amiss, then the
+    configuration is fixed.
+
+    :params app_bootstrap: The application bootstrap.
+    :param tk_framework_desktopserver: The desktopserver framework.
+    :param certificate_folder: Folder where the certificates are stored.
+
+    :returns: True is the certificate is ready, False otherwise.
+    """
+    cert_handler = tk_framework_desktopserver.get_certificate_handler(certificate_folder)
+
+    try:
+        # We only warn once.
+        warned = False
+        # Make sure the certificates exist.
+        if not cert_handler.exists():
+            logger.info("Certificate doesn't exist.")
+            # Start by unregistering certificates from the keychains, this can happen if the user
+            # wiped his shotgun/desktop/config/certificates folder.
+            if cert_handler.is_registered():
+                logger.info("Unregistering lingering certificate.")
+                # Warn once.
+                __warn_for_prompt()
+                warned = True
+                cert_handler.unregister()
+                logger.info("Unregistered.")
+            # Create the certificate files
+            cert_handler.create()
+            logger.info("Certificate created.")
+        else:
+            logger.info("Certificate already exist.")
+
+        # Check if the certificates are registered with the keychain.
+        if not cert_handler.is_registered():
+            logger.info("Certificate not registered.")
+
+            # Only if we've never been warned before.
+            if not warned:
+                __warn_for_prompt()
+            cert_handler.register()
+            logger.info("Certificate registered.")
+        else:
+            logger.info("Certificates already registered.")
+        return True
+    except:
+        logger.error("There was a problem registering the certificates. Skipping this step.")
+        return False
+
+
+def __init_websockets(tk_framework_desktopserver, splash, app_bootstrap, settings):
+    """
+    Initializes the local websocket server.
+
+    :param tk_framework_desktopserver: tk_framework_desktopserver module handle.
+    :pram splash: Splash widget.
+    :param app_bootstrap: The application bootstrap instance.
+    :param settings: The application's settings.
+
+    :returns: The tk_framework_desktopserver.Server instance.
+    """
+    key_path = os.path.join(
+        app_bootstrap.get_shotgun_desktop_cache_location(),
+        "config",
+        "certificates"
+    )
+
+    if not __ensure_certificate_ready(app_bootstrap, tk_framework_desktopserver, key_path):
+        return None
+
+    server = tk_framework_desktopserver.Server(
+        port=settings.integration_port,
+        debug=settings.integration_debug,
+        whitelist=settings.integration_whitelist,
+        keys_path=key_path
+    )
+    server.start(start_reactor=True)
+
+    return server
+
+
+def __import_tk_framework_desktopserver(app_bootstrap, splash, settings):
+    """
+    Imports the tk-framework-desktopserver module.
+
+    :param app_bootstrap: Application bootstrap.
+    :param splash: Splash widget.
+    :param settings: Desktop application settings
+
+    :returns: Handle to the tk-framework-desktopserver module.
+    """
+    # Do not import if Python is not 64-bits
+    if not __is_64bit_python():
+        logger.warning("Interpreter is not 64-bits, can't load desktop server")
+        return None
+
+    # Do not import if server is disabled.
+    if not settings.integration_enabled:
+        logger.info("Integration was disabled in config.ini.")
+        return None
+
+    # Show progress
+    splash.show()
+    splash.set_message("Initializing Desktop Integration server")
+
+    # try to import
+    tk_framework_desktopserver = None
+    try:
+        import tk_framework_desktopserver
+        app_bootstrap.add_logger_to_logfile(tk_framework_desktopserver.get_logger())
+    except:
+        __handle_unexpected_exception(splash, None)
+    return tk_framework_desktopserver
+
 class _BootstrapProxy(object):
     """
     Wraps the application bootstrap code to add functionality that should have been present
@@ -674,8 +878,8 @@ class _BootstrapProxy(object):
         # Pick the SHOTGUN_APP_ROOT:
         # https://github.com/shotgunsoftware/tk-desktop-internal/blob/a31e9339b7e438cd111fb8f4a2b0436e77c98a17/Common/Shotgun/python/bootstrap.py#L80
         return bootstrap_module.SHOTGUN_APP_ROOT
-
-
+    
+    
 def main(**kwargs):
     """
     Main
@@ -688,14 +892,16 @@ def main(**kwargs):
     :returns: Error code for the process.
     """
     logger.debug("Running main from %s" % __file__)
+    app_bootstrap = _BootstrapProxy(kwargs["app_bootstrap"])
+
+    settings = Settings(app_bootstrap)
+
     # Create some ui related objects
     app, splash = __init_app()
 
     # We might crash before even initializing the authenticator, so instantiate
     # it right away.
     shotgun_authenticator = None
-
-    app_bootstrap = _BootstrapProxy(kwargs["app_bootstrap"])
 
     # We have to import this in a separate try catch block because we'll be using
     # shotgun_authentication in the following catch statements.
@@ -704,15 +910,37 @@ def main(**kwargs):
         shotgun_authentication = __import_shotgun_authentication_from_path(app_bootstrap)
     except:
         __handle_unexpected_exception(splash, shotgun_authenticator)
+        return -1
 
-    # We have gui and the authentication module, now do the rest.
+    # We have gui, websocket library and the authentication module, now do the rest.
     try:
+        # For now let the Desktop keep running even if the server cannot start
+        try:
+            server = None
+            tk_framework_desktopserver = __import_tk_framework_desktopserver(app_bootstrap, splash, settings)
+            if tk_framework_desktopserver:
+                server = __init_websockets(tk_framework_desktopserver, splash, app_bootstrap, settings)
+        except Exception, e:
+            msg = "Could not start the desktop server: %s" % str(e)
+            logger.error(msg)
+            splash.set_message(msg)
+            splash.show()
+            app.processEvents()
+            time.sleep(3)
+
+        splash.hide()
+
         # It is very important to decouple logging in from creating the shotgun authenticator.
         # If there is an error during auto login, for example proxy settings changed and you
         # can't connect anymore, we need to be able to log the user out.
         shotgun_authenticator = authenticator.get_configured_shotgun_authenticator(
-            shotgun_authentication, app_bootstrap
+            shotgun_authentication, settings
         )
+        # If the user has never logged in, start the Desktop in minimalist mode.
+        if not shotgun_authenticator.get_default_host():
+            if __run_with_systray() == SystrayEventLoop.CLOSE_APP:
+                return 0
+
         # Authenticate
         connection = __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootstrap)
         # If we didn't authenticate a user
@@ -727,7 +955,8 @@ def main(**kwargs):
                 app,
                 splash,
                 connection,
-                app_bootstrap
+                app_bootstrap,
+                server
             )
     except RequestRestartException:
         subprocess.Popen(sys.argv)

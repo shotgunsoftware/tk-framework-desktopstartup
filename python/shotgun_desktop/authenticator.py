@@ -9,15 +9,17 @@
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
 import os
-import sys
-import ConfigParser
 
 
-def get_configured_shotgun_authenticator(sg_auth_module, app_bootstrap):
+def get_configured_shotgun_authenticator(sg_auth_module, settings):
     """
-    Returns a Shotgun Authenticator configured to read the optional config.ini file stored in the
-    install to provide default host and login for first time users of the app as well as configuring
-    the http proxy.
+    Returns a Shotgun Authenticator configured with the application settings to provide default
+    host and login for first time users of the app as well as configuring the http proxy.
+
+    :param sg_auth_module: Handle to the shotgun_authentication module.
+    :param settings: The Desktop Settings instance.
+
+    :returns: A ShotgunAuthenticator instance.
     """
 
     # Since the shotgun_authenticatioin module is uuid-loaded, it needs to be passed as a parameter
@@ -28,48 +30,22 @@ def get_configured_shotgun_authenticator(sg_auth_module, app_bootstrap):
         Provides default host and login for first time users of the Desktop application as well as
         an http proxy.
         """
-
         def __init__(self):
             """
-            Constructor. Reads the optionally configured config.ini file present in the Desktop
-            installer package. This file is in the root of the installed application folder on
-            Linux and Windows and in Contents/Resources on MacOSX.
-
-            The config.ini should have the following format
-            [Login]
-            default_login=login
-            default_site=site.shotgunstudio.com
-            http_proxy=http://www.someproxy.com:3128
+            Constructor.
             """
             super(DesktopAuthenticationManager, self).__init__()
-            self._default_login = None
-            self._default_host = None
-            self._default_http_proxy = None
+            self._default_login = settings.default_login
+            self._default_host = settings.default_site
+            self._default_http_proxy = settings.default_http_proxy
 
-            # Load up login config if it exists
-
-            if "SGTK_DEFAULT_LOGIN_DEBUG_LOCATION" in os.environ:
-                login_config = os.environ["SGTK_DEFAULT_LOGIN_DEBUG_LOCATION"]
-            elif sys.platform == "darwin":
-                login_config = os.path.join(app_bootstrap.get_app_root(), "Contents", "Resources", "config.ini")
-            else:
-                login_config = os.path.join(app_bootstrap.get_app_root(), "config.ini")
-            if os.path.exists(login_config):
-                # Try to load default login, site, and proxy from config
-                config = ConfigParser.SafeConfigParser({"default_login": None, "default_site": None, "http_proxy": None})
-                config.read(login_config)
-                if config.has_section("Login"):
-                    default_login = config.get("Login", "default_login", raw=True)
-                    default_host = config.get("Login", "default_site", raw=True)
-                    http_proxy = config.get("Login", "http_proxy", raw=True)
-
-                    # Update the default values
-                    if default_login is not None:
-                        self._default_login = os.path.expandvars(default_login)
-                    if default_host is not None:
-                        self._default_host = os.path.expandvars(default_host)
-                    if http_proxy is not None:
-                        self._default_http_proxy = os.path.expandvars(http_proxy)
+            # Update the default values
+            if self._default_login is not None:
+                self._default_login = os.path.expandvars(self._default_login)
+            if self._default_host is not None:
+                self._default_host = os.path.expandvars(self._default_host)
+            if self._default_http_proxy is not None:
+                self._default_http_proxy = os.path.expandvars(self._default_http_proxy)
 
         def get_host(self):
             """
