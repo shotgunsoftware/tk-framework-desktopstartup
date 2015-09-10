@@ -13,6 +13,7 @@ import sys
 import urlparse
 import logging
 
+logger = logging.getLogger("tk-desktop.paths")
 
 def get_python_path():
     """ returns the path to the default python interpreter """
@@ -27,6 +28,13 @@ def get_python_path():
 
 def get_default_site_config_root(connection):
     """ return the path to the default configuration for the site """
+    # If the TK_SITE_CONFIG_ROOT env variable is set and contains
+    # something useful, we will use that.
+    env_site = os.environ.get('TK_SITE_CONFIG_ROOT', '')
+    if env_site:
+        logger.info("TK_SITE_CONFIG_ROOT found, using root: " + str(env_site))
+        return (str(env_site), None)
+
     # find what path field from the entity we need
     if sys.platform == "darwin":
         plat_key = "mac_path"
