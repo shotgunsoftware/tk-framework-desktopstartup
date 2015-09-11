@@ -31,8 +31,8 @@ logger.info("Using shotgun_api3 from '%s'" % shotgun_api3_path)
 if "SGTK_DESKTOP_SERVER_LOCATION" in os.environ:
     desktop_server_root = os.environ["SGTK_DESKTOP_SERVER_LOCATION"]
 else:
-    desktop_server_root = os.path.join(os.path.split(__file__)[0], "..", "tk-framework-desktopserver")
-sys.path.insert(0, os.path.normpath(os.path.join(desktop_server_root, "python")))
+    desktop_server_root = os.path.normpath(os.path.join(os.path.split(__file__)[0], "..", "server"))
+sys.path.insert(0, os.path.join(desktop_server_root, "python"))
 logger.info("Using desktop integration from '%s'" % desktop_server_root)
 
 

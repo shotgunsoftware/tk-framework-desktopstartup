@@ -37,7 +37,7 @@ DEST_REPO=$ROOT/repo
 # Zip file that will be generated from that repo
 ZIP=$ROOT/tk-framework-desktopserver.zip
 # Destination relative to this script for the files
-DEST=`pwd`/python/tk-framework-desktopserver
+DEST=`pwd`/python/server
 
 # Recreate the folder structure
 mkdir $ROOT
