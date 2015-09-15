@@ -430,7 +430,10 @@ def __do_login_or_tray(splash, shotgun_authentication, shotgun_authenticator, ap
     """
     connection = None
     if not __should_do_login(shotgun_authenticator, app_bootstrap):
-        __run_with_systray("Browser Integration is running. Click the Shotgun icon to login or to quit.")
+        if __run_with_systray(
+            "Browser Integration is running. Click the Shotgun icon to login or to quit."
+        ) == SystrayEventLoop.CLOSE_APP:
+            return None
 
     # Loop until there is a connection or the user wants to quit.
     while True:
