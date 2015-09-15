@@ -8,7 +8,7 @@
 # agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
-from __future__ import absolute_import
+from __future__ import absolute_import, with_statement
 
 import os
 import sys
@@ -311,7 +311,7 @@ class SystrayEventLoop(QtCore.QEventLoop):
         self.exit(self.CLOSE_APP)
 
 
-def __run_with_systray():
+def __run_with_systray(balloon_message):
     """
     Creates a systray and runs a local event loop to process events for that systray.
 
@@ -320,8 +320,27 @@ def __run_with_systray():
     """
     systray = ShotgunSystemTrayIcon()
     systray.show()
+    systray.showMessage(
+        "Shotgun Desktop",
+        balloon_message,
+        QtGui.QSystemTrayIcon.Information,
+        5000
+    )
     # Executes until user clicks on the systray and chooses Login or Quit.
     return SystrayEventLoop(systray).exec_()
+
+
+def __try_cleanup_state(splash, shotgun_authenticator, app_bootstrap):
+    """
+    Cleans the Desktop state if the last key is pressed. Restarts the Desktop when done.
+    """
+
+    # If the application was launched holding the alt key, log the user out.
+    if (QtGui.QApplication.queryKeyboardModifiers() & QtCore.Qt.AltModifier) == QtCore.Qt.AltModifier:
+        logger.info("Alt was pressed, clearing default user and startup descriptor")
+        shotgun_authenticator.clear_default_user()
+        app_bootstrap.clear_startup_location()
+        __restart_app_with_countdown(splash, "Desktop has been reinitialized.")
 
 
 def __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootstrap):
@@ -333,13 +352,6 @@ def __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootst
         server).
     """
 
-    # If the application was launched holding the alt key, log the user out.
-    if (QtGui.QApplication.queryKeyboardModifiers() & QtCore.Qt.AltModifier) == QtCore.Qt.AltModifier:
-        logger.info("Alt was pressed, clearing default user and startup descriptor")
-        shotgun_authenticator.clear_default_user()
-        app_bootstrap.clear_startup_location()
-        __restart_app_with_countdown(splash, "Desktop has been reinitialized.")
-
     logger.debug("Retrieving credentials")
     try:
         user = shotgun_authenticator.get_user()
@@ -348,6 +360,94 @@ def __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootst
     else:
         connection = user.create_sg_connection()
     return connection
+
+
+def __should_do_login(shotgun_authenticator, app_bootstrap):
+    """
+    Tests if we should try to login.
+
+    :param shotgun_authenticator: Shotgun authenticator instance.
+
+    :returns: True if there is a default host, False otherwise.
+    """
+    # We should do the login is the default host is truthy and if login is enabled.
+    return bool(shotgun_authenticator.get_default_host()) and __is_login_enabled(
+        app_bootstrap
+    )
+
+
+def __get_login_disabled_path(app_bootstrap):
+    """
+    Returns the path to the login_disabled file that hints that the login dialog
+    should not be shown.
+
+    :param app_bootstrap: Application's bootstrap.
+
+    :returns: Path to the file.
+    """
+    return os.path.join(
+        app_bootstrap.get_shotgun_desktop_cache_location(),
+        "config",
+        "login_disabled"
+    )
+
+
+def __disable_login(app_bootstrap):
+    """
+    Disables the login. If the app is closed when the login is disabled, the login
+    screen won't be shown when the app starts back.
+
+    :param app_bootstrap: Application bootstrap.
+    """
+    # Creates the file and closes it.
+    with open(__get_login_disabled_path(app_bootstrap), "w"):
+        pass
+
+
+def __enable_login(app_bootstrap):
+    """
+    Enables the login. If the user logs in when the login is enabled, then the login screen
+    will be shown the next time the app starts.
+
+    :param app_bootstrap: Application bootstrap.
+    """
+    if not __is_login_enabled(app_bootstrap):
+        os.unlink(__get_login_disabled_path(app_bootstrap))
+
+
+def __is_login_enabled(app_bootstrap):
+    """
+    :returns: True is login is enabled, False otherwise.
+    """
+    return not os.path.exists(__get_login_disabled_path(app_bootstrap))
+
+
+def __do_login_or_tray(splash, shotgun_authentication, shotgun_authenticator, app_bootstrap):
+    """
+    Runs the login dialog or the tray icon.
+
+    :returns: The connection object if the user logged in, None if the user wants to quit the app.
+    """
+    connection = None
+    if not __should_do_login(shotgun_authenticator, app_bootstrap):
+        __run_with_systray("Browser Integration is running. Click the Shotgun icon to login or to quit.")
+
+    # Loop until there is a connection or the user wants to quit.
+    while True:
+        # Clear the disable login flag.
+        __enable_login(app_bootstrap)
+        connection = __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootstrap)
+        # If we logged in, return the connection.
+        if connection:
+            return connection
+        else:
+            # Not logged in, so disable the login dialog.
+            __disable_login(app_bootstrap)
+            # Now tell the user the Desktop is running in the tray.
+            if __run_with_systray(
+                "Browser integration is running in the background."
+            ) == SystrayEventLoop.CLOSE_APP:
+                return None
 
 
 def __restart_app_with_countdown(splash, reason):
@@ -946,13 +1046,11 @@ def main(**kwargs):
         shotgun_authenticator = authenticator.get_configured_shotgun_authenticator(
             shotgun_authentication, settings
         )
-        # If the user has never logged in, start the Desktop in minimalist mode.
-        if not shotgun_authenticator.get_default_host():
-            if __run_with_systray() == SystrayEventLoop.CLOSE_APP:
-                return 0
 
-        # Authenticate
-        connection = __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootstrap)
+        __try_cleanup_state(splash, shotgun_authenticator, app_bootstrap)
+
+        connection = __do_login_or_tray(splash, shotgun_authentication, shotgun_authenticator, app_bootstrap)
+
         # If we didn't authenticate a user
         if not connection:
             # We're done for the day.
