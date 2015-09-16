@@ -654,9 +654,17 @@ def __launch_app(app, splash, connection, app_bootstrap, server):
     logger.debug("Running tk-desktop")
     startup_version = get_location(sgtk, app_bootstrap).get("version") or "Undefined"
 
-    # FIXME: We need to pass the server into the run method so that the eagine can tear it down on shutdown
-    # before relaunching the Desktop when logging out.
-    return engine.run(splash, version=app_bootstrap.get_version(), startup_version=startup_version)
+    # Connect to the about to quit signal so that we can shut down the server automatically when the
+    # desktop tries to quit the app.
+    if server:
+        QtGui.qApp.aboutToQuit.connect(lambda: server.tear_down())
+
+    return engine.run(
+        splash,
+        version=app_bootstrap.get_version(),
+        startup_version=startup_version,
+        server=server
+    )
 
 
 def __handle_exception(splash, shotgun_authenticator, error_message):
@@ -913,13 +921,14 @@ def main(**kwargs):
         return -1
 
     # We have gui, websocket library and the authentication module, now do the rest.
+    server = None
     try:
         # For now let the Desktop keep running even if the server cannot start
         try:
-            server = None
             tk_framework_desktopserver = __import_tk_framework_desktopserver(app_bootstrap, splash, settings)
             if tk_framework_desktopserver:
                 server = __init_websockets(tk_framework_desktopserver, splash, app_bootstrap, settings)
+                app_bootstrap.add_logger_to_logfile(server.get_logger())
         except Exception, e:
             msg = "Could not start the desktop server: %s" % str(e)
             logger.error(msg)
@@ -959,7 +968,7 @@ def main(**kwargs):
                 server
             )
     except RequestRestartException:
-        subprocess.Popen(sys.argv)
+        subprocess.Popen(sys.argv, close_fds=True)
         return 0
     except shotgun_authentication.AuthenticationCancelled:
         # The user cancelled an authentication request while the app was running, log him out.
@@ -973,3 +982,9 @@ def main(**kwargs):
     except:
         __handle_unexpected_exception(splash, shotgun_authenticator)
         return -1
+    finally:
+        # We can end up in the finally either because the app closed correctly, in which case
+        # the aboutToQuit signal will have been send and the server shut down or there was an
+        # exception and we need to tear down correctly.
+        if server and server.is_running():
+            server.tear_down()
