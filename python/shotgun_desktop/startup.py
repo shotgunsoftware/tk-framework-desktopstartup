@@ -57,8 +57,6 @@ from shotgun_desktop.errors import (ShotgunDesktopError, RequestRestartException
                                     ToolkitDisabledError, UpdatePermissionsError, UpgradeCoreError,
                                     InvalidPipelineConfiguration, UnexpectedConfigFound)
 
-RESET_SITE_ARG = "--reset-site"
-
 
 def __is_64bit_python():
     """
@@ -311,9 +309,11 @@ class SystrayEventLoop(QtCore.QEventLoop):
         self.exit(self.CLOSE_APP)
 
 
-def __run_with_systray(balloon_message):
+def __run_with_systray(message):
     """
     Creates a systray and runs a local event loop to process events for that systray.
+
+    :param message: Message to display in tray icon balloon.
 
     :returns: SystrayEventLoop.LOGIN if the user clicked Login, SystrayEventLoop.CLOSE_APP
         is the user clicked Quit.
@@ -322,7 +322,7 @@ def __run_with_systray(balloon_message):
     systray.show()
     systray.showMessage(
         "Shotgun Desktop",
-        balloon_message,
+        message,
         QtGui.QSystemTrayIcon.Information,
         5000
     )
@@ -362,67 +362,11 @@ def __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootst
     return connection
 
 
-def __should_do_login(shotgun_authenticator, app_bootstrap):
-    """
-    Tests if we should try to login.
-
-    :param shotgun_authenticator: Shotgun authenticator instance.
-
-    :returns: True if there is a default host, False otherwise.
-    """
-    # We should do the login is the default host is truthy and if login is enabled.
-    return bool(shotgun_authenticator.get_default_host()) and __is_login_enabled(
-        app_bootstrap
-    )
-
-
-def __get_login_disabled_path(app_bootstrap):
-    """
-    Returns the path to the login_disabled file that hints that the login dialog
-    should not be shown.
-
-    :param app_bootstrap: Application's bootstrap.
-
-    :returns: Path to the file.
-    """
-    return os.path.join(
-        app_bootstrap.get_shotgun_desktop_cache_location(),
-        "config",
-        "login_disabled"
-    )
-
-
-def __disable_login(app_bootstrap):
-    """
-    Disables the login. If the app is closed when the login is disabled, the login
-    screen won't be shown when the app starts back.
-
-    :param app_bootstrap: Application bootstrap.
-    """
-    # Creates the file and closes it.
-    with open(__get_login_disabled_path(app_bootstrap), "w"):
-        pass
-
-
-def __enable_login(app_bootstrap):
-    """
-    Enables the login. If the user logs in when the login is enabled, then the login screen
-    will be shown the next time the app starts.
-
-    :param app_bootstrap: Application bootstrap.
-    """
-    if not __is_login_enabled(app_bootstrap):
-        os.unlink(__get_login_disabled_path(app_bootstrap))
-
-
-def __is_login_enabled(app_bootstrap):
-    """
-    :returns: True is login is enabled, False otherwise.
-    """
-    return not os.path.exists(__get_login_disabled_path(app_bootstrap))
-
-
-def __do_login_or_tray(splash, shotgun_authentication, shotgun_authenticator, app_bootstrap):
+def __do_login_or_tray(
+    splash,
+    shotgun_authentication, shotgun_authenticator,
+    app_bootstrap, force_login
+):
     """
     Runs the login dialog or the tray icon.
 
@@ -430,29 +374,27 @@ def __do_login_or_tray(splash, shotgun_authentication, shotgun_authenticator, ap
     """
     connection = None
 
-    # The workflow is the following. If the user has never used toolkit before or has cancelled
-    # his last login attempt
-
-    if not __should_do_login(shotgun_authenticator, app_bootstrap):
-        if __run_with_systray(
-            "Browser Integration is running. Click the Shotgun icon to login or to quit."
-        ) == SystrayEventLoop.CLOSE_APP:
+    # The workflow is the following (fl stands for force login, du stands for default user)
+    # 1. If you've never used the Desktop before, you will get the tray (!fl and !du)
+    # 2. If you've used the desktop before but never logged in, you'll get the tray !fl and !du)
+    # 3. If you've just logged out of desktop, you'll get the login screen (fl and !du)
+    # 4. If you quit desktop and restart it later you won't see the tray and will auto-login (!fl and du)
+    # 5. If you've cancelled the login screen at some point, you'll get the tray. (!fl and !du)
+    if force_login is False and shotgun_authenticator.get_default_user() is None:
+        if __run_with_systray("Click the Shotgun icon to login or to quit.") == SystrayEventLoop.CLOSE_APP:
             return None
 
     # Loop until there is a connection or the user wants to quit.
     while True:
-        # Clear the disable login flag.
-
         connection = __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootstrap)
         # If we logged in, return the connection.
         if connection:
             return connection
         else:
-            # Not logged in, so disable the login dialog.
-            __disable_login(app_bootstrap)
             # Now tell the user the Desktop is running in the tray.
             if __run_with_systray(
-                "Browser integration is running in the background."
+                "The application is now running in the background.\n"
+                "Click the Shotgun icon to login or to quit."
             ) == SystrayEventLoop.CLOSE_APP:
                 return None
 
@@ -477,6 +419,13 @@ def __restart_app_with_countdown(splash, reason):
         splash.set_message("%s Restarting in %d seconds..." % (reason, i))
         time.sleep(1)
     raise RequestRestartException()
+
+
+def __is_command_line_argument_set(arg_name):
+    is_set = arg_name in sys.argv
+    while arg_name in sys.argv:
+        sys.argv.remove(arg_name)
+    return is_set
 
 
 def __launch_app(app, splash, connection, app_bootstrap, server):
@@ -505,8 +454,10 @@ def __launch_app(app, splash, connection, app_bootstrap, server):
     toolkit_imported = False
     config_folder_exists_at_startup = os.path.exists(default_site_config)
 
+    reset_site = __is_command_line_argument_set("--reset-site")
+
     # If the config folder exists at startup but the user wants to wipe it, do it.
-    if config_folder_exists_at_startup and RESET_SITE_ARG in sys.argv:
+    if config_folder_exists_at_startup and reset_site:
         logger.info("Resetting site configuration at '%s'" % default_site_config)
         splash.set_message("Resetting site configuration ...")
         shutil.rmtree(default_site_config)
@@ -514,8 +465,6 @@ def __launch_app(app, splash, connection, app_bootstrap, server):
         config_folder_exists_at_startup = False
         # Remove all occurances of --reset-site so that if we restart the app it doesn't reset it
         # again.
-        while RESET_SITE_ARG in sys.argv:
-            sys.argv.remove(RESET_SITE_ARG)
 
     # If there is no pipeline configuration but we found something on disk nonetheless.
     if not pc and is_toolkit_already_configured(default_site_config):
@@ -1015,6 +964,8 @@ def main(**kwargs):
     # Create some ui related objects
     app, splash = __init_app()
 
+    force_login = __is_command_line_argument_set("--force-login")
+
     # We might crash before even initializing the authenticator, so instantiate
     # it right away.
     shotgun_authenticator = None
@@ -1062,7 +1013,13 @@ def main(**kwargs):
 
         __try_cleanup_state(splash, shotgun_authenticator, app_bootstrap)
 
-        connection = __do_login_or_tray(splash, shotgun_authentication, shotgun_authenticator, app_bootstrap)
+        connection = __do_login_or_tray(
+            splash,
+            shotgun_authentication,
+            shotgun_authenticator,
+            app_bootstrap,
+            force_login
+        )
 
         # If we didn't authenticate a user
         if not connection:
