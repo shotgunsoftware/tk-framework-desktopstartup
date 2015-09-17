@@ -429,6 +429,10 @@ def __do_login_or_tray(splash, shotgun_authentication, shotgun_authenticator, ap
     :returns: The connection object if the user logged in, None if the user wants to quit the app.
     """
     connection = None
+
+    # The workflow is the following. If the user has never used toolkit before or has cancelled
+    # his last login attempt
+
     if not __should_do_login(shotgun_authenticator, app_bootstrap):
         if __run_with_systray(
             "Browser Integration is running. Click the Shotgun icon to login or to quit."
@@ -438,7 +442,7 @@ def __do_login_or_tray(splash, shotgun_authentication, shotgun_authenticator, ap
     # Loop until there is a connection or the user wants to quit.
     while True:
         # Clear the disable login flag.
-        __enable_login(app_bootstrap)
+
         connection = __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootstrap)
         # If we logged in, return the connection.
         if connection:
@@ -1034,12 +1038,18 @@ def main(**kwargs):
                 server = __init_websockets(tk_framework_desktopserver, splash, app_bootstrap, settings)
                 app_bootstrap.add_logger_to_logfile(server.get_logger())
         except Exception, e:
-            msg = "Could not start the desktop server: %s" % str(e)
-            logger.error(msg)
-            splash.set_message(msg)
-            splash.show()
-            app.processEvents()
-            time.sleep(3)
+            logger.exception("Could not start the desktop server:")
+            splash.hide()
+            yes_no = QtGui.QMessageBox.question(
+                None,
+                "Shotgun Desktop",
+                "The browser integration failed to initialize properly: %s\n\n"
+                "Do you want to continue launching the Shotgun Desktop without the browser integration?" % e,
+                QtGui.QMessageBox.Yes | QtGui.QMessageBox.No,
+                QtGui.QMessageBox.Yes
+            )
+            if yes_no == QtGui.QMessageBox.No:
+                raise e
 
         splash.hide()
 
