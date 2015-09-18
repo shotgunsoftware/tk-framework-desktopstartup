@@ -808,7 +808,7 @@ def __init_websockets(tk_framework_desktopserver, splash, app_bootstrap, setting
         whitelist=settings.integration_whitelist,
         keys_path=key_path
     )
-    server.start(start_reactor=True)
+    server.start()
 
     return server
 
@@ -845,6 +845,7 @@ def __import_tk_framework_desktopserver(app_bootstrap, splash, settings):
     except:
         __handle_unexpected_exception(splash, None)
     return tk_framework_desktopserver
+
 
 class _BootstrapProxy(object):
     """
@@ -886,8 +887,8 @@ class _BootstrapProxy(object):
         # Pick the SHOTGUN_APP_ROOT:
         # https://github.com/shotgunsoftware/tk-desktop-internal/blob/a31e9339b7e438cd111fb8f4a2b0436e77c98a17/Common/Shotgun/python/bootstrap.py#L80
         return bootstrap_module.SHOTGUN_APP_ROOT
-    
-    
+
+
 def main(**kwargs):
     """
     Main
