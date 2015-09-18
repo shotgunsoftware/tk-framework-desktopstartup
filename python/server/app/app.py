@@ -112,7 +112,7 @@ if __name__ == '__main__':
         keys_path=os.environ.get("TANK_DESKTOP_INTEGRATION_CERTIFICATE", "../resources/keys"),
         port=os.environ.get("TANK_DESKTOP_INTEGRATION_PORT", 9000)
     )
-    server.start(start_reactor=True)
+    server.start()
 
     # Enables CTRL-C to kill this process even tough Qt doesn't know how to play nice with Python.
     # As per this stack overflow comment

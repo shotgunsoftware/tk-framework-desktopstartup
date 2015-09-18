@@ -8,9 +8,9 @@
 # agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
-import sys
 import os
 import threading
+import logging
 
 from server_protocol import ServerProtocol
 
@@ -36,8 +36,18 @@ class Server:
         self._whitelist = whitelist or self._DEFAULT_WHITELIST
         self._debug = debug
 
+        self._logger_root = logging.getLogger("tk-framework-desktopserver")
+
         if self._debug:
-            log.startLogging(sys.stdout)
+            # This will take the Twisted logging and forward it to Python's logging.
+            self._observer = log.PythonLoggingObserver("tk-framework-desktopserver.twisted")
+            self._observer.start()
+
+    def get_logger(self):
+        """
+        :returns: The python logger root for the framework.
+        """
+        return self._logger_root
 
     def _raise_if_missing_certificate(self, certificate_path):
         """
@@ -83,23 +93,25 @@ class Server:
         def start():
             reactor.run(installSignalHandlers=0)
 
-        t = threading.Thread(target=start)
-        t.start()
+        self._reactor_thread = threading.Thread(target=start)
+        self._reactor_thread.start()
 
-    def start(self, start_reactor=False):
+    def start(self):
         """
         Start shotgun web server, listening to websocket connections.
-
-        :param debug: Boolean Show debug output. Will also Start local web server to test client pages.
-        :param keys_path: Path to the certificate files (.crt and .key).
-        :param start_reactor: Boolean Start threaded reactor
         """
         self._start_server()
-        if start_reactor:
-            self._start_reactor()
+        self._start_reactor()
 
-    def stop(self):
+    def is_running(self):
         """
-        Stops the serverreactor.
+        :returns: True if the server is up and running, False otherwise.
+        """
+        return self._reactor_thread.isAlive()
+
+    def tear_down(self):
+        """
+        Tears down Twisted.
         """
         reactor.callFromThread(reactor.stop)
+        self._reactor_thread.join()
