@@ -8,7 +8,7 @@
 # agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
-from __future__ import absolute_import, with_statement
+from __future__ import absolute_import
 
 import os
 import sys
@@ -309,7 +309,7 @@ class SystrayEventLoop(QtCore.QEventLoop):
         self.exit(self.CLOSE_APP)
 
 
-def __run_with_systray(message):
+def __run_with_systray():
     """
     Creates a systray and runs a local event loop to process events for that systray.
 
@@ -322,7 +322,7 @@ def __run_with_systray(message):
     systray.show()
     systray.showMessage(
         "Shotgun Desktop",
-        message,
+        "The browser integration is running. Click the Shotgun icon to login or to quit.",
         QtGui.QSystemTrayIcon.Information,
         5000
     )
@@ -330,7 +330,7 @@ def __run_with_systray(message):
     return SystrayEventLoop(systray).exec_()
 
 
-def __try_cleanup_state(splash, shotgun_authenticator, app_bootstrap):
+def __optional_state_cleanup(splash, shotgun_authenticator, app_bootstrap):
     """
     Cleans the Desktop state if the last key is pressed. Restarts the Desktop when done.
     """
@@ -365,7 +365,7 @@ def __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootst
 def __do_login_or_tray(
     splash,
     shotgun_authentication, shotgun_authenticator,
-    app_bootstrap, force_login
+    app_bootstrap, skip_tray
 ):
     """
     Runs the login dialog or the tray icon.
@@ -380,8 +380,8 @@ def __do_login_or_tray(
     # 3. If you've just logged out of desktop, you'll get the login screen (fl and !du)
     # 4. If you quit desktop and restart it later you won't see the tray and will auto-login (!fl and du)
     # 5. If you've cancelled the login screen at some point, you'll get the tray. (!fl and !du)
-    if force_login is False and shotgun_authenticator.get_default_user() is None:
-        if __run_with_systray("Click the Shotgun icon to login or to quit.") == SystrayEventLoop.CLOSE_APP:
+    if skip_tray is False and shotgun_authenticator.get_default_user() is None:
+        if __run_with_systray() == SystrayEventLoop.CLOSE_APP:
             return None
 
     # Loop until there is a connection or the user wants to quit.
@@ -392,10 +392,7 @@ def __do_login_or_tray(
             return connection
         else:
             # Now tell the user the Desktop is running in the tray.
-            if __run_with_systray(
-                "The application is now running in the background.\n"
-                "Click the Shotgun icon to login or to quit."
-            ) == SystrayEventLoop.CLOSE_APP:
+            if __run_with_systray() == SystrayEventLoop.CLOSE_APP:
                 return None
 
 
@@ -838,7 +835,7 @@ def __ensure_certificate_ready(app_bootstrap, tk_framework_desktopserver, certif
         return False
 
 
-def __init_websockets(tk_framework_desktopserver, splash, app_bootstrap, settings):
+def __init_websockets(splash, app_bootstrap, settings):
     """
     Initializes the local websocket server.
 
@@ -848,36 +845,6 @@ def __init_websockets(tk_framework_desktopserver, splash, app_bootstrap, setting
     :param settings: The application's settings.
 
     :returns: The tk_framework_desktopserver.Server instance.
-    """
-    key_path = os.path.join(
-        app_bootstrap.get_shotgun_desktop_cache_location(),
-        "config",
-        "certificates"
-    )
-
-    if not __ensure_certificate_ready(app_bootstrap, tk_framework_desktopserver, key_path):
-        return None
-
-    server = tk_framework_desktopserver.Server(
-        port=settings.integration_port,
-        debug=settings.integration_debug,
-        whitelist=settings.integration_whitelist,
-        keys_path=key_path
-    )
-    server.start()
-
-    return server
-
-
-def __import_tk_framework_desktopserver(app_bootstrap, splash, settings):
-    """
-    Imports the tk-framework-desktopserver module.
-
-    :param app_bootstrap: Application bootstrap.
-    :param splash: Splash widget.
-    :param settings: Desktop application settings
-
-    :returns: Handle to the tk-framework-desktopserver module.
     """
     # Do not import if Python is not 64-bits
     if not __is_64bit_python():
@@ -889,18 +856,51 @@ def __import_tk_framework_desktopserver(app_bootstrap, splash, settings):
         logger.info("Integration was disabled in config.ini.")
         return None
 
-    # Show progress
-    splash.show()
-    splash.set_message("Initializing Desktop Integration server")
-
-    # try to import
-    tk_framework_desktopserver = None
     try:
+        # Show progress
+        splash.show()
+        splash.set_message("Initializing Desktop Integration server")
+
+        # Import framework
         import tk_framework_desktopserver
         app_bootstrap.add_logger_to_logfile(tk_framework_desktopserver.get_logger())
-    except:
-        __handle_unexpected_exception(splash, None)
-    return tk_framework_desktopserver
+
+        key_path = os.path.join(
+            app_bootstrap.get_shotgun_desktop_cache_location(),
+            "config",
+            "certificates"
+        )
+
+        # Makes sure that the certificate has been created on disk and registered with the OS (or browser on Linux).
+        if not __ensure_certificate_ready(app_bootstrap, tk_framework_desktopserver, key_path):
+            return None
+
+        server = tk_framework_desktopserver.Server(
+            port=settings.integration_port,
+            debug=settings.integration_debug,
+            whitelist=settings.integration_whitelist,
+            keys_path=key_path
+        )
+
+        # Launches the server, will throw if the server can't be started.
+        server.start()
+        return server
+    except Exception, e:
+        logger.exception("Could not start the desktop server:")
+        splash.hide()
+        yes_no = QtGui.QMessageBox.warning(
+            None,
+            "Shotgun Desktop",
+            "The browser integration failed to initialize properly: %s\n\n"
+            "Do you want to continue launching the Shotgun Desktop without the browser integration?" % e,
+            QtGui.QMessageBox.Yes | QtGui.QMessageBox.No,
+            QtGui.QMessageBox.Yes
+        )
+        if yes_no == QtGui.QMessageBox.No:
+            raise e
+    finally:
+        # Regardless of how this ends, we have to hide the splash screen.
+        splash.hide()
 
 
 class _BootstrapProxy(object):
@@ -964,7 +964,7 @@ def main(**kwargs):
     # Create some ui related objects
     app, splash = __init_app()
 
-    force_login = __is_command_line_argument_set("--force-login")
+    skip_tray = __is_command_line_argument_set("--skip-tray")
 
     # We might crash before even initializing the authenticator, so instantiate
     # it right away.
@@ -983,26 +983,8 @@ def main(**kwargs):
     server = None
     try:
         # For now let the Desktop keep running even if the server cannot start
-        try:
-            tk_framework_desktopserver = __import_tk_framework_desktopserver(app_bootstrap, splash, settings)
-            if tk_framework_desktopserver:
-                server = __init_websockets(tk_framework_desktopserver, splash, app_bootstrap, settings)
+        server = __init_websockets(splash, app_bootstrap, settings)
                 app_bootstrap.add_logger_to_logfile(server.get_logger())
-        except Exception, e:
-            logger.exception("Could not start the desktop server:")
-            splash.hide()
-            yes_no = QtGui.QMessageBox.question(
-                None,
-                "Shotgun Desktop",
-                "The browser integration failed to initialize properly: %s\n\n"
-                "Do you want to continue launching the Shotgun Desktop without the browser integration?" % e,
-                QtGui.QMessageBox.Yes | QtGui.QMessageBox.No,
-                QtGui.QMessageBox.Yes
-            )
-            if yes_no == QtGui.QMessageBox.No:
-                raise e
-
-        splash.hide()
 
         # It is very important to decouple logging in from creating the shotgun authenticator.
         # If there is an error during auto login, for example proxy settings changed and you
@@ -1011,15 +993,26 @@ def main(**kwargs):
             shotgun_authentication, settings
         )
 
-        __try_cleanup_state(splash, shotgun_authenticator, app_bootstrap)
+        __optional_state_cleanup(splash, shotgun_authenticator, app_bootstrap)
 
-        connection = __do_login_or_tray(
-            splash,
-            shotgun_authentication,
-            shotgun_authenticator,
-            app_bootstrap,
-            force_login
-        )
+        # If the server is up and running, we want the workflow where we can either not login
+        # and keep the websocket running in the background or choose to login
+        if server:
+            connection = __do_login_or_tray(
+                splash,
+                shotgun_authentication,
+                shotgun_authenticator,
+                app_bootstrap,
+                skip_tray
+            )
+        else:
+            # The server is not running, so simply offer to login.
+            connection = __do_login(
+                splash,
+                shotgun_authentication,
+                shotgun_authenticator,
+                app_bootstrap
+            )
 
         # If we didn't authenticate a user
         if not connection:
