@@ -108,11 +108,11 @@ class Settings(object):
     @property
     def integration_debug(self):
         """
-        :returns: True if the server should run in debug mode.
+        :returns: True if the server should run in debug mode. False otherwise.
         """
         # Any non empty string is True, so convert it to int, which will accept 0 or 1 and then
         # we'll cast the return value to a boolean.
-        return bool(self._get_value(self._BROWSER_INTEGRATION, "debug", int, True))
+        return bool(self._get_value(self._BROWSER_INTEGRATION, "debug", int, False))
 
     @property
     def integration_whitelist(self):

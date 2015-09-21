@@ -64,7 +64,19 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
     splash.set_message("Getting Shotgun Desktop updates...")
     logger.info("Getting Shotgun Desktop updates...")
 
-    latest_descriptor = current_desc.find_latest_version()
+    # Some clients block tank.shotgunstudio.com with a proxy. Normally, this isn't an issue
+    # because those clients will be using a locked site config, which won't try to connect
+    # to tank.shotgunstudio.com. The Desktop startup update code however always phones home.
+    # Beacuse of this, we'll try to find the latest version but accept that it may fail.
+    # Note that the exception handler catches way more that it should but the problem is that
+    # an unaccessible website can return so many different errors that it would be futile to
+    # try to catch every single exception type. Because of this, we'll cast a bigger net and log all
+    # errors in case someone has a genuine issue.
+    try:
+        latest_descriptor = current_desc.find_latest_version()
+    except:
+        logger.exception("Can't update Shotgun Desktop startup.")
+        return False
 
     # check deprecation
     (is_dep, dep_msg) = latest_descriptor.get_deprecation_status()
