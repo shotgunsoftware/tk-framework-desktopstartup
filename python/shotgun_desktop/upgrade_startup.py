@@ -68,14 +68,20 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
     # because those clients will be using a locked site config, which won't try to connect
     # to tank.shotgunstudio.com. The Desktop startup update code however always phones home.
     # Beacuse of this, we'll try to find the latest version but accept that it may fail.
-    # Note that the exception handler catches way more that it should but the problem is that
-    # an unaccessible website can return so many different errors that it would be futile to
-    # try to catch every single exception type. Because of this, we'll cast a bigger net and log all
-    # errors in case someone has a genuine issue.
+
+    # Local import because sgtk can't be imported globally in the desktop startup.
+    from tank_vendor.shotgun_api3.lib import httplib2
+
     try:
         latest_descriptor = current_desc.find_latest_version()
-    except:
-        logger.exception("Can't update Shotgun Desktop startup.")
+    # This happens when a proxy blocks the connection (derives from ProxyError)
+    except httplib2.socks.HTTPError:
+        logger.warning("A proxy blocked the access to tank.shotgunstudio.com.")
+        return False
+    # This happens when someone runs a local server and the Desktop doesn't have
+    # internet access for security reasons.
+    except httplib2.ServerNotFoundError:
+        logger.warning("Could not find tank.shotgunstudio.com. Internet connection down?")
         return False
 
     # check deprecation
