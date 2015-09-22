@@ -50,9 +50,8 @@ def get_location(sgtk, app_bootstrap):
         convention. Read more at https://toolkit.shotgunsoftware.com/entries/23797786#Code%20Locations
     """
     dev_descriptor = {
-        "type": "app_store",
-        "name": "tk-framework-desktopstartup",
-        "version": "v1.3.5"
+        "type": "dev",
+        "path": app_bootstrap.get_startup_location_override()
     }
     # If the startup location had been overriden, the descriptor is automatically
     # a dev descriptor.
