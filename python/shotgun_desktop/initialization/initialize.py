@@ -61,7 +61,7 @@ def initialize(splash, connection):
     locations[current_plat_name] = temp_site_root
 
     executables = {
-        "Darwin": "/Applications/Shotgun.app/Contents/Frameworks/Python/bin/python",
+        "Darwin": "/Applications/Shotgun.app/Contents/Resources/Python/bin/python",
         "Windows": "C:\\Program Files\\Shotgun\\Python\\python.exe",
         "Linux": "/opt/Shotgun/Python/bin/python",
     }
