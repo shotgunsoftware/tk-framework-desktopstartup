@@ -321,8 +321,8 @@ def __run_with_systray():
     systray = ShotgunSystemTrayIcon()
     systray.show()
     systray.showMessage(
-        "Shotgun Desktop",
-        "The browser integration is running. Click the Shotgun icon to login or to quit.",
+        "Shotgun",
+        "The Shotgun Services are running. Click the Shotgun icon to login.",
         QtGui.QSystemTrayIcon.Information,
         5000
     )
@@ -984,7 +984,8 @@ def main(**kwargs):
     try:
         # For now let the Desktop keep running even if the server cannot start
         server = __init_websockets(splash, app_bootstrap, settings)
-                app_bootstrap.add_logger_to_logfile(server.get_logger())
+        if server:
+            app_bootstrap.add_logger_to_logfile(server.get_logger())
 
         # It is very important to decouple logging in from creating the shotgun authenticator.
         # If there is an error during auto login, for example proxy settings changed and you

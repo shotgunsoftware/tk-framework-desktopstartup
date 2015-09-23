@@ -30,8 +30,8 @@ class ShotgunSystemTrayIcon(QtGui.QSystemTrayIcon):
         self.setToolTip("Shotgun")
 
         self._systray_menu = QtGui.QMenu()
-        self._login_action = self._systray_menu.addAction("Login")
-        self._about_action = self._systray_menu.addAction("About")
+        self._login_action = self._systray_menu.addAction("Login to Shotgun Desktop")
+        self._about_action = self._systray_menu.addAction("About Shotgun Services")
         self._systray_menu.addSeparator()
         self._quit_action = self._systray_menu.addAction("Quit")
 
