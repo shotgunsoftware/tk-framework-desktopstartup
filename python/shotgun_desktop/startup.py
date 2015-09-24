@@ -42,7 +42,7 @@ from PySide import QtCore, QtGui
 import shotgun_desktop.paths
 import shotgun_desktop.version
 from shotgun_desktop.turn_on_toolkit import TurnOnToolkit
-from shotgun_desktop.websocket_error import WebsocketError
+from shotgun_desktop.desktop_message_box import DesktopMessageBox
 from shotgun_desktop.initialization import initialize, does_pipeline_configuration_require_project
 from shotgun_desktop import authenticator
 from shotgun_desktop.upgrade_startup import upgrade_startup
@@ -51,7 +51,6 @@ from shotgun_desktop.settings import Settings
 from shotgun_desktop.systray_icon import ShotgunSystemTrayIcon
 from distutils.version import LooseVersion
 
-from shotgun_desktop.ui import resources_rc
 import shutil
 
 from shotgun_desktop.errors import (ShotgunDesktopError, RequestRestartException, UpgradeEngineError,
@@ -733,32 +732,36 @@ def __handle_exception(splash, shotgun_authenticator, error_message):
     if splash:
         splash.hide()
     logger.exception("Fatal error, user will be logged out.")
-    QtGui.QMessageBox.critical(None, "Toolkit Error", error_message)
+    DesktopMessageBox.critical("Shotgun Desktop Error", error_message)
     # If we are logged in, we should log out so the user is not stuck in a loop of always
     # automatically logging in each time the app is launched again
     if shotgun_authenticator:
         shotgun_authenticator.clear_default_user()
 
 
-def __handle_unexpected_exception(splash, shotgun_authenticator):
+def __handle_unexpected_exception(splash, shotgun_authenticator, error_message, app_bootstrap):
     """
-    Tears down the application and logs you out.
+    Tears down the application, logs you out and displays an error message.
 
     :param splash: Splash dialog to hide.
     :param shotgun_authenticator: Used to clear the default user so we logout
         automatically on Desktop failure.
-
-    :raises Exception: Any exception being handled is raised as is so its callstack
-        is left as is.
+    :param error_message: Error string that will be displayed in a message box.
     """
     if splash:
         splash.hide()
+    logger.exception("Fatal error, user will be logged out.")
+    DesktopMessageBox.critical(
+        "Shotgun Desktop Error",
+        "Something went wrong in the Shotgun Desktop! If you drop us an email at "
+        "support@shotgunsoftware.com, we'll help you diagnose the issue.\n"
+        "For more information, see the log file at %s.\n"
+        "Error: %s" % (app_bootstrap.get_logfile_location(), str(error_message))
+    )
     # If we are logged in, we should log out so the user is not stuck in a loop of always
     # automatically logging in each time the app is launched again
     if shotgun_authenticator:
         shotgun_authenticator.clear_default_user()
-    # Let the bootstrap catch this error and handle it.
-    raise
 
 
 def __warn_for_prompt():
@@ -766,21 +769,17 @@ def __warn_for_prompt():
     Warn the user he will be prompted.
     """
     if sys.platform == "darwin":
-        QtGui.QMessageBox.information(
-            None,
+        DesktopMessageBox.information(
             "Shotgun browser integration",
-            "The Shotgun browser integration needs to update your keychain.\n\n"
+            "The Shotgun browser integration needs to update your keychain.\n"
             "You will be prompted to enter your keychain credentials by Keychain Access in order "
-            "to update they keychain.",
-            QtGui.QMessageBox.Ok
-        ) == QtGui.QMessageBox.Ok
+            "to update the keychain."
+        )
     elif sys.platform == "win32":
-        QtGui.QMessageBox.information(
-            None,
+        DesktopMessageBox.information(
             "Shotgun browser integration",
-            "The Shotgun browser integration needs to update your Windows certificate list.\n\n"
+            "The Shotgun browser integration needs to update your Windows certificate list.\n",
             "Windows will now prompt you to update the certificate list.",
-            QtGui.QMessageBox.Ok
         )
     # On Linux there's no need to prompt. It's all silent.
 
@@ -798,42 +797,38 @@ def __ensure_certificate_ready(app_bootstrap, tk_framework_desktopserver, certif
     """
     cert_handler = tk_framework_desktopserver.get_certificate_handler(certificate_folder)
 
-    try:
-        # We only warn once.
-        warned = False
-        # Make sure the certificates exist.
-        if not cert_handler.exists():
-            logger.info("Certificate doesn't exist.")
-            # Start by unregistering certificates from the keychains, this can happen if the user
-            # wiped his shotgun/desktop/config/certificates folder.
-            if cert_handler.is_registered():
-                logger.info("Unregistering lingering certificate.")
-                # Warn once.
-                __warn_for_prompt()
-                warned = True
-                cert_handler.unregister()
-                logger.info("Unregistered.")
-            # Create the certificate files
-            cert_handler.create()
-            logger.info("Certificate created.")
-        else:
-            logger.info("Certificate already exist.")
+    # We only warn once.
+    warned = False
+    # Make sure the certificates exist.
+    if not cert_handler.exists():
+        logger.info("Certificate doesn't exist.")
+        # Start by unregistering certificates from the keychains, this can happen if the user
+        # wiped his shotgun/desktop/config/certificates folder.
+        if cert_handler.is_registered():
+            logger.info("Unregistering lingering certificate.")
+            # Warn once.
+            __warn_for_prompt()
+            warned = True
+            cert_handler.unregister()
+            logger.info("Unregistered.")
+        # Create the certificate files
+        cert_handler.create()
+        logger.info("Certificate created.")
+    else:
+        logger.info("Certificate already exist.")
 
-        # Check if the certificates are registered with the keychain.
-        if not cert_handler.is_registered():
-            logger.info("Certificate not registered.")
+    # Check if the certificates are registered with the keychain.
+    if not cert_handler.is_registered():
+        logger.info("Certificate not registered.")
 
-            # Only if we've never been warned before.
-            if not warned:
-                __warn_for_prompt()
-            cert_handler.register()
-            logger.info("Certificate registered.")
-        else:
-            logger.info("Certificates already registered.")
-        return True
-    except:
-        logger.error("There was a problem registering the certificates. Skipping this step.")
-        return False
+        # Only if we've never been warned before.
+        if not warned:
+            __warn_for_prompt()
+        cert_handler.register()
+        logger.info("Certificate registered.")
+    else:
+        logger.info("Certificates already registered.")
+    return True
 
 
 def __init_websockets(splash, app_bootstrap, settings):
@@ -860,7 +855,7 @@ def __init_websockets(splash, app_bootstrap, settings):
     try:
         # Show progress
         splash.show()
-        splash.set_message("Initializing Desktop Integration server")
+        splash.set_message("Initializing browser integration")
 
         # Import framework
         import tk_framework_desktopserver
@@ -873,8 +868,7 @@ def __init_websockets(splash, app_bootstrap, settings):
         )
 
         # Makes sure that the certificate has been created on disk and registered with the OS (or browser on Linux).
-        if not __ensure_certificate_ready(app_bootstrap, tk_framework_desktopserver, key_path):
-            return None
+        __ensure_certificate_ready(app_bootstrap, tk_framework_desktopserver, key_path)
 
         server = tk_framework_desktopserver.Server(
             port=settings.integration_port,
@@ -889,8 +883,15 @@ def __init_websockets(splash, app_bootstrap, settings):
     except Exception, e:
         logger.exception("Could not start the desktop server:")
         splash.hide()
-        dlg = WebsocketError(e)
-        if dlg.exec_() == QtGui.QMessageBox.No:
+        result = DesktopMessageBox.warning(
+            "Browser integration error",
+            "Browser integration failed to initialize properly:\n"
+            "%s\n"
+            "Continue launching without browser integration?" % str(e),
+            DesktopMessageBox.Yes,
+            DesktopMessageBox.Yes | DesktopMessageBox.No
+        )
+        if result == DesktopMessageBox.No:
             raise e
     finally:
         # Regardless of how this ends, we have to hide the splash screen.
@@ -969,8 +970,8 @@ def main(**kwargs):
     try:
         # get the shotgun authentication module.
         shotgun_authentication = __import_shotgun_authentication_from_path(app_bootstrap)
-    except:
-        __handle_unexpected_exception(splash, shotgun_authenticator)
+    except Exception, e:
+        __handle_unexpected_exception(splash, shotgun_authenticator, e, app_bootstrap)
         return -1
 
     # We have gui, websocket library and the authentication module, now do the rest.
@@ -1032,12 +1033,11 @@ def main(**kwargs):
         splash.hide()
         shotgun_authenticator.clear_default_user()
         return 0
-    except ShotgunDesktopError, ex:
-        # Those are expected errors and the error message will be printed as is.
-        __handle_exception(splash, shotgun_authenticator, str(ex))
+    except ShotgunDesktopError, e:
+        __handle_exception(splash, shotgun_authenticator, str(e))
         return -1
-    except:
-        __handle_unexpected_exception(splash, shotgun_authenticator)
+    except Exception, e:
+        __handle_unexpected_exception(splash, shotgun_authenticator, e, app_bootstrap)
         return -1
     finally:
         # We can end up in the finally either because the app closed correctly, in which case
