@@ -314,8 +314,6 @@ def __run_with_systray():
     """
     Creates a systray and runs a local event loop to process events for that systray.
 
-    :param message: Message to display in tray icon balloon.
-
     :returns: SystrayEventLoop.LOGIN if the user clicked Login, SystrayEventLoop.CLOSE_APP
         is the user clicked Quit.
     """
@@ -323,7 +321,7 @@ def __run_with_systray():
     systray.show()
     systray.showMessage(
         "Shotgun",
-        "Browser integration is running. Click the Shotgun icon to login.",
+        "Browser integration is running in the background. Click the Shotgun icon to login.",
         QtGui.QSystemTrayIcon.Information,
         5000
     )
