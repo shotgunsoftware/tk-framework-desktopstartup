@@ -33,7 +33,7 @@ if "SGTK_DESKTOP_SERVER_LOCATION" in os.environ:
 else:
     desktop_server_root = os.path.normpath(os.path.join(os.path.split(__file__)[0], "..", "server"))
 sys.path.insert(0, os.path.join(desktop_server_root, "python"))
-logger.info("Using desktop integration from '%s'" % desktop_server_root)
+logger.info("Using browser integration from '%s'" % desktop_server_root)
 
 
 # now proceed with non builtin imports
@@ -42,6 +42,7 @@ from PySide import QtCore, QtGui
 import shotgun_desktop.paths
 import shotgun_desktop.version
 from shotgun_desktop.turn_on_toolkit import TurnOnToolkit
+from shotgun_desktop.websocket_error import WebsocketError
 from shotgun_desktop.initialization import initialize, does_pipeline_configuration_require_project
 from shotgun_desktop import authenticator
 from shotgun_desktop.upgrade_startup import upgrade_startup
@@ -322,7 +323,7 @@ def __run_with_systray():
     systray.show()
     systray.showMessage(
         "Shotgun",
-        "The Shotgun Services are running. Click the Shotgun icon to login.",
+        "Browser integration is running. Click the Shotgun icon to login.",
         QtGui.QSystemTrayIcon.Information,
         5000
     )
@@ -767,8 +768,8 @@ def __warn_for_prompt():
     if sys.platform == "darwin":
         QtGui.QMessageBox.information(
             None,
-            "Shotgun Desktop Integration",
-            "The Shotgun Desktop Integration needs to update your keychain.\n\n"
+            "Shotgun browser integration",
+            "The Shotgun browser integration needs to update your keychain.\n\n"
             "You will be prompted to enter your keychain credentials by Keychain Access in order "
             "to update they keychain.",
             QtGui.QMessageBox.Ok
@@ -776,8 +777,8 @@ def __warn_for_prompt():
     elif sys.platform == "win32":
         QtGui.QMessageBox.information(
             None,
-            "Shotgun Desktop Integration",
-            "The Shotgun Desktop Integration needs to update your Windows certificate list.\n\n"
+            "Shotgun browser integration",
+            "The Shotgun browser integration needs to update your Windows certificate list.\n\n"
             "Windows will now prompt you to update the certificate list.",
             QtGui.QMessageBox.Ok
         )
@@ -888,15 +889,8 @@ def __init_websockets(splash, app_bootstrap, settings):
     except Exception, e:
         logger.exception("Could not start the desktop server:")
         splash.hide()
-        yes_no = QtGui.QMessageBox.warning(
-            None,
-            "Shotgun Desktop",
-            "The browser integration failed to initialize properly: %s\n\n"
-            "Do you want to continue launching the Shotgun Desktop without the browser integration?" % e,
-            QtGui.QMessageBox.Yes | QtGui.QMessageBox.No,
-            QtGui.QMessageBox.Yes
-        )
-        if yes_no == QtGui.QMessageBox.No:
+        dlg = WebsocketError(e)
+        if dlg.exec_() == QtGui.QMessageBox.No:
             raise e
     finally:
         # Regardless of how this ends, we have to hide the splash screen.
