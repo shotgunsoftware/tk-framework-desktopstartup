@@ -28,15 +28,6 @@ def get_python_path():
 
 def get_default_site_config_root(connection):
     """ return the path to the default configuration for the site """
-    # If the TK_SITE_CONFIG_ROOT env variable is set and contains
-    # something useful, we will use that.
-    env_site = os.environ.get("TK_SITE_CONFIG_ROOT")
-    if env_site:
-        logger.info(
-            "$TK_SITE_CONFIG_ROOT site config override found, using "
-            "site config path '%s' when launching desktop." % str(env_site)
-        )
-        return (str(env_site), None)
 
     # find what path field from the entity we need
     if sys.platform == "darwin":
@@ -97,10 +88,22 @@ def get_default_site_config_root(connection):
         # It is possible to get multiple pipeline configurations due to user error.
         # Log a warning if there was more than one pipeline configuration found.
         if len(pcs) > 1:
-            logging.getLogger("tk-desktop.paths").info(
+            logger.info(
                 "More than one pipeline configuration was found (%s), using %d" %
                 (", ".join([str(p["id"]) for p in pcs]), pc["id"])
             )
+
+    # If the TK_SITE_CONFIG_ROOT env variable is set and contains
+    # something useful, we will use that.
+    env_site = os.environ.get("TK_SITE_CONFIG_ROOT")
+    if env_site:
+        logger.info(
+            "$TK_SITE_CONFIG_ROOT site config override found, using "
+            "site config path '%s' when launching desktop." % str(env_site)
+        )
+        if sys.platform in ["darwin", "linux"]:
+            env_site = os.path.expanduser(str(env_site))
+        return (env_site, pc)
 
     # see if we found a pipeline configuration
     if pc is not None and pc.get(plat_key, ""):
