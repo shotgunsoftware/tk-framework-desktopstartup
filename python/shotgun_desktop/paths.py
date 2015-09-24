@@ -88,7 +88,7 @@ def get_default_site_config_root(connection):
         # It is possible to get multiple pipeline configurations due to user error.
         # Log a warning if there was more than one pipeline configuration found.
         if len(pcs) > 1:
-            logging.getLogger("tk-desktop.paths").info(
+            logger.info(
                 "More than one pipeline configuration was found (%s), using %d" %
                 (", ".join([str(p["id"]) for p in pcs]), pc["id"])
             )
