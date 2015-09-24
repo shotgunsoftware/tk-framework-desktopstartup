@@ -15,6 +15,7 @@ import sys
 import time
 import subprocess
 import struct
+import traceback
 
 # initialize logging
 import logging
@@ -756,7 +757,8 @@ def __handle_unexpected_exception(splash, shotgun_authenticator, error_message, 
         "Something went wrong in the Shotgun Desktop! If you drop us an email at "
         "support@shotgunsoftware.com, we'll help you diagnose the issue.\n"
         "For more information, see the log file at %s.\n"
-        "Error: %s" % (app_bootstrap.get_logfile_location(), str(error_message))
+        "Error: %s" % (app_bootstrap.get_logfile_location(), str(error_message)),
+        detailed_text="".join(traceback.format_exception(sys.exc_type, sys.exc_value, sys.exc_traceback))
     )
     # If we are logged in, we should log out so the user is not stuck in a loop of always
     # automatically logging in each time the app is launched again

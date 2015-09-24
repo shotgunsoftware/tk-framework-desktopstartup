@@ -14,39 +14,42 @@ from PySide import QtGui
 class DesktopMessageBox(QtGui.QMessageBox):
 
     @staticmethod
-    def critical(title, message, default_button=QtGui.QMessageBox.Ok, buttons=QtGui.QMessageBox.Ok, parent=None):
+    def critical(title, message, default_button=QtGui.QMessageBox.Ok, buttons=QtGui.QMessageBox.Ok, detailed_text=None, parent=None):
         return DesktopMessageBox(
             QtGui.QMessageBox.Critical,
             title,
             message,
             default_button,
             buttons,
+            detailed_text,
             parent
         ).exec_()
 
     @staticmethod
-    def information(title, message, default_button=QtGui.QMessageBox.Ok, buttons=QtGui.QMessageBox.Ok, parent=None):
+    def information(title, message, default_button=QtGui.QMessageBox.Ok, buttons=QtGui.QMessageBox.Ok, detailed_text=None, parent=None):
         return DesktopMessageBox(
             QtGui.QMessageBox.Information,
             title,
             message,
             default_button,
             buttons,
+            detailed_text,
             parent
         ).exec_()
 
     @staticmethod
-    def warning(title, message, default_button=QtGui.QMessageBox.Ok, buttons=QtGui.QMessageBox.Ok, parent=None):
+    def warning(title, message, default_button=QtGui.QMessageBox.Ok, buttons=QtGui.QMessageBox.Ok, detailed_text=None, parent=None):
         return DesktopMessageBox(
             QtGui.QMessageBox.Warning,
             title,
             message,
             default_button,
             buttons,
+            detailed_text,
             parent
         ).exec_()
 
-    def __init__(self, icon, title, message, default_button, buttons, parent=None):
+    def __init__(self, icon, title, message, default_button, buttons, detailed_text, parent=None):
         QtGui.QMessageBox.__init__(self)
 
         # Retrieve the style to get the message box icon associated to it. Icon is a temporary
@@ -83,6 +86,9 @@ class DesktopMessageBox(QtGui.QMessageBox):
         # Set the buttons
         self.setStandardButtons(buttons)
         self.setDefaultButton(default_button)
+
+        if detailed_text:
+            self.setDetailedText(detailed_text)
 
         # Set the title
         self.setWindowTitle(title)
