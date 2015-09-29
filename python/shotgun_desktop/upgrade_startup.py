@@ -11,7 +11,6 @@
 import os
 import logging
 from distutils.version import LooseVersion
-from PySide import QtGui
 from shotgun_desktop.location import get_location, write_location
 from shotgun_desktop.desktop_message_box import DesktopMessageBox
 

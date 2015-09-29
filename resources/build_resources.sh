@@ -39,7 +39,6 @@ function build_res {
 echo "building user interfaces..."
 build_ui splash
 build_ui turn_on_toolkit
-build_ui websocket_error
 build_ui additional_details
 
 # build resources
