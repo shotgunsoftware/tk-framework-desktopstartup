@@ -15,6 +15,22 @@ class DesktopMessageBox(QtGui.QMessageBox):
 
     @staticmethod
     def critical(title, message, default_button=QtGui.QMessageBox.Ok, buttons=QtGui.QMessageBox.Ok, detailed_text=None, parent=None):
+        """
+        Pops a critical message box, very similar to QtGui.QMessageBox.critical.
+
+        :param title: Text to display in the title bar.
+        :param message: Text to display in the body of the dialog. Text is split into a separate
+            paragraph after each \n.
+        :param default_button: Button that will be highlighted bu default. Defaults to
+            QtGui.QMessageBox.Ok
+        :param buttons: Union of QtGui.QMessageBox.StandardButton to display in the dialog. Defaults
+            to QtGui.QMessageBox.Ok
+        :param detailed_text: Text to display in the detailed area when clicking "Show Details...".
+            If None, the button won't be displayed.
+        :param parent: Parent widget of this message box.
+
+        :returns: The QtGui.QMessageBox.StandardButton value representing the user selection.
+        """
         return DesktopMessageBox(
             QtGui.QMessageBox.Critical,
             title,
@@ -27,6 +43,22 @@ class DesktopMessageBox(QtGui.QMessageBox):
 
     @staticmethod
     def information(title, message, default_button=QtGui.QMessageBox.Ok, buttons=QtGui.QMessageBox.Ok, detailed_text=None, parent=None):
+        """
+        Pops an informational message box, very similar to QtGui.QMessageBox.information.
+
+        :param title: Text to display in the title bar.
+        :param message: Text to display in the body of the dialog. Text is split into a separate
+            paragraph after each \n.
+        :param default_button: Button that will be highlighted bu default. Defaults to
+            QtGui.QMessageBox.Ok
+        :param buttons: Union of QtGui.QMessageBox.StandardButton to display in the dialog. Defaults
+            to QtGui.QMessageBox.Ok
+        :param detailed_text: Text to display in the detailed area when clicking "Show Details...".
+            If None, the button won't be displayed.
+        :param parent: Parent widget of this message box.
+
+        :returns: The QtGui.QMessageBox.StandardButton value representing the user selection.
+        """
         return DesktopMessageBox(
             QtGui.QMessageBox.Information,
             title,
@@ -39,6 +71,22 @@ class DesktopMessageBox(QtGui.QMessageBox):
 
     @staticmethod
     def warning(title, message, default_button=QtGui.QMessageBox.Ok, buttons=QtGui.QMessageBox.Ok, detailed_text=None, parent=None):
+        """
+        Pops a warning message box, very similar to QtGui.QMessageBox.warning.
+
+        :param title: Text to display in the title bar.
+        :param message: Text to display in the body of the dialog. Text is split into a separate
+            paragraph after each \n.
+        :param default_button: Button that will be highlighted bu default. Defaults to
+            QtGui.QMessageBox.Ok
+        :param buttons: Union of QtGui.QMessageBox.StandardButton to display in the dialog. Defaults
+            to QtGui.QMessageBox.Ok
+        :param detailed_text: Text to display in the detailed area when clicking "Show Details...".
+            If None, the button won't be displayed.
+        :param parent: Parent widget of this message box.
+
+        :returns: The QtGui.QMessageBox.StandardButton value representing the user selection.
+        """
         return DesktopMessageBox(
             QtGui.QMessageBox.Warning,
             title,
@@ -50,6 +98,24 @@ class DesktopMessageBox(QtGui.QMessageBox):
         ).exec_()
 
     def __init__(self, icon, title, message, default_button, buttons, detailed_text=None, parent=None):
+        """
+        Pops a warning message box, very similar to QtGui.QMessageBox.warning.
+
+        :param icon: QtGui.QMessageBox.Icon value representing the icon to display.
+        :param title: Text to display in the title bar.
+        :param message: Text to display in the body of the dialog. Text is split into a separate
+            paragraph after each \n.
+        :param default_button: Button that will be highlighted bu default. Defaults to
+            QtGui.QMessageBox.Ok
+        :param buttons: Union of QtGui.QMessageBox.StandardButton to display in the dialog. Defaults
+            to QtGui.QMessageBox.Ok
+        :param detailed_text: Text to display in the detailed area when clicking "Show Details...".
+            If None, the button won't be displayed.
+        :param parent: Parent widget of this message box.
+
+        :returns: The QtGui.QMessageBox.StandardButton value representing the user selection.
+        """
+
         QtGui.QMessageBox.__init__(self)
 
         # Retrieve the style to get the message box icon associated to it. Icon is a temporary
