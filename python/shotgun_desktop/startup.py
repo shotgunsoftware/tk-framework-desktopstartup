@@ -179,6 +179,8 @@ def __get_initialized_sgtk(path, app_bootstrap):
 
     :param sgtk: The Toolkit API handle.
     :param app_bootstrap: The application bootstrap instance.
+
+    :returns: The imported sgtk module.
     """
     sgtk = __import_sgtk_from_path(path)
     __initialize_sgtk_authentication(sgtk, app_bootstrap)
@@ -210,6 +212,8 @@ def __import_shotgun_authentication_from_path(app_bootstrap):
     another instance can be loaded later on. If SGTK_CORE_DEBUG_LOCATION
     is set, it will import the Shogun Authentication module bundled with that
     core instead.
+
+    :params app_bootstrap: The application bootstrap.
     """
     logger.info("Initializing Shotgun Authenticator")
 
@@ -331,7 +335,11 @@ def __run_with_systray():
 
 def __optional_state_cleanup(splash, shotgun_authenticator, app_bootstrap):
     """
-    Cleans the Desktop state if the last key is pressed. Restarts the Desktop when done.
+    Cleans the Desktop state if the alt key is pressed. Restarts the Desktop when done.
+
+    :param splash: Splash screen widget.
+    :param shotgun_authenticator: Shotgun authenticator used to logout if alt is pressed.
+    :params app_bootstrap: The application bootstrap.
     """
 
     # If the application was launched holding the alt key, log the user out.
@@ -346,6 +354,11 @@ def __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootst
     """
     Asks for the credentials of the user or automatically logs the user in if the credentials are
     cached on disk.
+
+    :param splash: Splash screen widget.
+    :param shotgun_authentication: Shotgun authentication module.
+    :param shotgun_authenticator: Instance of the Shotgun Authenticator to use for login.
+    :params app_bootstrap: The application bootstrap.
 
     :returns: The tuple (ShotgunAuthenticator instance used to login, Shotgun connection to the
         server).
@@ -364,10 +377,17 @@ def __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootst
 def __do_login_or_tray(
     splash,
     shotgun_authentication, shotgun_authenticator,
-    app_bootstrap, skip_tray
+    app_bootstrap, force_login
 ):
     """
     Runs the login dialog or the tray icon.
+
+    :param splash: Splash screen widget.
+    :param shotgun_authentication: Shotgun authentication module.
+    :param shotgun_authenticator: Instance of the Shotgun Authenticator to use for login.
+    :params app_bootstrap: The application bootstrap.
+    :params force_login: If True, the prompt will be shown automatically instead of going
+        into tray mode.
 
     :returns: The connection object if the user logged in, None if the user wants to quit the app.
     """
@@ -379,7 +399,7 @@ def __do_login_or_tray(
     # 3. If you've just logged out of desktop, you'll get the login screen (fl and !du)
     # 4. If you quit desktop and restart it later you won't see the tray and will auto-login (!fl and du)
     # 5. If you've cancelled the login screen at some point, you'll get the tray. (!fl and !du)
-    if skip_tray is False and shotgun_authenticator.get_default_user() is None:
+    if force_login is False and shotgun_authenticator.get_default_user() is None:
         if __run_with_systray() == SystrayEventLoop.CLOSE_APP:
             return None
 
@@ -417,7 +437,14 @@ def __restart_app_with_countdown(splash, reason):
     raise RequestRestartException()
 
 
-def __is_command_line_argument_set(arg_name):
+def __extract_command_line_argument(arg_name):
+    """
+    Checks if an argument was specified from the command line and extracts it. Note that this method
+    removes all instances of the argument from argv. Therefore, invoking the method twice with the
+    same parameter will always return False the second time.
+
+    :returns: True if the argument was set, False otherwise.
+    """
     is_set = arg_name in sys.argv
     while arg_name in sys.argv:
         sys.argv.remove(arg_name)
@@ -450,7 +477,7 @@ def __launch_app(app, splash, connection, app_bootstrap, server):
     toolkit_imported = False
     config_folder_exists_at_startup = os.path.exists(default_site_config)
 
-    reset_site = __is_command_line_argument_set("--reset-site")
+    reset_site = __extract_command_line_argument("--reset-site")
 
     # If the config folder exists at startup but the user wants to wipe it, do it.
     if config_folder_exists_at_startup and reset_site:
@@ -746,6 +773,7 @@ def __handle_unexpected_exception(splash, shotgun_authenticator, error_message, 
     :param shotgun_authenticator: Used to clear the default user so we logout
         automatically on Desktop failure.
     :param error_message: Error string that will be displayed in a message box.
+    :params app_bootstrap: The application bootstrap.
     """
     if splash:
         splash.hide()
@@ -764,6 +792,20 @@ def __handle_unexpected_exception(splash, shotgun_authenticator, error_message, 
         shotgun_authenticator.clear_default_user()
 
 
+def __get_certificate_prompt(keychain_name, action):
+    """
+    Generates the text to use when alerting the user that we need to register the certificate.
+
+    :param keychain_name: Name of the keychain-like entity for a particular OS.
+    :param action: Description of what the user will need to do when the OS prompts the user.
+
+    :returns: String containing an error message formatted
+    """
+    return ("The Shotgun Desktop needs to install a security certificate into your %s before "
+            "it can turn on the browser integration.\n"
+            "%s." % (keychain_name, action))
+
+
 def __warn_for_prompt():
     """
     Warn the user he will be prompted.
@@ -771,15 +813,19 @@ def __warn_for_prompt():
     if sys.platform == "darwin":
         DesktopMessageBox.information(
             "Shotgun browser integration",
-            "The Shotgun browser integration needs to update your keychain.\n"
-            "You will be prompted to enter your keychain credentials by Keychain Access in order "
-            "to update the keychain."
+            __get_certificate_prompt(
+                "keychain",
+                "You will be prompted to enter your username and password by MacOS's keychain "
+                "manager in order to proceed with the update."
+            )
         )
     elif sys.platform == "win32":
         DesktopMessageBox.information(
             "Shotgun browser integration",
-            "The Shotgun browser integration needs to update your Windows certificate list.\n",
-            "Windows will now prompt you to update the certificate list.",
+            __get_certificate_prompt(
+                "Windows certificate store",
+                "Windows will now prompt you to accept an update to your certificate store."
+            )
         )
     # On Linux there's no need to prompt. It's all silent.
 
@@ -831,36 +877,89 @@ def __ensure_certificate_ready(app_bootstrap, tk_framework_desktopserver, certif
     return True
 
 
+def __query_quit_or_continue_launching(msg, app_bootstrap):
+    """
+    Asks the user if he wants to keep launching the Desktop or not.
+
+    :param msg: Message to display to the user.
+    :param app_bootstrap: The application bootstrap instance.
+
+    :returns: True if the user wants to continue, False otherwise.
+    """
+    warning_box = DesktopMessageBox(
+        DesktopMessageBox.Warning,
+        "Browser Integration error",
+        "%s\n"
+        "Do you want to continue launching the Shotgun Desktop?" % msg,
+        DesktopMessageBox.Yes,
+        DesktopMessageBox.Yes | DesktopMessageBox.No,
+        "If you drop us an email at support@shotgunsoftware.com, we'll help you diagnose "
+        "the issue.\n\n"
+        "For more information, see the log file at %s.\n\n"
+        "%s" % (app_bootstrap.get_logfile_location(), traceback.format_exc())
+    )
+    warning_box.button(DesktopMessageBox.Yes).setText("Continue")
+    warning_box.button(DesktopMessageBox.No).setText("Quit")
+
+    return warning_box.exec_() == DesktopMessageBox.Yes
+
+
+def __handle_unexpected_exception_during_websocket_init(splash, app_bootstrap, ex):
+    """
+    Handles unexpected exception during websocket initialization. If hides the splashscreen
+    and asks the user if we wants to keep launching the Desktop.
+
+    :param splash: Splashscreen widget.
+    :param app_bootstrap: The application bootstrap instance.
+    :param ex: The unexpected exception.
+
+    :returns: True if the user wants to continue, False otherwise.
+    """
+    logger.exception("Could not start the browser integration:")
+    splash.hide()
+    return __query_quit_or_continue_launching(
+        "Browser integration failed to start. It will not be available if "
+        "you continue.\n"
+        "Error: %s" % str(ex),
+        app_bootstrap
+    )
+
+
 def __init_websockets(splash, app_bootstrap, settings):
     """
     Initializes the local websocket server.
 
-    :param tk_framework_desktopserver: tk_framework_desktopserver module handle.
     :pram splash: Splash widget.
     :param app_bootstrap: The application bootstrap instance.
     :param settings: The application's settings.
 
-    :returns: The tk_framework_desktopserver.Server instance.
+    :returns: The tk_framework_desktopserver.Server instance and a boolean indicating if the
+        Desktop should keep launching.
     """
-    # Do not import if Python is not 64-bits
     if not __is_64bit_python():
+        # Do not import if Python is not 64-bits
         logger.warning("Interpreter is not 64-bits, can't load desktop server")
-        return None
+        return None, True
 
-    # Do not import if server is disabled.
     if not settings.integration_enabled:
+        # Do not import if server is disabled.
         logger.info("Integration was disabled in config.ini.")
-        return None
+        return None, True
 
+    # First try to import the framework. If it fails, let the user decide if the Desktop should
+    # keep launching.
     try:
-        # Show progress
         splash.show()
         splash.set_message("Initializing browser integration")
-
         # Import framework
         import tk_framework_desktopserver
         app_bootstrap.add_logger_to_logfile(tk_framework_desktopserver.get_logger())
+    except Exception, e:
+        return None, __handle_unexpected_exception_during_websocket_init(splash, app_bootstrap, e)
 
+    # We need to break these two try's because if we can't import the tk-framework-desktopserver
+    # module we won't be able to catch any exception types from that module.
+    try:
         key_path = os.path.join(
             app_bootstrap.get_shotgun_desktop_cache_location(),
             "config",
@@ -870,6 +969,7 @@ def __init_websockets(splash, app_bootstrap, settings):
         # Makes sure that the certificate has been created on disk and registered with the OS (or browser on Linux).
         __ensure_certificate_ready(app_bootstrap, tk_framework_desktopserver, key_path)
 
+        # Launch the server
         server = tk_framework_desktopserver.Server(
             port=settings.integration_port,
             debug=settings.integration_debug,
@@ -877,25 +977,22 @@ def __init_websockets(splash, app_bootstrap, settings):
             keys_path=key_path
         )
 
-        # Launches the server, will throw if the server can't be started.
+        # This might throw a PortBusy error.
         server.start()
-        return server
-    except Exception, e:
-        logger.exception("Could not start the desktop server:")
+
         splash.hide()
-        result = DesktopMessageBox.warning(
-            "Browser integration error",
-            "Browser integration failed to initialize properly:\n"
-            "%s\n"
-            "Continue launching without browser integration?" % str(e),
-            DesktopMessageBox.Yes,
-            DesktopMessageBox.Yes | DesktopMessageBox.No
+        return server, True
+    except tk_framework_desktopserver.PortBusy:
+        # Gracefully let the user know that the Desktop might already be running.
+        logger.exception("Could not start the browser integration:")
+        splash.hide()
+        return None, __query_quit_or_continue_launching(
+            "Browser integration failed to start because port %d is already in use. The Shotgun "
+            "Desktop may already be running on your machine." % settings.integration_port,
+            app_bootstrap
         )
-        if result == DesktopMessageBox.No:
-            raise e
-    finally:
-        # Regardless of how this ends, we have to hide the splash screen.
-        splash.hide()
+    except Exception, e:
+        return None, __handle_unexpected_exception_during_websocket_init(splash, app_bootstrap, e)
 
 
 class _BootstrapProxy(object):
@@ -959,7 +1056,7 @@ def main(**kwargs):
     # Create some ui related objects
     app, splash = __init_app()
 
-    skip_tray = __is_command_line_argument_set("--skip-tray")
+    show_login = __extract_command_line_argument("--show-login")
 
     # We might crash before even initializing the authenticator, so instantiate
     # it right away.
@@ -977,8 +1074,10 @@ def main(**kwargs):
     # We have gui, websocket library and the authentication module, now do the rest.
     server = None
     try:
-        # For now let the Desktop keep running even if the server cannot start
-        server = __init_websockets(splash, app_bootstrap, settings)
+        server, keep_running = __init_websockets(splash, app_bootstrap, settings)
+        if keep_running is False:
+            return 0
+
         if server:
             app_bootstrap.add_logger_to_logfile(server.get_logger())
 
@@ -999,7 +1098,7 @@ def main(**kwargs):
                 shotgun_authentication,
                 shotgun_authenticator,
                 app_bootstrap,
-                skip_tray
+                show_login
             )
         else:
             # The server is not running, so simply offer to login.

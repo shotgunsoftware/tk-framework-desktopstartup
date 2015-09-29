@@ -49,7 +49,7 @@ class DesktopMessageBox(QtGui.QMessageBox):
             parent
         ).exec_()
 
-    def __init__(self, icon, title, message, default_button, buttons, detailed_text, parent=None):
+    def __init__(self, icon, title, message, default_button, buttons, detailed_text=None, parent=None):
         QtGui.QMessageBox.__init__(self)
 
         # Retrieve the style to get the message box icon associated to it. Icon is a temporary
