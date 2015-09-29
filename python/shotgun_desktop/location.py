@@ -47,7 +47,7 @@ def get_location(sgtk, app_bootstrap):
     :param app_bootstrap: Instance of the application bootstrap.
 
     :returns: A dictionary with keys and values following the Toolkit location
-        convention. Read more at https://toolkit.shotgunsoftware.com/entries/23797786#Code%20Locations
+        convention. Read more at https://support.shotgunsoftware.com/entries/95442678#Code%20Locations
     """
     dev_descriptor = {
         "type": "dev",
