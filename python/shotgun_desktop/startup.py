@@ -977,12 +977,12 @@ def __init_websockets(splash, app_bootstrap, settings):
             keys_path=key_path
         )
 
-        # This might throw a PortBusy error.
+        # This might throw a PortBusyError.
         server.start()
 
         splash.hide()
         return server, True
-    except tk_framework_desktopserver.PortBusy:
+    except tk_framework_desktopserver.PortBusyError:
         # Gracefully let the user know that the Desktop might already be running.
         logger.exception("Could not start the browser integration:")
         splash.hide()
