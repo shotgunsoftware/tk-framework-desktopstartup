@@ -94,7 +94,7 @@ class _CertificateHandler(object):
             # Sometimes the is_registered_cmd will output Shotgun Software and sometimes it will
             # only output the pretty name Shotgun Desktop Integration, so searching for Shotgun is 
             # good enough.
-            subprocess.check_call(cmd, shell=True)
+            subprocess.check_call(cmd, stderr=subprocess.STDOUT, shell=True)
         except subprocess.CalledProcessError, e:
             self._logger.exception("There was a problem %s" % ctx)
             self._logger.info("Output:\n%s" % e.output)
@@ -110,7 +110,7 @@ class _CertificateHandler(object):
             # Sometimes the is_registered_cmd will output Shotgun Software and sometimes it will
             # only output the pretty name Shotgun Desktop Integration, so searching for Shotgun is
             # good enough.
-            return "Shotgun" in subprocess.check_output(self._get_is_registered_cmd(), shell=True)
+            return "Shotgun" in subprocess.check_output(self._get_is_registered_cmd(), stderr=subprocess.STDOUT, shell=True)
         except subprocess.CalledProcessError, e:
             self._logger.exception("There was a problem validating if a certificate was installed.")
             self._logger.info("Output:\n%s" % e.output)

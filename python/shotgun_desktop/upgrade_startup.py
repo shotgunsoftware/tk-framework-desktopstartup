@@ -11,8 +11,8 @@
 import os
 import logging
 from distutils.version import LooseVersion
-from PySide import QtGui
 from shotgun_desktop.location import get_location, write_location
+from shotgun_desktop.desktop_message_box import DesktopMessageBox
 
 logger = logging.getLogger("tk-desktop.startup")
 
@@ -135,13 +135,12 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
         # If there is an error updating, don't prevent the user from running the app, but let them
         # know something wrong is going on.
         logger.exception("Unexpected error when updating startup code.")
-        QtGui.QMessageBox.critical(
-            None,
+        DesktopMessageBox.critical(
             "Desktop update failed",
             "There is a new update of the Shotgun Desktop, but it couldn't be installed. Shotgun "
-            "Desktop will be launched with the currently installed version of the code.\n\n"
+            "Desktop will be launched with the currently installed version of the code.\n"
             "If this problem persists, please contact Shotgun support at "
-            "support@shotgunsoftware.com.\n\n"
+            "support@shotgunsoftware.com.\n"
             "Error: %s" % str(e))
         splash.show()
         return False
