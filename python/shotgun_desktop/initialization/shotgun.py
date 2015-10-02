@@ -92,7 +92,7 @@ def get_or_create_script(connection):
     # prepare the data to create the script
     data = {
         "description": "Shotgun Toolkit API Access",
-        "email": "toolkitsupport@shotgunsoftware.com",
+        "email": "support@shotgunsoftware.com",
         "firstname": "Toolkit",
         "lastname": "1.0",
         "generate_event_log_entries": True,
