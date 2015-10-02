@@ -72,7 +72,7 @@ class Settings(object):
     def _get_config_location(self, bootstrap):
         """
         Retrieves the location of the config.ini file. It will first look inside
-        the user folder, then look at the  SGTK_DEFAULT_CONFIG_LOCATION environment
+        the user folder, then look at the  SGTK_DESKTOP_CONFIG_LOCATION environment
         variable and finally in the installation folder.
 
         :param bootstrap: The application bootstrap.
@@ -85,7 +85,7 @@ class Settings(object):
             return location
 
         return os.environ.get(
-            "SGTK_DEFAULT_CONFIG_LOCATION",
+            "SGTK_DESKTOP_CONFIG_LOCATION",
             self._get_install_dir_config_location(bootstrap)
         )
 
