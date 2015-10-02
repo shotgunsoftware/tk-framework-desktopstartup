@@ -9,6 +9,7 @@
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
 from PySide import QtCore, QtGui
+import sys
 
 
 class ShotgunSystemTrayIcon(QtGui.QSystemTrayIcon):
@@ -40,7 +41,16 @@ class ShotgunSystemTrayIcon(QtGui.QSystemTrayIcon):
         self._login_action.triggered.connect(self.login)
         self._about_action.triggered.connect(self._about)
         self._quit_action.triggered.connect(self.quit)
-        self.activated.connect(self._activated)
+
+        # On MacOS, the context menu is more than a pop-up menu and shows up on the
+        # mouse click, so setting it as context menu makes sense.
+        if sys.platform == "darwin":
+            self.setContextMenu(self._systray_menu)
+        else:
+            # On Windows and Linux, they are glorified pop-up menus that appear on a right
+            # click, but we want our menu to appear on any click, so connect to the activated
+            # event.
+            self.activated.connect(self._activated)
 
     def _activated(self, unused):
         """
