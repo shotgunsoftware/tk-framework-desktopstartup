@@ -325,7 +325,7 @@ def __run_with_systray():
     systray.show()
     systray.showMessage(
         "Shotgun",
-        "Browser integration is running in the background. Click the Shotgun icon to login.",
+        "Browser integration is running in the background. Click the Shotgun icon to sign in.",
         QtGui.QSystemTrayIcon.Information,
         5000
     )

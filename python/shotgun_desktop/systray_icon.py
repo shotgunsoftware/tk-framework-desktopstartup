@@ -29,6 +29,7 @@ class ShotgunSystemTrayIcon(QtGui.QSystemTrayIcon):
         self.setIcon(icon)
         self.setToolTip("Shotgun")
 
+        # Create the pop-up menu.
         self._systray_menu = QtGui.QMenu()
         self._login_action = self._systray_menu.addAction("Sign in to Shotgun Desktop")
         self._about_action = self._systray_menu.addAction("About Browser Integration")
@@ -39,7 +40,14 @@ class ShotgunSystemTrayIcon(QtGui.QSystemTrayIcon):
         self._login_action.triggered.connect(self.login)
         self._about_action.triggered.connect(self._about)
         self._quit_action.triggered.connect(self.quit)
-        self.setContextMenu(self._systray_menu)
+        self.activated.connect(self._activated)
+
+    def _activated(self, unused):
+        """
+        Called when the systray icon is activated.
+        """
+        # Don't care how it is activated for now, just show the menu.
+        self._systray_menu.exec_(QtGui.QCursor.pos())
 
     def _about(self):
         """
