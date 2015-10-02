@@ -8,7 +8,7 @@
 # agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
-from PySide import QtGui
+from PySide import QtCore, QtGui
 
 
 class DesktopMessageBox(QtGui.QMessageBox):
@@ -164,3 +164,13 @@ class DesktopMessageBox(QtGui.QMessageBox):
         self.setText(
             "<html><head/><body>%s</body></html>" % message
         )
+
+    def exec_(self):
+        """
+        Displays the window modally and makes sure it goes front and center.
+        """
+        self.show()
+        self.raise_()
+        self.activateWindow()
+        self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint | self.windowFlags())
+        return QtGui.QDialog.exec_(self)
