@@ -13,6 +13,7 @@ import os
 import sys
 import subprocess
 import logging
+from .errors import CertificateRegistrationFailed
 
 from OpenSSL import crypto
 
@@ -98,7 +99,7 @@ class _CertificateHandler(object):
         except subprocess.CalledProcessError, e:
             self._logger.exception("There was a problem %s" % ctx)
             self._logger.info("Output:\n%s" % e.output)
-            raise
+            raise CertificateRegistrationFailed("There was a problem %s" % ctx)
 
     def is_registered(self):
         """
@@ -114,7 +115,7 @@ class _CertificateHandler(object):
         except subprocess.CalledProcessError, e:
             self._logger.exception("There was a problem validating if a certificate was installed.")
             self._logger.info("Output:\n%s" % e.output)
-            raise
+            raise CertificateRegistrationFailed("There was a problem validating if a certificate was installed.")
 
     def unregister(self):
         """
