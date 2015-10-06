@@ -325,7 +325,7 @@ def __run_with_systray():
     systray.show()
     systray.showMessage(
         "Shotgun",
-        "Browser integration is running in the background. Click the Shotgun icon to login.",
+        "Browser integration is running in the background. Click the Shotgun icon to sign in.",
         QtGui.QSystemTrayIcon.Information,
         5000
     )
@@ -801,9 +801,9 @@ def __get_certificate_prompt(keychain_name, action):
 
     :returns: String containing an error message formatted
     """
-    return ("The Shotgun Desktop needs to install a security certificate into your %s before "
+    return ("The Shotgun Desktop needs to update the security certificate list from your %s before "
             "it can turn on the browser integration.\n"
-            "%s." % (keychain_name, action))
+            "%s" % (keychain_name, action))
 
 
 def __warn_for_prompt():
@@ -816,7 +816,7 @@ def __warn_for_prompt():
             __get_certificate_prompt(
                 "keychain",
                 "You will be prompted to enter your username and password by MacOS's keychain "
-                "manager in order to proceed with the update."
+                "manager in order to proceed with the updates."
             )
         )
     elif sys.platform == "win32":
@@ -824,7 +824,7 @@ def __warn_for_prompt():
             "Shotgun browser integration",
             __get_certificate_prompt(
                 "Windows certificate store",
-                "Windows will now prompt you to accept an update to your certificate store."
+                "Windows will now prompt you to accept one or more updates to your certificate store."
             )
         )
     # On Linux there's no need to prompt. It's all silent.
