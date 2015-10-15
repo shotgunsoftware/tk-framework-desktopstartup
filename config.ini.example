@@ -1,0 +1,33 @@
+# Login related settings
+[Login]
+
+# If specified, the username text input on the login screen will be populated
+# with this value.
+# Defaults to the user's OS login.
+default_login=$USERNAME
+
+# If specified, the site text input on the login screen will be populated with
+# this value.
+# Defaults to https://mystudio.shotgunstudio.com.
+default_site=https://your-site-here.shotgunstudio.com
+
+# If specified, the Shotgun API and Toolkit will use these proxy settings to
+# connect to the Shotgun site. The proxy string should be of the forms
+# 123.123.123.123, 123.123.123.123:8888 or username:pass@123.123.123.123:8888.
+# Empty by default.
+http_proxy=123.234.345.456:8888
+
+# Browser integration related settings
+[BrowserIntegration]
+
+# If set to 0, this setting disables the browser integration.
+# Defaults to 1.
+enabled=1
+
+# If specified, the browser integration will listen on the specified port.
+# Defaults to 9000.
+port=9000
+
+# Comma separated list of sites that can access the browser integration.
+# Defaults to *.shotgunstudio.com.
+whitelist=*.shotgunstudio.com
