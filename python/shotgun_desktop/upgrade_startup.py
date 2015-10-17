@@ -14,6 +14,8 @@ from distutils.version import LooseVersion
 from shotgun_desktop.location import get_location, write_location
 from shotgun_desktop.desktop_message_box import DesktopMessageBox
 
+import httplib
+
 logger = logging.getLogger("tk-desktop.startup")
 
 
@@ -74,14 +76,10 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
 
     try:
         latest_descriptor = current_desc.find_latest_version()
-    # This happens when a proxy blocks the connection (derives from ProxyError)
-    except httplib2.socks.HTTPError:
-        logger.warning("A proxy blocked the access to tank.shotgunstudio.com.")
-        return False
     # This happens when someone runs a local server and the Desktop doesn't have
     # internet access for security reasons.
-    except httplib2.ServerNotFoundError:
-        logger.warning("Could not find tank.shotgunstudio.com. Internet connection down?")
+    except (httplib2.HttpLib2Error, httplib2.socks.HTTPError, httplib.HTTPException), e:
+        logger.warning("Could not access tank.shotgunstudio.com (%s)." % e.__class__.__name__)
         return False
 
     # check deprecation
