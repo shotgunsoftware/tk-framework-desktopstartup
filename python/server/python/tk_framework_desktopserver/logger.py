@@ -15,8 +15,6 @@ def get_logger(child_logger=None):
     """
     Returns the logger used by this framework.
     """
-    # FIXME: We should forward the logging from twisted into our own. Read more about
-    # it here: http://twistedmatrix.com/documents/12.0.0/core/howto/logging.html#auto3
     if not child_logger:
         return logging.getLogger("tk-framework-desktopserver")
     else:

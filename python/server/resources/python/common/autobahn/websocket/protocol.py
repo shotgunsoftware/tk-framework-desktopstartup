@@ -832,6 +832,8 @@ class WebSocketProtocol:
             if self.invalidPayload("invalid close reason (non-UTF-8 payload)"):
                return True
          self.remoteCloseReason = reasonRaw.decode('utf8')
+      else:
+         self.remoteCloseReason = None
 
       ## handle receive of close frame depending on protocol state
       ##
@@ -869,7 +871,7 @@ class WebSocketProtocol:
          else:
             ## Either reply with same code/reason, or code == NORMAL/reason=None
             if self.echoCloseCodeReason:
-               self.sendCloseFrame(code = code, reasonUtf8 = reason.encode("UTF-8"), isReply = True)
+               self.sendCloseFrame(code = code, reasonUtf8 = self.remoteCloseReason, isReply = True)
             else:
                self.sendCloseFrame(code = WebSocketProtocol.CLOSE_STATUS_CODE_NORMAL, isReply = True)
 

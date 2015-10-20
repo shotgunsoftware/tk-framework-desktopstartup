@@ -10,116 +10,80 @@
 # agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
-import sys
 import os
+import sys
 import optparse
-import itertools
 
-
-def _tokenize_args(args):
+def _parse_options():
     """
-    Tokenize the strings assigned to each argument to split them by commas so that we
-    can use comma separated strings for arguments.
+    Parses the command line for options.
 
-    :param args: Array of strings of each command line argument
-
-    :returns: A flat list of individual strings, without commas.
+    :returns An OptionParser with attributes debug and configuration.
     """
-    return list(itertools.chain(
-        *[arg.split(",") for arg in args]
-    ))
-
-
-if __name__ == '__main__':
-    """
-    Simple application for client/server development and testing.
-
-    Example usage: python app.py --debug
-
-    Server TODO:
-        - Test on all Platforms
-            - Dependencies:
-                [cryptography, cffi, six, pycparser]
-                [service-identity, pyasn1, pyasn1-modules, pyopens, sl, characteristic]   --> service_identity for test_client only?
-
-            - General issues with test client
-                - pip install service-identity
-            - Linux issues
-                For cffi:
-                    yum install libffi-devel
-                    yum install python-devel
-                    yum install openssl-devel
-                    pip install cffi
-                - When do we actually need both files/folder selection?
-        - uft-8 unit testing internationalization
-            - Internationalization works fine, except for this case: /Users/rivestm/tmp 普通话/ 國語/ 華語.txt, were filename is
-              'tmp 普通话/ 國語/ 華語.txt'. The '/' should be encoded by the client differently, and possibly decoded
-              differently on the server too.
-    """
-    sys.path.append("../python")
-
-    from tk_framework_desktopserver import Server
-    from tk_framework_desktopserver import shotgun_api
-
     parser = optparse.OptionParser()
     parser.add_option(
         "--debug", action="store_true", default=False,
         help="prints debugging message from the server on the console"
     )
     parser.add_option(
-        "--local-server", action="store_true", default=False,
-        help="also runs the local server on port 8080 to mock calls from the browser."
-    )
-    parser.add_option(
-        "--fake-errors", action="append", default=[],
-        help="list of server calls to fake an error on"
-    )
-    parser.add_option(
-        "--block", action="append", default=[],
-        help="list of server calls that will block until ENTER is pressed."
+        "-c", "--configuration", action="store", default=None,
+        help="location of the configuration file"
     )
 
     options, _ = parser.parse_args()
 
-    options.fake_errors = _tokenize_args(options.fake_errors)
-    options.block = _tokenize_args(options.block)
+    return options
 
-    if options.fake_errors:
-        print "Faking errors for %s" % ", ".join(options.fake_errors)
 
-    if options.block:
-        print "Blocking calls for %s" % ", ".join(options.block)
+def main():
+    """
+    Main.
+    """
 
-    # Make a local copy of the handle because we are about to overwrite it.
-    ShotgunAPI = shotgun_api.ShotgunAPI
+    # Configure the app.
+    options = _parse_options()
+    # Create the logger and dump the settings.
+    app_logger = logger.get_logger(options.debug)
 
-    class ShotgunAPIProxy(object):
-        def __init__(self, *args, **kwargs):
-            self._shotgun_api = ShotgunAPI(*args, **kwargs)
+    # Read the settings and print them out.
+    app_settings = settings.get_settings(options.configuration)
+    app_logger.info("Starting server with the following configuration:")
+    app_settings.dump(app_logger)
 
-        def __getattr__(self, name):
-            if name in options.fake_errors:
-                raise Exception("Fake error for '%s'." % name)
-            elif name in options.block:
-                raw_input("Blocking %s. Press ENTER to unblock." % name)
-                print "Unblocked"
-            return getattr(self._shotgun_api, name)
-
-    shotgun_api.ShotgunAPI = ShotgunAPIProxy
-
-    server = Server(
-        debug=options.debug,
-        keys_path=os.environ.get("TANK_DESKTOP_INTEGRATION_CERTIFICATE", "../resources/keys"),
-        port=os.environ.get("TANK_DESKTOP_INTEGRATION_PORT", 9000)
-    )
-    server.start()
+    try:
+        # Start the server
+        server = Server(
+            debug=app_settings.debug,
+            keys_path=app_settings.certificate_folder,
+            port=app_settings.port,
+            whitelist=app_settings.whitelist
+        )
+        server.start()
+    except BrowserIntegrationError, e:
+        if options.debug:
+            app_logger.exception("There was an error while running the browser integration.")
+        else:
+            app_logger.error(e)
+        return
 
     # Enables CTRL-C to kill this process even tough Qt doesn't know how to play nice with Python.
     # As per this stack overflow comment
     import signal
     signal.signal(signal.SIGINT, signal.SIG_DFL)
 
+    # Start the main Qt event loop.
     from PySide import QtGui
     app = QtGui.QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.exec_()
+
+
+if __name__ == '__main__':
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../python"))
+
+    # Import settings here since it wasn't in the Python path before.
+    import settings
+    import logger
+
+    from tk_framework_desktopserver import Server, BrowserIntegrationError
+    main()
