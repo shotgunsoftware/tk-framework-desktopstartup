@@ -364,14 +364,31 @@ def __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootst
         server).
     """
 
-    logger.debug("Retrieving credentials")
-    try:
-        user = shotgun_authenticator.get_user()
-    except shotgun_authentication.AuthenticationCancelled:
-        return None
-    else:
-        connection = user.create_sg_connection()
-    return connection
+    class CustomEvent(QtCore.QEvent):
+        _event_type_id = QtCore.QEvent.Type(QtCore.QEvent.registerEventType())
+
+        def __init__(self):
+            QtCore.QEvent.__init__(self, self._event_type_id)
+
+    app = QtGui.QApplication.instance()
+
+    class CustomEventHanlder(QtCore.QObject):
+        def customEvent(self, e):
+            logger.info("Retrieving credentials")
+            try:
+                user = shotgun_authenticator.get_user()
+            except shotgun_authentication.AuthenticationCancelled:
+                self.connection = None
+            else:
+                self.connection = user.create_sg_connection()
+            print self.connection
+            app.quit()
+
+    a = CustomEventHanlder()
+    c = CustomEvent()
+    app.postEvent(a, c)
+    app.exec_()
+    return a.connection
 
 
 def __do_login_or_tray(
@@ -402,7 +419,6 @@ def __do_login_or_tray(
     if force_login is False and shotgun_authenticator.get_default_user() is None:
         if __run_with_systray() == SystrayEventLoop.CLOSE_APP:
             return None
-
     # Loop until there is a connection or the user wants to quit.
     while True:
         connection = __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootstrap)
