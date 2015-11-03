@@ -17,10 +17,11 @@ certificate_folder=/path/to/your/certificate/folder
 # Linux
 # certificate_folder=~/.shotgun/desktop/config/certificates
 
-# If set to 1, Twisted messages will be printed. If not specified, defaults to
-# 0. Warning, this produces a lot of output.
-#
-debug=0
+# WARNING: This option will write sensitive information to the logs. We
+# recommend turning this on ONLY for debugging. We recommend you clear or delete
+# your logs after debugging.
+# If set to 1, low level debugging messages from the server will be logged.
+low_level_debug=0
 
 # Port to listen for requests coming from the browser. If not specified,
 # defaults to 9000. Note that you will need to contact support at

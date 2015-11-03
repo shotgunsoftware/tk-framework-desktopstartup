@@ -67,13 +67,13 @@ class Settings(object):
         return self._get_value(self._BROWSER_INTEGRATION, "port", int, 9000)
 
     @property
-    def debug(self):
+    def low_level_debug(self):
         """
-        :returns: True if the server should run in debug mode. False otherwise.
+        :returns: True if the server should run in low level debugging mode. False otherwise.
         """
         # Any non empty string is True, so convert it to int, which will accept 0 or 1 and then
         # we'll cast the return value to a boolean.
-        return bool(self._get_value(self._BROWSER_INTEGRATION, "debug", int, False))
+        return bool(self._get_value(self._BROWSER_INTEGRATION, "low_level_debug", int, False))
 
     @property
     def whitelist(self):
@@ -96,7 +96,7 @@ class Settings(object):
         Dumps all the settings into the logger.
         """
         logger.info("Certificate folder: %s" % self.certificate_folder)
-        logger.info("Debug: %s" % self.debug)
+        logger.info("Low level debug: %s" % self.low_level_debug)
         logger.info("Port: %d" % self.port)
         logger.info("Whitelist: %s" % self.whitelist)
 
