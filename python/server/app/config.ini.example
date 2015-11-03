@@ -21,6 +21,7 @@ certificate_folder=/path/to/your/certificate/folder
 # recommend turning this on ONLY for debugging. We recommend you clear or delete
 # your logs after debugging.
 # If set to 1, low level debugging messages from the server will be logged.
+#
 low_level_debug=0
 
 # Port to listen for requests coming from the browser. If not specified,

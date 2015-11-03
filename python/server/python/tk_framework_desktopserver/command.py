@@ -230,7 +230,7 @@ class Command(object):
             ret = process.returncode
 
         except StandardError:
-            get_logger().exception("Error running subprocess :%s" % args)
+            get_logger().exception("Error running subprocess:")
 
             ret = 1
             stderr_lines = [traceback.format_exc().split()]
