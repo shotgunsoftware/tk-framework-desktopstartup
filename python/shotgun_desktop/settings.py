@@ -28,9 +28,7 @@ class Settings(object):
     default_site=site.shotgunstudio.com
     http_proxy=http://www.someproxy.com:3128
     [BrowserIntegration]
-    port=9000
     enabled=1
-    whitelist=*.shotgunstudio.com
     """
 
     _LOGIN = "Login"
@@ -42,7 +40,9 @@ class Settings(object):
 
         :param bootstrap: The application bootstrap.
         """
-        path = self._get_config_location(bootstrap)
+
+        self._bootstrap = bootstrap
+        path = self.get_config_location()
         logger.info("Reading global settings from %s" % path)
         self._global_config = self._load_config(path)
 
@@ -69,24 +69,22 @@ class Settings(object):
             "config.ini"
         )
 
-    def _get_config_location(self, bootstrap):
+    def get_config_location(self):
         """
         Retrieves the location of the config.ini file. It will first look inside
         the user folder, then look at the  SGTK_DESKTOP_CONFIG_LOCATION environment
         variable and finally in the installation folder.
 
-        :param bootstrap: The application bootstrap.
-
         :returns: The location where to read the configuration file from.
         """
         # Look inside the user folder. If it exists, return that path.
-        location = self._get_user_dir_config_location(bootstrap)
+        location = self._get_user_dir_config_location(self._bootstrap)
         if os.path.exists(location):
             return location
 
         return os.environ.get(
             "SGTK_DESKTOP_CONFIG_LOCATION",
-            self._get_install_dir_config_location(bootstrap)
+            self._get_install_dir_config_location(self._bootstrap)
         )
 
     def _load_config(self, path):
@@ -101,6 +99,18 @@ class Settings(object):
         if os.path.exists(path):
             config.read(path)
         return config
+
+    def dump(self, logger):
+        """
+        Dumps all the settings into the logger.
+
+        :param logger: Logger to write the information to.
+        """
+        logger.info("config.ini location: %s" % self.get_config_location())
+        logger.info("Default site: %s" % self.default_site)
+        logger.info("Default_proxy: %s" % self.default_http_proxy)
+        logger.info("Default login: %s" % self.default_login)
+        logger.info("Integration enabled: %s" % self.integration_enabled)
 
     @property
     def default_http_proxy(self):
@@ -124,13 +134,6 @@ class Settings(object):
         return self._get_value(self._LOGIN, "default_login")
 
     @property
-    def integration_port(self):
-        """
-        :returns: The port to listen on for incoming websocket requests.
-        """
-        return self._get_value(self._BROWSER_INTEGRATION, "port", int, 9000)
-
-    @property
     def integration_enabled(self):
         """
         :returns: True if the websocket should run, False otherwise.
@@ -138,19 +141,6 @@ class Settings(object):
         # Any non empty string is True, so convert it to int, which will accept 0 or 1 and then
         # we'll cast the return value to a boolean.
         return bool(self._get_value(self._BROWSER_INTEGRATION, "enabled", int, True))
-
-    @property
-    def integration_debug(self):
-        """
-        :returns: True if the server should run in debug mode. False otherwise.
-        """
-        # Any non empty string is True, so convert it to int, which will accept 0 or 1 and then
-        # we'll cast the return value to a boolean.
-        return bool(self._get_value(self._BROWSER_INTEGRATION, "debug", int, False))
-
-    @property
-    def integration_whitelist(self):
-        return self._get_value(self._BROWSER_INTEGRATION, "whitelist", default="*.shotgunstudio.com")
 
     def _get_value(self, section, key, type_cast=str, default=None):
         """
