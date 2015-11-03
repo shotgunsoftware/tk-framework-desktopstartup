@@ -313,6 +313,18 @@ class SystrayEventLoop(QtCore.QEventLoop):
         """
         self.exit(self.CLOSE_APP)
 
+    def exec_(self):
+        """
+        Execute the local event loop. If CmdQ was hit in the past, it will be handled just as if the
+        user had picked the Quit menu.
+        """
+        code = QtCore.QEventLoop.exec_(self)
+        # CmdQ was hit before.
+        if code == -1:
+            return self.CLOSE_APP
+        else:
+            return code
+
 
 def __run_with_systray():
     """
@@ -364,31 +376,14 @@ def __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootst
         server).
     """
 
-    class CustomEvent(QtCore.QEvent):
-        _event_type_id = QtCore.QEvent.Type(QtCore.QEvent.registerEventType())
-
-        def __init__(self):
-            QtCore.QEvent.__init__(self, self._event_type_id)
-
-    app = QtGui.QApplication.instance()
-
-    class CustomEventHanlder(QtCore.QObject):
-        def customEvent(self, e):
-            logger.info("Retrieving credentials")
-            try:
-                user = shotgun_authenticator.get_user()
-            except shotgun_authentication.AuthenticationCancelled:
-                self.connection = None
-            else:
-                self.connection = user.create_sg_connection()
-            print self.connection
-            app.quit()
-
-    a = CustomEventHanlder()
-    c = CustomEvent()
-    app.postEvent(a, c)
-    app.exec_()
-    return a.connection
+    logger.debug("Retrieving credentials")
+    try:
+        user = shotgun_authenticator.get_user()
+    except shotgun_authentication.AuthenticationCancelled:
+        return None
+    else:
+        connection = user.create_sg_connection()
+    return connection
 
 
 def __do_login_or_tray(
@@ -419,6 +414,7 @@ def __do_login_or_tray(
     if force_login is False and shotgun_authenticator.get_default_user() is None:
         if __run_with_systray() == SystrayEventLoop.CLOSE_APP:
             return None
+
     # Loop until there is a connection or the user wants to quit.
     while True:
         connection = __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootstrap)
