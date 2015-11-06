@@ -321,11 +321,13 @@ class SystrayEventLoop(QtCore.QEventLoop):
         :returns: The exit code for the loop.
         """
         code = QtCore.QEventLoop.exec_(self)
-        # Somebody requested the app to close.
+        # Somebody requested the app to close, so pretend the close menu was picked.
         if code == -1:
             return self.CLOSE_APP
-        else:
+        elif code in [self.CLOSE_APP, self.LOGIN]:
             return code
+        else:
+            raise Exception("Unexpected return code in local event loop: %s" % code)
 
 
 def __run_with_systray():
