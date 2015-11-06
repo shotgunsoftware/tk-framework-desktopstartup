@@ -313,6 +313,22 @@ class SystrayEventLoop(QtCore.QEventLoop):
         """
         self.exit(self.CLOSE_APP)
 
+    def exec_(self):
+        """
+        Execute the local event loop. If CmdQ was hit in the past, it will be handled just as if the
+        user had picked the Quit menu.
+
+        :returns: The exit code for the loop.
+        """
+        code = QtCore.QEventLoop.exec_(self)
+        # Somebody requested the app to close, so pretend the close menu was picked.
+        if code == -1:
+            return self.CLOSE_APP
+        elif code in [self.CLOSE_APP, self.LOGIN]:
+            return code
+        else:
+            raise Exception("Unexpected return code in local event loop: %s" % code)
+
 
 def __run_with_systray():
     """
