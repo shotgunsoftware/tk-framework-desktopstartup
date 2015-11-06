@@ -317,9 +317,11 @@ class SystrayEventLoop(QtCore.QEventLoop):
         """
         Execute the local event loop. If CmdQ was hit in the past, it will be handled just as if the
         user had picked the Quit menu.
+
+        :returns: The exit code for the loop.
         """
         code = QtCore.QEventLoop.exec_(self)
-        # CmdQ was hit before.
+        # Somebody requested the app to close.
         if code == -1:
             return self.CLOSE_APP
         else:
