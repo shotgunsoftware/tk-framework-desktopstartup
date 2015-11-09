@@ -21,33 +21,61 @@ from autobahn.twisted.websocket import WebSocketServerFactory, listenWS
 
 from .errors import MissingCertificateError, PortBusyError
 
+import logger
 
-class Server:
+
+class Server(object):
     _DEFAULT_PORT = 9000
     _DEFAULT_KEYS_PATH = "../resources/keys"
     _DEFAULT_WHITELIST = "*.shotgunstudio.com"
 
-    def __init__(self, port=None, debug=True, whitelist=None, keys_path=None):
+    def __init__(self, keys_path, port=None, low_level_debug=False, whitelist=None):
         """
         Constructor.
+
+        :param keys_path: Path to the keys. If the path is relative, it will be relative to the
+            current working directory. Mandatory
+        :param port: Port to listen for websocket requests from.
+        :param low_level_debug: If True, wss traffic will be written to the console.
+        :param whitelist: Comma separated list of sites that can connect to the server.
+            For example:
+                - *.shotgunstudio.com (default)
+                - some-site.shotgunstudio.com
+                - localserver.localnetwork.com
+                - some-site.shotgunstudio.com,some-other-site.shotgunstudio.com
         """
         self._port = port or self._DEFAULT_PORT
         self._keys_path = keys_path or self._DEFAULT_KEYS_PATH
         self._whitelist = whitelist or self._DEFAULT_WHITELIST
-        self._debug = debug
+        self._debug = low_level_debug
 
-        self._logger_root = logging.getLogger("tk-framework-desktopserver")
+        if not os.path.exists(keys_path):
+            raise MissingCertificateError(keys_path)
+
+        twisted = logger.get_logger("twisted")
 
         if self._debug:
-            # This will take the Twisted logging and forward it to Python's logging.
-            self._observer = log.PythonLoggingObserver("tk-framework-desktopserver.twisted")
-            self._observer.start()
+            # When running the server in low_level_debug mode, the twisted framework will print out
+            # data exchanged with the client. Unfortunately, there's no way to filter out that
+            # information from since it is being logged at the INFO level just like regular Twisted
+            # logs.
+            # Warn the user that this is dangerous.
+            twisted.warning("-" * 30)
+            twisted.warning(
+                "YOU ARE LOGGING TWISTED INTERNAL MESSAGES TO THE CONSOLE. MAKE SURE YOU CLOSE THE "
+                "CONSOLE AFTER RUNNING THE APPLICATION AS TWISTED CAN LOG SENSITIVE INFORMATION."
+            )
+            twisted.warning("-" * 30)
+
+        # This will take the Twisted logging and forward it to Python's logging.
+        self._observer = log.PythonLoggingObserver(twisted.name)
+        self._observer.start()
 
     def get_logger(self):
         """
         :returns: The python logger root for the framework.
         """
-        return self._logger_root
+        return logger.get_logger()
 
     def _raise_if_missing_certificate(self, certificate_path):
         """

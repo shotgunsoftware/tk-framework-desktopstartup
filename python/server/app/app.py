@@ -14,6 +14,7 @@ import os
 import sys
 import optparse
 
+
 def _parse_options():
     """
     Parses the command line for options.
@@ -53,7 +54,7 @@ def main():
     try:
         # Start the server
         server = Server(
-            debug=app_settings.debug,
+            low_level_debug=app_settings.low_level_debug,
             keys_path=app_settings.certificate_folder,
             port=app_settings.port,
             whitelist=app_settings.whitelist
