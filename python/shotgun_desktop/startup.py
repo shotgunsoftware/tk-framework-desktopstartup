@@ -972,24 +972,30 @@ def __init_websockets(splash, app_bootstrap, settings):
     except Exception, e:
         return None, __handle_unexpected_exception_during_websocket_init(splash, app_bootstrap, e)
 
-    # We need to break these two try's because if we can't import the tk-framework-desktopserver
-    # module we won't be able to catch any exception types from that module.
-    try:
-        key_path = os.path.join(
+    # Read the browser integration settings in the same file as the desktop integration settings.
+    integration_settings = tk_framework_desktopserver.Settings(
+        settings.get_config_location(),
+        os.path.join(
             app_bootstrap.get_shotgun_desktop_cache_location(),
             "config",
             "certificates"
         )
+    )
 
+    integration_settings.dump(logger)
+
+    # We need to break these two try's because if we can't import the tk-framework-desktopserver
+    # module we won't be able to catch any exception types from that module.
+    try:
         # Makes sure that the certificate has been created on disk and registered with the OS (or browser on Linux).
-        __ensure_certificate_ready(app_bootstrap, tk_framework_desktopserver, key_path)
+        __ensure_certificate_ready(app_bootstrap, tk_framework_desktopserver, integration_settings.certificate_folder)
 
         # Launch the server
         server = tk_framework_desktopserver.Server(
-            port=settings.integration_port,
-            debug=settings.integration_debug,
-            whitelist=settings.integration_whitelist,
-            keys_path=key_path
+            port=integration_settings.port,
+            low_level_debug=integration_settings.low_level_debug,
+            whitelist=integration_settings.whitelist,
+            keys_path=integration_settings.certificate_folder
         )
 
         # This might throw a PortBusyError.
@@ -1003,7 +1009,7 @@ def __init_websockets(splash, app_bootstrap, settings):
         splash.hide()
         return None, __query_quit_or_continue_launching(
             "Browser integration failed to start because port %d is already in use. The Shotgun "
-            "Desktop may already be running on your machine." % settings.integration_port,
+            "Desktop may already be running on your machine." % integration_settings.port,
             app_bootstrap
         )
     except Exception, e:
@@ -1067,6 +1073,7 @@ def main(**kwargs):
     app_bootstrap = _BootstrapProxy(kwargs["app_bootstrap"])
 
     settings = Settings(app_bootstrap)
+    settings.dump(logger)
 
     # Create some ui related objects
     app, splash = __init_app()

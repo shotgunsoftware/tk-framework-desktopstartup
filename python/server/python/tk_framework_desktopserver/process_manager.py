@@ -152,8 +152,9 @@ class ProcessManager(object):
         has_error = return_code != 0
 
         if has_error:
-            raise Exception("{message_error}\nCommand: {command}\nReturn code: {return_code}\nOutput: {std_out}\nError: {std_err}"
-                            .format(message_error=message_error, command=args, return_code=return_code, std_out=out, std_err=err))
+            # Do not log the command line, it might contain sensitive information.
+            raise Exception("{message_error}\nReturn code: {return_code}\nOutput: {std_out}\nError: {std_err}"
+                            .format(message_error=message_error, return_code=return_code, std_out=out, std_err=err))
 
         return True
 
@@ -195,6 +196,8 @@ class ProcessManager(object):
 
             return (out, err, return_code)
         except Exception, e:
+            # call_cmd is not including sentitive information in the error message, so this won't
+            # either.
             raise Exception("Error executing toolkit command: " + e.message)
 
     def _add_action_output(self, actions, out, err, code):
