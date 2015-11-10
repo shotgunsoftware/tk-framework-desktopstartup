@@ -41,7 +41,6 @@ logger.info("Using browser integration from '%s'" % desktop_server_root)
 from PySide import QtCore, QtGui
 
 import shotgun_desktop.paths
-import shotgun_desktop.version
 from shotgun_desktop.turn_on_toolkit import TurnOnToolkit
 from shotgun_desktop.desktop_message_box import DesktopMessageBox
 from shotgun_desktop.initialization import initialize, does_pipeline_configuration_require_project
