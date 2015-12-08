@@ -23,7 +23,6 @@ import threading
 from .. import loader
 from .. import hook
 from ..errors import TankError, TankEngineInitError
-from ..deploy import descriptor
 from ..deploy.dev_descriptor import TankDevDescriptor
 
 from . import application
@@ -38,6 +37,8 @@ class Engine(TankBundle):
     """
     Base class for an engine in Tank.
     """
+
+    _ASYNC_INVOKER, _SYNC_INVOKER = range(2)
 
     def __init__(self, tk, context, engine_instance_name, env):
         """
@@ -65,7 +66,10 @@ class Engine(TankBundle):
         
         self.__global_progress_widget = None
         
+        # Initialize these early on so that methods implemented in the derived class and trying
+        # to access the invoker don't trip on undefined variables.
         self._invoker = None
+        self._async_invoker = None
         
         # get the engine settings
         settings = self.__env.get_engine_settings(self.__engine_instance_name)
@@ -123,7 +127,7 @@ class Engine(TankBundle):
         
         # create invoker to allow execution of functions on the
         # main thread:
-        self._invoker = self.__create_main_thread_invoker()
+        self._invoker, self._async_invoker = self.__create_invokers()
         
         # run any init that needs to be done before the apps are loaded:
         self.pre_app_init()
@@ -152,7 +156,7 @@ class Engine(TankBundle):
         # loaded environment, add a reload button to the menu!
         for app in self.__applications.values():
             if isinstance(app.descriptor, TankDevDescriptor):
-                self.log_debug("App %s is registerered via a dev descriptor. Will add a reload "
+                self.log_debug("App %s is registered via a dev descriptor. Will add a reload "
                                "button to the actions listings."  % app)
                 from . import restart 
                 self.register_command("Reload and Restart", restart, {"short_name": "restart", "type": "context_menu"})                
@@ -439,8 +443,8 @@ class Engine(TankBundle):
 
         # clean up the main thread invoker - it's a QObject so it's important we
         # explicitly set the value to None!
-        if self._invoker:
-            self._invoker = None
+        self._invoker = None
+        self._async_invoker = None
 
     def destroy_engine(self):
         """
@@ -504,7 +508,8 @@ class Engine(TankBundle):
     def register_panel(self, callback, panel_name="main", properties=None):
         """
         Similar to register_command, but instead of registering a menu item in the form of a
-        command, this method registers a UI panel.
+        command, this method registers a UI panel. A register_panel call should
+        be used in conjunction with a register_command call.
         
         Panels need to be registered if they should persist between DCC sessions (e.g. 
         for example 'saved layouts').
@@ -538,17 +543,17 @@ class Engine(TankBundle):
         # similar to register_command, track which app this request came from
         properties["app"] = current_app 
         
-        # now compose a unique id for this panel
-        # this is done based on the app instance name plus the given
-        # panel name. By using the instance name rather than the app name,
-        # we support the use case where more than one instance of an app exists 
-        # within a config.
+        # now compose a unique id for this panel.
+        # This is done based on the app instance name plus the given panel name.
+        # By using the instance name rather than the app name, we support the
+        # use case where more than one instance of an app exists within a
+        # config.
         panel_id = "%s_%s" % (current_app.instance_name, panel_name)
-        # to ensure the string is safe to use in most engines, 
+        # to ensure the string is safe to use in most engines,
         # sanitize to simple alpha-numeric form
         panel_id = re.sub("\W", "_", panel_id)
         panel_id = panel_id.lower()
-         
+
         # add it to the list of registered panels
         self.__panels[panel_id] = {"callback": callback, "properties": properties}
         
@@ -559,55 +564,14 @@ class Engine(TankBundle):
     def execute_in_main_thread(self, func, *args, **kwargs):
         """
         Execute the specified function in the main thread when called from a non-main
-        thread.  This will block the calling thread until the function returns.
+        thread.  This will block the calling thread until the function returns. Note that this
+        method can introduce a deadlock if the main thread is waiting for a background thread
+        and the background thread is invoking this method. Since the main thread is waiting
+        for the background thread to finish, Qt's event loop won't be able to process the request
+        to execute in the main thread.
 
         Note, this currently only works if Qt is available, otherwise it just
-        executes on the current thread.
-
-        # ---------------------------------------------------------------------------------
-        # The following test checks that execute_in_main_thread is itself thread-safe!  It
-        # runs a simple test a number of times in multiple threads and ensures the result
-        # returned is as expected.  If this isn't the case it will print out one or more:
-        #     'Result mismatch...'
-        #
-        import threading
-        import random
-        import time
-        import sgtk
-        from sgtk.platform.qt import QtCore, QtGui
-
-        NUM_TEST_THREADS=20
-        NUM_THREAD_ITERATIONS=30
-
-        def run_in_main_thread(v):
-            print "Running", v
-            if QtCore.QThread.currentThread() != QtGui.QApplication.instance().thread():
-                print " > but not running in main thread!"
-            return v
-
-        def threaded_work(val):
-            eng = sgtk.platform.current_engine()
-            c_time = 0.0
-            for i in range(NUM_THREAD_ITERATIONS):
-                time.sleep(random.randint(0, 10)/10.0)
-                arg = (val, i)
-                st = time.time()
-                ret_val = eng.execute_in_main_thread(run_in_main_thread, arg)
-                e = time.time()
-                #print "Time to run: %0.4fs" % (e-st)
-                c_time += (e-st)
-                if ret_val != arg:
-                    print "Result mismatch: %s != %s!!" % (ret_val, arg)
-
-            print "Cumulative time for thread %d: %0.4fs" % (val, c_time)
-
-        threads = []
-        for ti in range(NUM_TEST_THREADS):
-            t = threading.Thread(target=lambda:threaded_work(ti))
-            t.start()
-            threads.append(t)
-        # ---------------------------------------------------------------------------------
-        # ---------------------------------------------------------------------------------
+        executes immediately on the current thread.
 
         :param func: function to call
         :param args: arguments to pass to the function
@@ -615,18 +579,114 @@ class Engine(TankBundle):
 
         :returns: the result of the function call
         """
-        if self._invoker:
+        return self._execute_in_main_thread(self._SYNC_INVOKER, func, *args, **kwargs)
+
+    def async_execute_in_main_thread(self, func, *args, **kwargs):
+        """
+        Execute the specified function in the main thread when called from a non-main
+        thread.  This call will return immediately and will not wait for the code to be
+        executed in the main thread.
+
+        Note, this currently only works if Qt is available, otherwise it just
+        executes immediately on the current thread.
+
+        :param func: function to call
+        :param args: arguments to pass to the function
+        :param kwargs: named arguments to pass to the function
+        """
+        self._execute_in_main_thread(self._ASYNC_INVOKER, func, *args, **kwargs)
+
+    def _execute_in_main_thread(self, invoker_id, func, *args, **kwargs):
+        """
+        Executes the given method and arguments with the specified invoker.
+        If the invoker is not ready or if the calling thread is the main thread,
+        the method is called immediately with it's arguments.
+
+        :param invoker_id: Either _ASYNC_INVOKER or _SYNC_INVOKER.
+        :param func: function to call
+        :param args: arguments to pass to the function
+        :param kwargs: named arguments to pass to the function
+
+        :returns: The return value from the invoker.
+        """
+        # Execute in main thread might be called before the invoker is ready.
+        # For example, an engine might use the invoker for logging to the main
+        # thread.
+        invoker = self._invoker if invoker_id == self._SYNC_INVOKER else self._async_invoker
+        if invoker:
             from .qt import QtGui, QtCore
-            if (QtGui.QApplication.instance() 
+            if (QtGui.QApplication.instance()
                 and QtCore.QThread.currentThread() != QtGui.QApplication.instance().thread()):
                 # invoke the function on the thread that the QtGui.QApplication was created on.
-                return self._invoker.invoke(func, *args, **kwargs)
+                return invoker.invoke(func, *args, **kwargs)
             else:
                 # we're already on the main thread so lets just call our function:
                 return func(*args, **kwargs)
         else:
             # we don't have an invoker so just call the function:
             return func(*args, **kwargs)
+
+    def get_matching_commands(self, command_selectors):
+        """
+        Finds all the commands that match the given selectors.
+
+        Command selector structures are typically found in engine configurations
+        and are typically defined on the following form in yaml:
+
+        menu_favourites:
+        - {app_instance: tk-multi-workfiles, name: Shotgun File Manager...}
+        - {app_instance: tk-multi-snapshot,  name: Snapshot...}
+        - {app_instance: tk-multi-workfiles, name: Shotgun Save As...}
+        - {app_instance: tk-multi-publish,   name: Publish...}
+
+        Note that selectors that do not match a command will output a warning.
+
+        :param command_selectors: A list of command selectors, with each
+                                  selector having the following structure:
+                                    {
+                                      name: command-name,
+                                      app_instance: instance-name
+                                    }
+                                  An empty name ('') will select all the
+                                  commands of the given instance-name.
+
+        :returns:                 A list of tuples for all commands that match
+                                  the selectors. Each tuple has the format:
+                                    (instance-name, command-name, callback)
+        """
+        # return a dictionary grouping all the commands by instance name
+        commands_by_instance = {}
+        for (name, value) in self.commands.iteritems():
+            app_instance = value["properties"].get("app")
+            if app_instance is None:
+                continue
+            instance_name = app_instance.instance_name
+            commands_by_instance.setdefault(instance_name, []).append(
+                (name, value["callback"]))
+
+        # go through the selectors and return any matching commands
+        ret_value = []
+        for selector in command_selectors:
+            command_name = selector["name"]
+            instance_name = selector["app_instance"]
+            instance_commands = commands_by_instance.get(instance_name, [])
+
+            # add the commands if the name of the settings is ''
+            # or the name matches
+            matching_commands = [(instance_name, name, callback)
+                                 for (name, callback) in instance_commands
+                                 if not command_name or (command_name == name)]
+            ret_value.extend(matching_commands)
+
+            # give feedback if no commands were found
+            if not matching_commands:
+                self._engine.log_warning(
+                    "The requested command '%s' from app instance '%s' could "
+                    "not be matched.\nPlease make sure that you have the app "
+                    "installed and that it has successfully initialized." %
+                    (command_name, instance_name))
+
+        return ret_value
 
     ##########################################################################################
     # logging interfaces
@@ -936,6 +996,8 @@ class Engine(TankBundle):
         :param widget_class: The class of the UI to be constructed. This must derive from QWidget.
         
         Additional parameters specified will be passed through to the widget_class constructor.
+        
+        :returns: the created widget_class instance
         """
         # engines implementing panel support should subclass this method.
         # the core implementation falls back on a modeless window.
@@ -1154,15 +1216,16 @@ class Engine(TankBundle):
         """
         return self.__shared_frameworks.get(instance_name, None)
 
-    def __create_main_thread_invoker(self):
+    def __create_invokers(self):
         """
         Create the object used to invoke function calls on the main thread when
         called from a different thread.
-
-        :returns:  Invoker instance
         """
+        invoker = None
+        async_invoker = None
         if self.has_ui:
             from .qt import QtGui, QtCore
+            # Classes are defined locally since Qt might not be available.
             if QtGui and QtCore:
                 class Invoker(QtCore.QObject):
                     """
@@ -1187,7 +1250,7 @@ class Engine(TankBundle):
                         :param **kwargs:    Named arguments for the function
                         :returns:           The result returned by the function
                         """
-                        # acquire lock to ensure that the function and result are not overwritten 
+                        # acquire lock to ensure that the function and result are not overwritten
                         # by syncrounous calls to this method from different threads
                         self._lock.acquire()
                         try:
@@ -1210,14 +1273,43 @@ class Engine(TankBundle):
                         """
                         self._res = self._fn()
 
+                class AsyncInvoker(QtCore.QObject):
+                    """
+                    Invoker class - implements a mechanism to execute a function with arbitrary
+                    args in the main thread asynchronously.
+                    """
+                    __signal = QtCore.Signal(object)
+
+                    def __init__(self):
+                        """
+                        Construction
+                        """
+                        QtCore.QObject.__init__(self)
+                        self.__signal.connect(self.__execute_in_main_thread)
+
+                    def invoke(self, fn, *args, **kwargs):
+                        """
+                        Invoke the specified function with the specified args in the main thread
+
+                        :param fn:          The function to execute in the main thread
+                        :param *args:       Args for the function
+                        :param **kwargs:    Named arguments for the function
+                        :returns:           The result returned by the function
+                        """
+
+                        self.__signal.emit(lambda: fn(*args, **kwargs))
+
+                    def __execute_in_main_thread(self, fn):
+                        fn()
+
                 # Make sure that the invoker exists in the main thread:
                 invoker = Invoker()
-                if QtGui.QApplication.instance():
-                    invoker.moveToThread(QtGui.QApplication.instance().thread())
-                return invoker
+                async_invoker = AsyncInvoker()
+                if QtCore.QCoreApplication.instance():
+                    invoker.moveToThread(QtCore.QCoreApplication.instance().thread())
+                    async_invoker.moveToThread(QtCore.QCoreApplication.instance().thread())
 
-        # don't have ui so can't create an invoker!
-        return None
+        return invoker, async_invoker
 
     ##########################################################################################
     # private         
@@ -1263,7 +1355,7 @@ class Engine(TankBundle):
             except TankError, e:
                 # validation error - probably some issue with the settings!
                 # report this as an error message.
-                self.log_error("App configuration Error for %s (configured in in environment '%s'). "
+                self.log_error("App configuration Error for %s (configured in environment '%s'). "
                                "It will not be loaded: %s" % (app_instance_name, self.__env.disk_location, e))
                 continue
             
@@ -1413,7 +1505,7 @@ def start_engine(engine_name, tk, context):
 
     return obj
 
-def find_app_settings(engine_name, app_name, tk, context):
+def find_app_settings(engine_name, app_name, tk, context, engine_instance_name=None):
     """
     Utility method to find the settings for an app in an engine in the
     environment determined for the context by pick environment hook.
@@ -1422,6 +1514,7 @@ def find_app_settings(engine_name, app_name, tk, context):
     :param app_name: system name of the app to look for
     :param tk: tank instance
     :param context: context to use when picking environment
+    :param engine_instance_name: The instance name of the engine to look for.
     
     :returns: list of dictionaries containing the engine name, 
               application name and settings for any matching
@@ -1432,13 +1525,18 @@ def find_app_settings(engine_name, app_name, tk, context):
     
     # get the environment via the pick_environment hook
     env_name = __pick_environment(engine_name, tk, context)
-
     env = tk.pipeline_configuration.get_environment(env_name, context)
     
-    # now find all engines whose descriptor matches the engine_name:
+    # now find all engines whose names match the engine_name:
     for eng in env.get_engines():
         eng_desc = env.get_engine_descriptor(eng)
-        if eng_desc.get_system_name() != engine_name:
+        eng_sys_name = eng_desc.get_system_name()
+
+        # Make sure that we get the right engine by comparing engine
+        # name and instance name, if provided.
+        if eng_sys_name != engine_name:
+            continue
+        if engine_instance_name and engine_instance_name != eng:
             continue
         
         # ok, found engine so look for app:

@@ -1379,7 +1379,7 @@ class MigratePublishedFileEntitiesAction(Action):
         
         log.info("")
         log.info("For further information please see the documentation which can be found here: "
-                 "https://toolkit.shotgunsoftware.com/entries/24515053")
+                 "https://support.shotgunsoftware.com/entries/95442888")
         log.info("")        
         log.info("The migration can take a long time to run depending on the number of entities " 
                  "that need migrating.  Therefore, we advise running it outside of working "
@@ -1396,7 +1396,7 @@ class MigratePublishedFileEntitiesAction(Action):
         log.info("- Update any custom apps or hooks you are using to support the new 'PublishedFile' "
                  "entity types.")
         log.info("")
-        log.info("If you are unsure about any of this, please contact toolkitsupport@shotgunsoftware.com!")
+        log.info("If you are unsure about any of this, please contact support@shotgunsoftware.com!")
         
         # now, after all that are they ready to start?
         num_entities_to_migrate = 0
@@ -1705,7 +1705,7 @@ class MigratePublishedFileEntitiesAction(Action):
         
         log.info("")
         log.info("Finally, if you have any problems with this migration, please contact: "
-                 "toolkitsupport@shotgunsoftware.com")
+                 "support@shotgunsoftware.com")
         log.info("")
         
 
@@ -1776,7 +1776,21 @@ class MigratePublishedFileEntitiesAction(Action):
                 try:
                     # and write the new file
                     fh = open(pc_path, "wt")
-                    yaml.dump(pc_data, fh)
+                    # using safe_dump instead of dump ensures that we
+                    # don't serialize any non-std yaml content. In particular,
+                    # this causes issues if a unicode object containing a 7-bit
+                    # ascii string is passed as part of the data. in this case, 
+                    # dump will write out a special format which is later on 
+                    # *loaded in* as a unicode object, even if the content doesn't  
+                    # need unicode handling. And this causes issues down the line
+                    # in toolkit code, assuming strings:
+                    #
+                    # >>> yaml.dump({"foo": u"bar"})
+                    # "{foo: !!python/unicode 'bar'}\n"
+                    # >>> yaml.safe_dump({"foo": u"bar"})
+                    # '{foo: bar}\n'
+                    #                    
+                    yaml.safe_dump(pc_data, fh)
                 finally:
                     fh.close()
         

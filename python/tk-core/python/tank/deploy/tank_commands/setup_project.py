@@ -118,7 +118,11 @@ class SetupProjectAction(Action):
         
     def run_noninteractive(self, log, parameters):
         """
-        API accessor
+        Tank command API accessor. 
+        Called when someone runs a tank command through the core API.
+        
+        :param log: std python logger
+        :param parameters: dictionary with tank command parameters
         """
         # validate params and seed default values
         computed_params = self._validate_parameters(parameters)
@@ -169,7 +173,10 @@ class SetupProjectAction(Action):
                         
     def run_interactive(self, log, args):
         """
-        Tank command accessor (tank setup_project)
+        Tank command accessor
+        
+        :param log: std python logger
+        :param args: command line args
         """
         
         if len(args) not in [0, 1]:
@@ -256,7 +263,7 @@ class SetupProjectAction(Action):
         log.info("versions of all apps and engines for this project.")
         log.info("")
         log.info("For more Apps, Support, Documentation and the Toolkit Community, go to")
-        log.info("https://toolkit.shotgunsoftware.com")
+        log.info("https://support.shotgunsoftware.com")
         log.info("")        
         
         
