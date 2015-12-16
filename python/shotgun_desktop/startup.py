@@ -381,12 +381,18 @@ def __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootst
 
     logger.debug("Retrieving credentials")
     try:
-        # Get the current user
         user = shotgun_authenticator.get_user()
-        # If the current user's credentials are expired.
+        # It it possible the user's credentials are expired now. If we don't check for that
+        # the user will be prompted to refresh their session by entering the passowrd further
+        # down the line when we start looking for a pipeline configuration.
+
+        # In order to avoid this, we'll check to see if the credentials are expired.
         if user.are_credentials_expired():
-            # Clear them and ask them again.
+            # If they are, we will clear them from the session cache...
             shotgun_authenticator.clear_default_user()
+            # ... and ask again for a user. Since there is no more current user,
+            # the authentication module will prompt for full set of credentials and site
+            # information.
             user = shotgun_authenticator.get_user()
     except shotgun_authentication.AuthenticationCancelled:
         return None
