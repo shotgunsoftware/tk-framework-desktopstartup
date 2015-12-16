@@ -381,7 +381,13 @@ def __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootst
 
     logger.debug("Retrieving credentials")
     try:
+        # Get the current user
         user = shotgun_authenticator.get_user()
+        # If the current user's credentials are expired.
+        if user.are_credentials_expired():
+            # Clear them and ask them again.
+            shotgun_authenticator.clear_default_user()
+            user = shotgun_authenticator.get_user()
     except shotgun_authentication.AuthenticationCancelled:
         return None
     else:
