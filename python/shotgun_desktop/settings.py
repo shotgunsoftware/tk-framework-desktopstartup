@@ -168,12 +168,9 @@ class Settings(object):
         # If there is an address available
         proxy = self.default_http_proxy
 
-        # If the proxy is not set, return the default value.
-        if not proxy:
-            return proxy
-
-        # If there is a username and password in the proxy string
-        if "@" in proxy:
+        # If there is a username and password in the proxy string. Proxy is None when not set
+        # so test that first.
+        if proxy and "@" in proxy:
             # Filter out the username and password
             # Given xzy:123@localhost or xyz:12@3@locahost, this will return localhost in both cases
             return "xxx@%s" % proxy.split("@")[-1]
