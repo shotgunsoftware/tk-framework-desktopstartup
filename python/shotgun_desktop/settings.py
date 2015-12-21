@@ -108,7 +108,7 @@ class Settings(object):
         """
         logger.info("config.ini location: %s" % self.get_config_location())
         logger.info("Default site: %s" % self.default_site)
-        logger.info("Default_proxy: %s" % self.default_http_proxy)
+        logger.info("Default_proxy: %s" % self._get_filtered_proxy())
         logger.info("Default login: %s" % self.default_login)
         logger.info("Integration enabled: %s" % self.integration_enabled)
 
@@ -160,3 +160,19 @@ class Settings(object):
             return default
         else:
             return type_cast(self._global_config.get(section, key))
+
+    def _get_filtered_proxy(self):
+        """
+        :returns: Returns the proxy settings with credentials masked.
+        """
+        # If there is an address available
+        proxy = self.default_http_proxy
+
+        # If there is a username and password in the proxy string. Proxy is None when not set
+        # so test that first.
+        if proxy and "@" in proxy:
+            # Filter out the username and password
+            # Given xzy:123@localhost or xyz:12@3@locahost, this will return localhost in both cases
+            return "xxx@%s" % proxy.split("@")[-1]
+        else:
+            return proxy
