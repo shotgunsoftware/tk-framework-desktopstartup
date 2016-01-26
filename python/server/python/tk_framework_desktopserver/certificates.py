@@ -133,9 +133,11 @@ class _CertificateHandler(object):
         # Sometimes the is_registered_cmd will output Shotgun Software and sometimes it will
         # only output the pretty name Shotgun Desktop Integration, so searching for Shotgun is
         # good enough.
-        return "Shotgun" in self._check_call(
+        # The 'security' tool on OSX 10.7 puts everything in upper case, so lower case everything
+        # for testing.
+        return "shotgun" in self._check_call(
             "validating if the certificate was installed", self._get_is_registered_cmd()
-        )
+        ).lower()
 
     def unregister(self):
         """

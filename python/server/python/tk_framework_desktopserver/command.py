@@ -135,8 +135,13 @@ class Command(object):
             # it's finished
             process.wait()
 
-            process.stdout.flush()
-            process.stderr.flush()
+            try:
+                process.stdout.flush()
+                process.stderr.flush()
+            except IOError:
+                # This fails on OSX 10.7, but it looks like there's no ill side effect
+                # from failing on that platform so we can ignore it.
+                get_logger().exception("Error while flushing file descriptor:")
             stdout_t.join()
             stderr_t.join()
 
