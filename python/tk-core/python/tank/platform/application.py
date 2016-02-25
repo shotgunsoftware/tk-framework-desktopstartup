@@ -21,6 +21,7 @@ from . import constants
 
 from ..errors import TankError
 from .bundle import TankBundle
+from ..util import log_user_activity_metric
 
 class Application(TankBundle):
     """
@@ -95,23 +96,30 @@ class Application(TankBundle):
             pass
         
         return self.tank.shotgun        
-        
-    @property
-    def instance_name(self):
+
+    def _get_instance_name(self):
         """
-        The name for this app instance
+        The name for this app instance.
         """
         return self.__instance_name
+
+    def _set_instance_name(self, instance_name):
+        """
+        Sets the instance name of the app.
+        """
+        self.__instance_name = instance_name
+
+    instance_name = property(_get_instance_name, _set_instance_name)
         
     @property
     def engine(self):
         """
-        The engine that this app is connected to
+        The engine that this app is connected to.
         """
-        return self.__engine                
+        return self.__engine
         
     ##########################################################################################
-    # init and destroy
+    # init, destroy, and context changing
         
     def init_app(self):
         """
@@ -136,7 +144,6 @@ class Application(TankBundle):
         """
         pass
     
-    
     ##########################################################################################
     # logging methods, delegated to the current engine
 
@@ -154,6 +161,29 @@ class Application(TankBundle):
 
     def log_exception(self, msg):
         self.engine.log_exception(msg)
+
+
+    ##########################################################################################
+    # internal API
+
+    def log_metric(self, action):
+        """Logs an app metric.
+
+        :param action: Action string to log, e.g. 'Execute Action'
+
+        Logs a user activity metric as performed within an app. This is a
+        convenience method that auto-populates the module portion of
+        `tank.util.log_user_activity_metric()`.
+
+        Internal Use Only - We provide no guarantees that this method
+        will be backwards compatible.
+
+        """
+        # the action contains the engine and app name, e.g.
+        # module: tk-multi-loader2
+        # action: (tk-maya) tk-multi-loader2 - Load...
+        full_action = "(%s) %s %s" % (self.engine.name, self.name, action)
+        log_user_activity_metric(self.name, full_action)
 
 
 def get_application(engine, app_folder, descriptor, settings, instance_name, env):

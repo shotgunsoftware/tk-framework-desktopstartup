@@ -15,14 +15,15 @@ across storages, configurations etc.
 import os
 import sys
 import glob
+import cPickle
 
 from tank_vendor import yaml
 
-from .errors import TankError
+from .errors import TankError, TankUnreadableFileError
 from .deploy import util
 from .platform import constants
 from .platform.environment import Environment, WritableEnvironment
-from .util import shotgun
+from .util import shotgun, yaml_cache
 from . import hook
 from . import pipelineconfig_utils
 from . import template_includes
@@ -90,6 +91,13 @@ class PipelineConfiguration(object):
 
         # cache fields lazily populated on getter access
         self._clear_cached_settings()
+
+        # Populate the global yaml_cache if we find a pickled cache
+        # on disk.
+        # TODO: Discuss and possibly implement a mechanism to copy
+        # the global pickled cache stored in the config down to
+        # local storage to speed up reading in subsequent sessions.
+        self._populate_yaml_cache()
         
         self.execute_core_hook_internal(constants.PIPELINE_CONFIGURATION_INIT_HOOK_NAME, parent=self)
 
@@ -128,8 +136,27 @@ class PipelineConfiguration(object):
         self._project_id = data.get("project").get("id")
         self._pc_id = data.get("id")
         self._pc_name = data.get("code")
-    
-    
+
+    def _populate_yaml_cache(self):
+        """
+        Loads pickled yaml_cache items if they are found and merges them into
+        the global YamlCache.
+        """
+        cache_file = os.path.join(self._pc_root, "yaml_cache.pickle")
+        try:
+            fh = open(cache_file, 'rb')
+        except Exception:
+            return
+
+        try:
+            cache_items = cPickle.load(fh)
+            yaml_cache.g_yaml_cache.merge_cache_items(cache_items)
+        except Exception:
+            return
+        finally:
+            fh.close()
+
+
     ########################################################################################
     # general access and properties
 
@@ -646,39 +673,43 @@ class PipelineConfiguration(object):
         You can use the get_environments() method to get a list of
         all the environment names.
         
-        :param env_name: name of the environment to load
-        :param context: context to seed the environment with
-        :param writable: If true, a writable environment object will be 
-                         returned, allowing a user to update it.
-        :returns: An environment object
+        :param env_name:    name of the environment to load
+        :param context:     context to seed the environment with
+        :param writable:    If true, a writable environment object will be 
+                            returned, allowing a user to update it.
+        :returns:           An environment object
         """        
-        env_file = os.path.join(self._pc_root, "config", "env", "%s.yml" % env_name)
-        if not os.path.exists(env_file):
-            raise TankError("Cannot load environment '%s': Environment configuration "
-                            "file '%s' does not exist!" % (env_name, env_file))
-        
+        env_file = self.get_environment_path(env_name)
         EnvClass = WritableEnvironment if writable else Environment
         env_obj = EnvClass(env_file, self, context)
-        
         return env_obj
+
+    def get_environment_path(self, env_name):
+        """
+        Returns the path to the environment yaml file for the given
+        environment name for this pipeline configuration.
+
+        :param env_name:    The name of the environment.
+        :returns:           String path to the environment yaml file.
+        """
+        return os.path.join(self._pc_root, "config", "env", "%s.yml" % env_name)
     
     def get_templates_config(self):
         """
         Returns the templates configuration as an object
         """
-        templates_file = os.path.join(self._pc_root, "config", "core", constants.CONTENT_TEMPLATES_FILE)
+        templates_file = os.path.join(
+            self._pc_root,
+            "config",
+            "core",
+            constants.CONTENT_TEMPLATES_FILE,
+        )
 
-        if os.path.exists(templates_file):
-            config_file = open(templates_file, "r")
-            try:
-                data = yaml.load(config_file) or {}
-            finally:
-                config_file.close()
-        else:
-            data = {}
-
-        # and process include files
-        data = template_includes.process_includes(templates_file, data)
+        try:
+            data = yaml_cache.g_yaml_cache.get(templates_file, deepcopy_data=False)
+            data = template_includes.process_includes(templates_file, data)
+        except TankUnreadableFileError:
+            data = dict()
 
         return data
 
@@ -710,6 +741,11 @@ class PipelineConfiguration(object):
             # of the core API.
             hooks_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "hooks"))
             hook_path = os.path.join(hooks_path, file_name)
+        else:
+            # some hooks are always custom. ignore those and log the rest.
+            if (hasattr(parent, 'log_metric') and
+               hook_name not in constants.TANK_LOG_METRICS_CUSTOM_HOOK_BLACKLIST):
+                parent.log_metric("custom hook %s" % (hook_name,))
 
         return hook.execute_hook(hook_path, parent, **kwargs)
 
@@ -739,6 +775,8 @@ class PipelineConfiguration(object):
         hook_path = os.path.join(hook_folder, file_name)
         if os.path.exists(hook_path):
             hook_paths.append(hook_path)
-            
+            if hasattr(parent, 'log_metric'):
+                parent.log_metric("custom hook %s" % (hook_name,))
+
         return hook.execute_hook_method(hook_paths, parent, method_name, **kwargs)
 

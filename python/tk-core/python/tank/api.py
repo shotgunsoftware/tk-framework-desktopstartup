@@ -16,15 +16,14 @@ import os
 import glob
 import threading
 
-from tank_vendor import yaml
-
 from . import folder
 from . import context
-from .util import shotgun
+from .util import shotgun, yaml_cache
 from .errors import TankError
 from .path_cache import PathCache
 from .template import read_templates
 from .platform import constants as platform_constants
+from .util import log_user_activity_metric
 from . import pipelineconfig
 from . import pipelineconfig_utils
 from . import pipelineconfig_factory
@@ -126,6 +125,23 @@ class Tank(object):
                                                                              parent=self, 
                                                                              **kwargs)
 
+    def log_metric(self, action):
+        """Log a core metric.
+
+        :param action: Action string to log, e.g. 'Init'
+
+        Logs a user activity metric as performed within core. This is
+        a convenience method that auto-populates the module portion of
+        `tank.util.log_user_activity_metric()`
+
+        Internal Use Only - We provide no guarantees that this method
+        will be backwards compatible.
+
+        """
+        full_action = "%s %s" % ('tk-core', action)
+        log_user_activity_metric('tk-core', full_action)
+
+
     ################################################################################################
     # properties
 
@@ -202,15 +218,11 @@ class Tank(object):
         # read this from info.yml
         info_yml_path = os.path.abspath(os.path.join( os.path.dirname(__file__), "..", "..", "info.yml"))
         try:
-            info_fh = open(info_yml_path, "r")
-            try:
-                data = yaml.load(info_fh)
-            finally:
-                info_fh.close()
+            yaml_cache.g_yaml_cache.get(info_yml_path, deepcopy_data=False)
             data = str(data.get("documentation_url"))
             if data == "":
                 data = None
-        except:
+        except Exception:
             data = None
 
         return data

@@ -14,12 +14,13 @@ Functionality for managing versions of apps.
 
 import os
 import copy
+import sys
 
 from tank_vendor import yaml
 
 from .. import hook
-from ..util import shotgun
-from ..errors import TankError
+from ..util import shotgun, yaml_cache
+from ..errors import TankError, TankFileDoesNotExistError
 from ..platform import constants
 
 
@@ -48,6 +49,17 @@ class AppDescriptor(object):
         self._bundle_install_path = bundle_install_path
         self._location_dict = location_dict
         self.__manifest_data = None
+
+    def __eq__(self, other):
+        # By default, we can assume equality if the path to the data
+        # on disk is equivalent.
+        if isinstance(other, self.__class__):
+            return self.get_path() == other.get_path()
+        else:
+            return False
+
+    def __ne__(self, other):
+        return not (self == other)
 
     def __repr__(self):
         class_name = self.__class__.__name__
@@ -116,26 +128,18 @@ class AppDescriptor(object):
                 
             # get the metadata
             bundle_root = self.get_path()
-        
             file_path = os.path.join(bundle_root, constants.BUNDLE_METADATA_FILE)
-        
-            if not os.path.exists(file_path):
-                raise TankError("Toolkit metadata file '%s' missing." % file_path)
-        
+
             try:
-                file_data = open(file_path)
-                try:
-                    metadata = yaml.load(file_data)
-                finally:
-                    file_data.close()
+                metadata = yaml_cache.g_yaml_cache.get(file_path, deepcopy_data=False)
+            except TankFileDoesNotExistError:
+                raise
             except Exception, exp:
                 raise TankError("Cannot load metadata file '%s'. Error: %s" % (file_path, exp))
-        
+
             # cache it
             self.__manifest_data = metadata
-        
-        # return a copy
-        return copy.deepcopy(self.__manifest_data)
+        return self.__manifest_data
 
 
     ###############################################################################################
@@ -422,18 +426,74 @@ class AppDescriptor(object):
         
         post_install_hook_path = os.path.join(self.get_path(), "hooks",
                                               "post_install.py")
-        
-        if os.path.exists(post_install_hook_path):            
-            
-            try:
-                hook.execute_hook(post_install_hook_path, 
-                                  parent=None,
-                                  pipeline_configuration=self._pipeline_config_path,
-                                  path=self.get_path())
+        try:
+            hook.execute_hook(post_install_hook_path, 
+                              parent=None,
+                              pipeline_configuration=self._pipeline_config_path,
+                              path=self.get_path())
+        except TankFileDoesNotExistError:
+            pass
+        except Exception, e:
+            raise TankError("Could not run post-install hook for %s. "
+                            "Error reported: %s" % (self, e))
 
-            except Exception, e:
-                raise TankError("Could not run post-install hook for %s. "
-                                "Error reported: %s" % (self, e))
+
+class VersionedSingletonDescriptor(AppDescriptor):
+    """
+    Caching layer for the versioned app descriptor classes.
+
+    Executes prior to __init__, caches descriptor instances so that
+    an instance for a given locator is only ever created once.
+
+    The cache keys based on the bundle storage root path and
+    the locator dictionary.
+    """
+    _instances = dict()
+
+    def __new__(cls, pc_path, bundle_cache_root, location_dict, *args, **kwargs):
+        """
+        Handles caching of descriptors.
+
+        Executed prior to __init__ being executed.
+
+        Since all our normal descriptors are immutable - they represent a specific,
+        read only and cached version of an app, engine or framework on disk, we can
+        also cache their wrapper objects.
+
+        :param pc_path: Path to pipeline configuration
+        :param bundle_cache_root: Root location for bundle cache
+        :param location_dict: Location dictionary describing the bundle
+        :return: Descriptor instance
+        """
+        instance_cache = cls._instances
+
+        # The cache is keyed based on the location dict and the bundle install root
+        cache_key = (bundle_cache_root, str(location_dict))
+
+        # Instantiate and cache if we need to, otherwise just return what we
+        # already have stored away.
+        if cache_key not in instance_cache:
+            # If the bundle install path isn't in the cache, then we are
+            # starting fresh. Otherwise, check to see if the app (by name)
+            # is cached, and if not initialize its specific cache. After
+            # that we instantiate and store by version.
+            instance_cache[cache_key] = super(VersionedSingletonDescriptor, cls).__new__(
+                cls,
+                pc_path,
+                bundle_cache_root,
+                location_dict,
+                *args, **kwargs
+            )
+
+        return instance_cache[cache_key]
+
+    def __eq__(self, other):
+        # Since this is a singleton descriptor, we can check
+        # to see if it's a reference to the same object.
+        return self is other
+
+    def __ne__(self, other):
+        return self is not other
 
 
 ################################################################################################

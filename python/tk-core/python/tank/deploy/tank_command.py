@@ -37,6 +37,8 @@ from .tank_commands import clone_configuration
 from .tank_commands import copy_apps
 from .tank_commands import unregister_folders
 from .tank_commands import desktop_migration
+from .tank_commands import cache_yaml
+from .tank_commands import get_entity_commands
 
 from ..platform import constants
 from ..platform.engine import start_engine, get_environment_from_context
@@ -71,7 +73,9 @@ BUILT_IN_ACTIONS = [setup_project.SetupProjectAction,
                     unregister_folders.UnregisterFoldersAction,
                     clone_configuration.CloneConfigAction,
                     copy_apps.CopyAppsAction,
-                    desktop_migration.DesktopMigration
+                    desktop_migration.DesktopMigration,
+                    cache_yaml.CacheYamlAction,
+                    get_entity_commands.GetEntityCommandsAction
                     ]
 
 
@@ -300,6 +304,10 @@ class SgtkSystemCommand(object):
                        is the value you want to pass. You can query which parameters
                        can be passed in via the parameters property.
         """
+
+        if self.__internal_action_obj.tk:
+            self.__internal_action_obj.tk.log_metric(self.name)
+
         return self.__internal_action_obj.run_noninteractive(self.__log, params)
         
         
@@ -455,6 +463,10 @@ def run_action(log, tk, ctx, command, args):
         log.info("Command: %s" % found_action.name.replace("_", " ").capitalize())
         log.info("-" * 70)
         log.info("")
+
+        if found_action.tk and not isinstance(found_action, ShellEngineAction):
+            found_action.tk.log_metric(found_action.name)
+
         return found_action.run_interactive(log, args)
 
 
