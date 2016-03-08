@@ -18,7 +18,7 @@ from . import shotgun
 from .. import paths
 
 
-def initialize(splash, connection):
+def initialize(splash, connection, app_store_http_proxy):
     """ initialize toolkit for this computer for a single site """
     logger = logging.getLogger("tk-desktop.initialization")
 
@@ -78,7 +78,9 @@ def initialize(splash, connection):
     installer.set_app_store_info(
         app_store_script["firstname"],
         app_store_script["salted_password"],
-        app_store_script)
+        app_store_script,
+        app_store_http_proxy
+    )
     installer.set_locations(locations)
     installer.set_executables(executables)
 

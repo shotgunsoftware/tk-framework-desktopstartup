@@ -37,7 +37,7 @@ class InstallThread(QtCore.QThread):
     def __init__(self):
         QtCore.QThread.__init__(self)
         self._auth = None
-        self._logger = logging.getLogger("tk-framework-desktopstartup.initialization.install")
+        self._logger = logging.getLogger("tk-desktop.initialization.install")
 
     def set_install_folder(self, folder):
         self._sgtk_folder = folder
@@ -48,10 +48,11 @@ class InstallThread(QtCore.QThread):
         self._sg_proxy = connection.config.raw_http_proxy
         self._script_user = script_user
 
-    def set_app_store_info(self, script, key, app_store_current_script_user_entity):
+    def set_app_store_info(self, script, key, app_store_current_script_user_entity, app_store_http_proxy):
         self._app_store_script = script
         self._app_store_key = key
         self._app_store_current_script_user_entity = app_store_current_script_user_entity
+        self._app_store_http_proxy = app_store_http_proxy
 
     def set_locations(self, location):
         self._location = location
@@ -132,10 +133,14 @@ class InstallThread(QtCore.QThread):
         if self._script_user:
             fh.write("api_script: %s\n" % self._script_user["firstname"])
             fh.write("api_key: %s\n" % self._script_user["salted_password"])
-        if self._sg_proxy is None:
-            fh.write("http_proxy: null\n")
-        else:
+        if self._sg_proxy:
             fh.write("http_proxy: %s\n" % self._sg_proxy)
+        else:
+            fh.write("http_proxy: null\n")
+        if self._app_store_http_proxy:
+            fh.write("app_store_http_proxy: %s\n" % self._app_store_http_proxy)
+        else:
+            fh.write("app_store_http_proxy: null\n")
         fh.write("\n")
         fh.write("# End of file.\n")
         fh.close()
@@ -190,13 +195,16 @@ class InstallThread(QtCore.QThread):
             fh.write(self._executables[x])
             fh.close()
 
+    def _get_app_store_proxy(self):
+        return self._app_store_http_proxy or self._sg_proxy
+
     def install_core(self):
         # download latest core from the app store
         sg_studio_version = ".".join([str(x) for x in self._connection.server_info["version"]])
 
         sg_app_store = Shotgun(
             constants.SGTK_APP_STORE, self._app_store_script, self._app_store_key,
-            http_proxy=self._sg_proxy)
+            http_proxy=self._get_app_store_proxy())
 
         (latest_core, core_path) = self._download_core(
             sg_studio_version, sg_app_store,
