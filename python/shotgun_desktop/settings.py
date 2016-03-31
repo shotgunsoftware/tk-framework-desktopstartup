@@ -181,6 +181,6 @@ class Settings(object):
         if proxy and "@" in proxy:
             # Filter out the username and password
             # Given xzy:123@localhost or xyz:12@3@locahost, this will return localhost in both cases
-            return "<your crendentials have been removed for security reasons>@%s" % proxy.rsplit("@", 1)[-1]
+            return "<your credentials have been removed for security reasons>@%s" % proxy.rsplit("@", 1)[-1]
         else:
             return proxy
