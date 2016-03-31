@@ -79,8 +79,18 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
     # Connection errors can occur for a variety of reasons. For example, there is no internet access
     # or there is a proxy server blocking access to the Toolkit app store
     except (httplib2.HttpLib2Error, httplib2.socks.HTTPError, httplib.HTTPException), e:
-        logger.warning("Could not access tank.shotgunstudio.com (%s)." % e)
+        logger.warning("Could not access the TK App Store (tank.shotgunstudio.com): (%s)." % e)
         return False
+    # In cases where there is a firewall/proxy blocking access to the app store, sometimes the 
+    # firewall will drop the connection instead of rejecting it. The API request will timeout which
+    # unfortunately results in a generic SSLError with only the message text to give us a clue why
+    # the request failed. Issue a warning in this case and continue on. 
+    except httplib2.ssl.SSLError, e:
+        if "timed" in e.message:
+            logger.warning("Could not access the TK App Store (tank.shotgunstudio.com): %s" % e)
+            return False
+        else:
+            raise
 
     # check deprecation
     (is_dep, dep_msg) = latest_descriptor.get_deprecation_status()
@@ -88,7 +98,7 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
     if is_dep:
         logger.warning(
             "This version of tk-framework-desktopstartup has been flagged as deprecated with the "
-            "following  status: %s" % dep_msg
+            "following status: %s" % dep_msg
         )
         return False
 
