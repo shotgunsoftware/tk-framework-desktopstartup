@@ -38,8 +38,11 @@ def initialize(splash, connection, app_store_http_proxy):
     else:
         toolkit_script = None
 
+    # Compute the proxy that needs to be used to access the App Store.
+    actual_app_store_proxy = shotgun.get_app_store_http_proxy(connection, app_store_http_proxy)
+
     # grab the login to the app store
-    app_store_script = shotgun.get_app_store_credentials(connection)
+    app_store_script = shotgun.get_app_store_credentials(connection, actual_app_store_proxy)
     if app_store_script is None:
         raise RuntimeError("did not get app store script")
 
@@ -79,6 +82,7 @@ def initialize(splash, connection, app_store_http_proxy):
         app_store_script["firstname"],
         app_store_script["salted_password"],
         app_store_script,
+        actual_app_store_proxy,
         app_store_http_proxy
     )
     installer.set_locations(locations)

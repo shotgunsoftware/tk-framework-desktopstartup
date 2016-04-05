@@ -114,33 +114,9 @@ def get_or_create_script(connection):
     return script
 
 
-def get_proxy_from_connection(connection):
-    """
-    Return the proxy string from a connection object
-    Returns None if there is no proxy set
-    """
-    proxy_server = connection.config.proxy_server
-    if proxy_server is None:
-        return None
-
-    proxy_port = connection.config.proxy_port
-    proxy_user = connection.config.proxy_user
-    proxy_pass = connection.config.proxy_pass
-
-    if proxy_user is None:
-        proxy = "%s:%s" % (proxy_server, proxy_port)
-    else:
-        proxy = "%s:%s@%s:%s" % (proxy_user, proxy_pass, proxy_server, proxy_port)
-
-    return proxy
-
-
-def get_app_store_credentials(connection):
+def get_app_store_credentials(connection, proxy):
     """ Return the validated script for this site to connect to the app store """
     (script, key) = __get_app_store_key(connection)
-
-    # get the proxy string from the connection
-    proxy = get_proxy_from_connection(connection)
 
     # connect to the app store
     try:
@@ -155,6 +131,28 @@ def get_app_store_credentials(connection):
         return None
 
     return app_store_script
+
+
+def get_app_store_http_proxy(connection, app_store_http_proxy):
+    """
+    Computes the proxy server to use for the app store. If the app_store_http_proxy setting is set in config.ini,
+    that value will be used for the App Store proxy. If it is not set, the one from the site will be used.
+
+    :param connection: Shotgun connection to the Shotgun site.
+    :param app_store_http_proxy: Proxy setting found in config.ini
+
+    :returns: The app store
+    """
+    # If app store proxy is None, we use the proxy setting from the site
+    if app_store_http_proxy is None:
+        return connection.config.raw_http_proxy
+    # If the proxy is empty, it means we are forcing it to None, regardless
+    # of the http proxy setting.
+    elif app_store_http_proxy == "":
+        return None
+    # We have something, so use that.
+    else:
+        return app_store_http_proxy
 
 
 def __get_app_store_key_internal(connection, post_data):

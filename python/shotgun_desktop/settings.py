@@ -109,7 +109,8 @@ class Settings(object):
         logger.info("config.ini location: %s" % self.get_config_location())
         logger.info("Default site: %s" % self.default_site)
         logger.info("Default proxy: %s" % self._get_filtered_proxy(self.default_http_proxy))
-        logger.info("Default app store proxy: %s" % self._get_filtered_proxy(self.default_app_store_http_proxy))
+        proxy = self._get_filtered_proxy(self.default_app_store_http_proxy)
+        logger.info("Default app store proxy: %s" % "<not set>" if proxy is None else proxy)
         logger.info("Default login: %s" % self.default_login)
         logger.info("Integration enabled: %s" % self.integration_enabled)
 
@@ -123,9 +124,21 @@ class Settings(object):
     @property
     def default_app_store_http_proxy(self):
         """
-        :returns: The default proxy.
+        :returns: If None, the proxy wasn't set. If an empty string, it has been forced to
         """
-        return self._get_value(self._LOGIN, "app_store_http_proxy")
+        # Passing PROXY_NOT_SET and getting it back means that the proxy wasn't set in the file.
+        _PROXY_NOT_SET = "PROXY_NOT_SET"
+        proxy = self._get_value(self._LOGIN, "app_store_http_proxy", default=_PROXY_NOT_SET)
+
+        # If proxy wasn't set, then return None, which means Toolkit will use the value from the http_proxy
+        # setting for the app store proxy.
+        if proxy == _PROXY_NOT_SET:
+            return None
+        # If the proxy was set to a falsy value, it means it was hardcoded to be None.
+        elif not proxy:
+            return ""
+        else:
+            return proxy
 
     @property
     def default_site(self):
