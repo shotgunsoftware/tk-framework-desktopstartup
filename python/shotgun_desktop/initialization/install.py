@@ -37,7 +37,7 @@ class InstallThread(QtCore.QThread):
     def __init__(self):
         QtCore.QThread.__init__(self)
         self._auth = None
-        self._logger = logging.getLogger("tk-framework-desktopstartup.initialization.install")
+        self._logger = logging.getLogger("tk-desktop.initialization.install")
 
     def set_install_folder(self, folder):
         self._sgtk_folder = folder
@@ -48,10 +48,28 @@ class InstallThread(QtCore.QThread):
         self._sg_proxy = connection.config.raw_http_proxy
         self._script_user = script_user
 
-    def set_app_store_info(self, script, key, app_store_current_script_user_entity):
+    def set_app_store_info(
+        self,
+        script, key,
+        app_store_current_script_user_entity,
+        actual_app_store_http_proxy, app_store_http_proxy_setting
+    ):
+        """
+        Sets app store connection parameters.
+
+        :param script: Script name to authenticate to the App Store.
+        :param key: Script key to authenticate to the App Store.
+        :param app_store_current_script_user_entity: Entity for the App Store script user.
+        :param actual_app_store_http_proxy: Proxy server to use when connecting to the App Store.
+        :param app_store_http_proxy_setting: Raw value of the proxy server setting to write to shotgun.yml
+            If None, nothing will be written. If empty string, null will be written. If non-empty, will be written
+            as is.
+        """
         self._app_store_script = script
         self._app_store_key = key
         self._app_store_current_script_user_entity = app_store_current_script_user_entity
+        self._actual_app_store_http_proxy = actual_app_store_http_proxy
+        self._app_store_http_proxy_setting = app_store_http_proxy_setting
 
     def set_locations(self, location):
         self._location = location
@@ -132,10 +150,19 @@ class InstallThread(QtCore.QThread):
         if self._script_user:
             fh.write("api_script: %s\n" % self._script_user["firstname"])
             fh.write("api_key: %s\n" % self._script_user["salted_password"])
-        if self._sg_proxy is None:
-            fh.write("http_proxy: null\n")
-        else:
+        if self._sg_proxy:
             fh.write("http_proxy: %s\n" % self._sg_proxy)
+        else:
+            fh.write("http_proxy: null\n")
+
+        # If the proxy is to be set, set it.
+        if self._app_store_http_proxy_setting:
+            fh.write("app_store_http_proxy: %s\n" % self._app_store_http_proxy_setting)
+        # If the proxy is to be hardcoded to none, write null
+        elif self._app_store_http_proxy_setting == "":
+            fh.write("app_store_http_proxy: null\n")
+        # Otherwise we'll inherit whatever proxy setting that came from http_proxy.
+
         fh.write("\n")
         fh.write("# End of file.\n")
         fh.close()
@@ -196,7 +223,8 @@ class InstallThread(QtCore.QThread):
 
         sg_app_store = Shotgun(
             constants.SGTK_APP_STORE, self._app_store_script, self._app_store_key,
-            http_proxy=self._sg_proxy)
+            http_proxy=self._actual_app_store_http_proxy
+        )
 
         (latest_core, core_path) = self._download_core(
             sg_studio_version, sg_app_store,
@@ -310,7 +338,7 @@ class InstallThread(QtCore.QThread):
         if "SGTK_CORE_DEBUG_LOCATION" in os.environ:
             self.stepDone.emit("Using debug core from '%s'" % os.environ["SGTK_CORE_DEBUG_LOCATION"])
             self._logger.debug("Using debug core from '%s'" % os.environ["SGTK_CORE_DEBUG_LOCATION"])
-            return (latest_core, os.environ["SGTK_CORE_DEBUG_LOCATION"])
+            return (latest_core, os.path.expanduser(os.path.expandvars(os.environ["SGTK_CORE_DEBUG_LOCATION"])))
         # download Sgtk code
         if latest_core[constants.SGTK_CODE_PAYLOAD_FIELD] is None:
             raise Exception("Cannot find an Sgtk binary bundle for %s. Please contact support" % latest_core["code"])

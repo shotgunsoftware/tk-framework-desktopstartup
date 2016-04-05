@@ -10,4 +10,4 @@
 
 from . import initialize
 from .initialize import initialize
-from .shotgun import is_script_user_required, does_pipeline_configuration_require_project
+from .shotgun import is_script_user_required, does_pipeline_configuration_require_project, get_app_store_http_proxy

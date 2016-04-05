@@ -478,7 +478,7 @@ def __extract_command_line_argument(arg_name):
     return is_set
 
 
-def __launch_app(app, splash, connection, app_bootstrap, server):
+def __launch_app(app, splash, connection, app_bootstrap, server, settings):
     """
     Shows the splash screen, optionally downloads and configures Toolkit, imports it, optionally
     updates it and then launches the desktop engine.
@@ -487,6 +487,7 @@ def __launch_app(app, splash, connection, app_bootstrap, server):
     :param splash: Splash dialog to update user on what is currently going on
     :param connection: Connection to the Shotgun server.
     :param server: The tk_framework_desktopserver.Server instance.
+    :param settings: The application's settings.
 
     :returns: The error code to return to the shell.
     """
@@ -542,7 +543,7 @@ def __launch_app(app, splash, connection, app_bootstrap, server):
             app.processEvents()
             splash.set_message("Initializing Toolkit")
             logger.info("Initializing Toolkit")
-            core_path = initialize(splash, connection)
+            core_path = initialize(splash, connection, settings.default_app_store_http_proxy)
         except Exception, error:
             logger.exception(error)
             if "ApiUser can not be accessed" in error.message:
@@ -1156,7 +1157,8 @@ def main(**kwargs):
                 splash,
                 connection,
                 app_bootstrap,
-                server
+                server,
+                settings
             )
     except RequestRestartException:
         subprocess.Popen(sys.argv, close_fds=True)
