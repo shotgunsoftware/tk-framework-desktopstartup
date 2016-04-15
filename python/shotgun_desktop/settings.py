@@ -27,6 +27,7 @@ class Settings(object):
     default_login=login
     default_site=site.shotgunstudio.com
     http_proxy=http://www.someproxy.com:3128
+    app_store_http_proxy=http://www.someproxy.com:3128
     [BrowserIntegration]
     enabled=1
     """
@@ -110,7 +111,7 @@ class Settings(object):
         logger.info("Default site: %s" % self.default_site)
         logger.info("Default proxy: %s" % self._get_filtered_proxy(self.default_http_proxy))
         proxy = self._get_filtered_proxy(self.default_app_store_http_proxy)
-        logger.info("Default app store proxy: %s" % "<not set>" if proxy is None else proxy)
+        logger.info("Default app store proxy: %s" % ("<not set>" if proxy is None else proxy))
         logger.info("Default login: %s" % self.default_login)
         logger.info("Integration enabled: %s" % self.integration_enabled)
 
