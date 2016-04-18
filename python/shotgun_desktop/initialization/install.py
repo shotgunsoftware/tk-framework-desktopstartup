@@ -27,17 +27,26 @@ from shotgun_api3 import Shotgun
 from .. import utils
 from . import constants
 from . import shotgun
+from ..logger import get_logger
 
 
 class InstallThread(QtCore.QThread):
-    stepDone = QtCore.Signal(str)
-    stepWarn = QtCore.Signal(str)
-    stepError = QtCore.Signal(str)
 
     def __init__(self):
         QtCore.QThread.__init__(self)
         self._auth = None
-        self._logger = logging.getLogger("tk-desktop.initialization.install")
+        self._logger = get_logger("initialization.install")
+        self._error_message = None
+
+    def wait(self):
+        """
+        Waits for the install thread to finish.
+
+        :raises Exception: Thrown if the thread ended due to an error.
+        """
+        QtCore.QThread.wait(self)
+        if self._error_message is not None:
+            raise Exception(self._error_message)
 
     def set_install_folder(self, folder):
         self._sgtk_folder = folder
@@ -80,18 +89,15 @@ class InstallThread(QtCore.QThread):
     def run(self):
         if os.path.exists(self._sgtk_folder):
             self._logger.info("Install directory already exists: '%s'" % self._sgtk_folder)
-            self.stepDone.emit("Install directory already exists")
             return
 
         try:
             self.create_structure()
             self.install_core()
-        except Exception:
+        except Exception, e:
             self._logger.exception("Error installing core.")
-            error = traceback.format_exc()
-            self.stepError.emit(error)
+            self._error_message = str(e)
         else:
-            self.stepDone.emit("Done")
             self._logger.debug("Done")
         finally:
             if self._auth is not None:
@@ -100,7 +106,6 @@ class InstallThread(QtCore.QThread):
 
     def create_structure(self):
         self._logger.debug("Creating install directory...")
-        self.stepDone.emit("Creating install directory...")
 
         # Figure out if we need to mkdir with elevated privs
         try:
@@ -136,7 +141,6 @@ class InstallThread(QtCore.QThread):
         mkdir(os.path.join(self._sgtk_folder, "install", "frameworks"), 0777)
 
         # create configuration files
-        self.stepDone.emit("Creating configuration files...")
         self._logger.debug("Creating configuration files...")
 
         sg_config_location = os.path.join(self._sgtk_folder, "config", "core", "shotgun.yml")
@@ -230,45 +234,21 @@ class InstallThread(QtCore.QThread):
             sg_studio_version, sg_app_store,
             self._server_url, self._app_store_current_script_user_entity)
 
-        self.stepDone.emit("Now installing Shotgun Pipeline Toolkit Core")
         self._logger.debug("Now installing Shotgun Pipeline Toolkit Core")
         sys.path.insert(0, core_path)
         try:
-            class EmitLogger(object):
-                def __init__(self, host, debug=False):
-                    self.host = host
-                    self._debug = debug
-
-                def debug(self, msg):
-                    if self._debug:
-                        self.host.stepDone.emit(msg)
-
-                def info(self, msg):
-                        self.host.stepDone.emit(msg)
-
-                def warning(self, msg):
-                    self.host.stepWarn.emit(msg)
-
-                def error(self, msg):
-                    self.host.stepError.emit(msg)
-
             import _core_upgrader
             sgtk_install_folder = os.path.join(self._sgtk_folder, "install")
-            _core_upgrader.upgrade_tank(sgtk_install_folder, EmitLogger(self, debug=False))
+            _core_upgrader.upgrade_tank(sgtk_install_folder, self._logger)
         except Exception, e:
             self._logger.exception("Could not run upgrade script! Error reported: %s" % e)
-            self.stepError.emit("Could not run upgrade script! Error reported: %s" % e)
             return
 
         # now copy some of the files into key locations in the core area
-        self.stepDone.emit("Installing binary wrapper scripts...")
         self._logger.debug("Installing binary wrapper scripts...")
         src_dir = os.path.join(self._sgtk_folder, "install", "core", "setup", "root_binaries")
         # pre-013 check
         if not os.path.exists(src_dir):
-            self.stepError.emit(
-                "Looks like you are trying to download an old version "
-                "of the Shotgun Pipeline Toolkit!")
             self._logger.error(
                 "Looks like you are trying to download an old version "
                 "of the Shotgun Pipeline Toolkit!")
@@ -302,7 +282,6 @@ class InstallThread(QtCore.QThread):
         Downloads the latest core from the app store.
         Returns a path to the unpacked code in a tmp location
         """
-        self.stepDone.emit("Finding the latest version of the Core API...")
         self._logger.debug("Finding the latest version of the Core API...")
 
         if os.environ.get("TANK_QA_ENABLED"):
@@ -336,14 +315,12 @@ class InstallThread(QtCore.QThread):
 
         # for debugging allow pointing at an arbitrary core directory
         if "SGTK_CORE_DEBUG_LOCATION" in os.environ:
-            self.stepDone.emit("Using debug core from '%s'" % os.environ["SGTK_CORE_DEBUG_LOCATION"])
             self._logger.debug("Using debug core from '%s'" % os.environ["SGTK_CORE_DEBUG_LOCATION"])
             return (latest_core, os.path.expanduser(os.path.expandvars(os.environ["SGTK_CORE_DEBUG_LOCATION"])))
         # download Sgtk code
         if latest_core[constants.SGTK_CODE_PAYLOAD_FIELD] is None:
             raise Exception("Cannot find an Sgtk binary bundle for %s. Please contact support" % latest_core["code"])
 
-        self.stepDone.emit("Downloading Toolkit Core API %s from the App Store..." % latest_core["code"])
         self._logger.debug("Downloading Toolkit Core API %s from the App Store..." % latest_core["code"])
 
         zip_tmp = os.path.join(tempfile.gettempdir(), "%s_sgtk_core.zip" % uuid.uuid4().hex)
@@ -367,7 +344,6 @@ class InstallThread(QtCore.QThread):
         fh.write(bundle_content)
         fh.close()
 
-        self.stepDone.emit("Download complete, now extracting content...")
         self._logger.debug("Download complete, now extracting content...")
         # unzip core zip file to temp location and run updater
         unzip_file(zip_tmp, extract_tmp)

@@ -16,6 +16,9 @@ from shotgun_api3 import Shotgun
 
 from . import constants
 from distutils.version import LooseVersion
+from ..logger import get_logger
+
+logger = get_logger("initialization.shotgun")
 
 
 def get_server_version(connection):
@@ -127,7 +130,8 @@ def get_app_store_credentials(connection, proxy):
             "ApiUser",
             [["firstname", "is", script]],
             fields=["type", "firstname", "id", "salted_password"])
-    except Exception:
+    except:
+        logger.exception("Something went wrong while connecting to the App Store:")
         return None
 
     return app_store_script
