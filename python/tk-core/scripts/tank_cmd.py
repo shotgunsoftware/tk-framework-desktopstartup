@@ -21,7 +21,7 @@ import datetime
 from tank import TankError
 from tank.deploy.tank_commands.clone_configuration import clone_pipeline_configuration_html
 from tank.deploy import tank_command
-from tank.deploy.tank_commands.core_upgrade import TankCoreUpgrader
+from tank.deploy.tank_commands.core_upgrade import TankCoreUpdater
 from tank.deploy.tank_commands.action_base import Action
 from tank.util import shotgun, CoreDefaultsManager
 from tank.platform import constants
@@ -207,7 +207,7 @@ Log out of the current user (no context required):
         log.info(x)
 
 
-def ensure_authenticated(script_name=None, script_key=None):
+def ensure_authenticated(script_name, script_key):
     """
     Make sure that there is a current toolkit user set.
     May prompt for a login/password if needed. Note that if command line
@@ -636,10 +636,10 @@ def _shotgun_run_action(log, install_root, pipeline_config_root, is_localized, a
         code_css_block = "display: block; padding: 0.5em 1em; border: 1px solid #bebab0; background: #faf8f0;"
 
         # create an upgrader instance that we can query if the install is up to date
-        installer = TankCoreUpgrader(install_root, log)
+        installer = TankCoreUpdater(install_root, log)
 
         cv = installer.get_current_version_number()
-        lv = installer.get_latest_version_number()
+        lv = installer.get_update_version_number()
         log.info("You are currently running version %s of the Shotgun Pipeline Toolkit." % cv)
 
         if not is_localized:
@@ -650,16 +650,16 @@ def _shotgun_run_action(log, install_root, pipeline_config_root, is_localized, a
         log.info("")
 
         status = installer.get_update_status()
-        req_sg = installer.get_required_sg_version_for_upgrade()
+        req_sg = installer.get_required_sg_version_for_update()
 
-        if status == TankCoreUpgrader.UP_TO_DATE:
+        if status == TankCoreUpdater.UP_TO_DATE:
             log.info("<b>You are up to date! There is no need to update the Toolkit Core API at this time!</b>")
 
-        elif status == TankCoreUpgrader.UPGRADE_BLOCKED_BY_SG:
+        elif status == TankCoreUpdater.UPDATE_BLOCKED_BY_SG:
             log.warning("<b>A new version (%s) of the core API is available however "
                         "it requires a more recent version (%s) of Shotgun!</b>" % (lv, req_sg))
 
-        elif status == TankCoreUpgrader.UPGRADE_POSSIBLE:
+        elif status == TankCoreUpdater.UPDATE_POSSIBLE:
 
             (summary, url) = installer.get_release_notes()
 
@@ -1601,7 +1601,10 @@ if __name__ == "__main__":
                     ctx_list = [ os.getcwd() ] # path
 
             # first make sure there is a current user
-            ensure_authenticated(credentials)
+            ensure_authenticated(
+                credentials.get("script-name"),
+                credentials.get("script-key")
+            )
 
             # now run the command
             exit_code = run_engine_cmd(logger, pipeline_config_root, ctx_list, cmd_name, using_cwd, cmd_args)
