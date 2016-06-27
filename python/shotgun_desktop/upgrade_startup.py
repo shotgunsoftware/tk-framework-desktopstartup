@@ -12,6 +12,7 @@ import os
 from distutils.version import LooseVersion
 from shotgun_desktop.location import get_location, write_location
 from shotgun_desktop.desktop_message_box import DesktopMessageBox
+from .logger import get_logger
 
 import httplib
 
