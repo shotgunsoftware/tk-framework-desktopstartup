@@ -13,7 +13,6 @@ import sys
 import uuid
 import errno
 import shutil
-import logging
 import tempfile
 import traceback
 
