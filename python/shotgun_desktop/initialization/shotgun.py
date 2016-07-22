@@ -12,8 +12,6 @@ import json
 import urllib
 import urllib2
 
-from shotgun_api3 import Shotgun
-
 from . import constants
 from distutils.version import LooseVersion
 from ..logger import get_logger
@@ -118,11 +116,15 @@ def get_or_create_script(connection):
 
 
 def get_app_store_credentials(connection, proxy):
-    """ Return the validated script for this site to connect to the app store """
+    """
+    Return the validated script for this site to connect to the app store.
+    """
     (script, key) = __get_app_store_key(connection)
 
     # connect to the app store
     try:
+        # Lazy-init since at import type it won't be defined.
+        from shotgun_api3 import Shotgun
         sg_app_store = Shotgun(constants.SGTK_APP_STORE, script, key, http_proxy=proxy)
 
         # pull down the full script information

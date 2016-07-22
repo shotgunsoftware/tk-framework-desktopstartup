@@ -21,22 +21,6 @@ import traceback
 import shotgun_desktop.splash
 from .logger import get_logger
 
-logger = get_logger()
-logger.info("------------------ Desktop Engine Startup ------------------")
-
-# Add shotgun_api3 bundled with tk-core to the path.
-shotgun_api3_path = os.path.normpath(os.path.join(os.path.split(__file__)[0], "..", "tk-core", "python", "tank_vendor"))
-sys.path.insert(0, shotgun_api3_path)
-logger.info("Using shotgun_api3 from '%s'" % shotgun_api3_path)
-# Add the Shotgun Desktop Server source to the Python path
-if "SGTK_DESKTOP_SERVER_LOCATION" in os.environ:
-    desktop_server_root = os.environ["SGTK_DESKTOP_SERVER_LOCATION"]
-else:
-    desktop_server_root = os.path.normpath(os.path.join(os.path.split(__file__)[0], "..", "server"))
-sys.path.insert(0, os.path.join(desktop_server_root, "python"))
-logger.info("Using browser integration from '%s'" % desktop_server_root)
-
-
 # now proceed with non builtin imports
 from PySide import QtCore, QtGui
 
@@ -56,6 +40,8 @@ import shutil
 from shotgun_desktop.errors import (ShotgunDesktopError, RequestRestartException, UpgradeEngineError,
                                     ToolkitDisabledError, UpdatePermissionsError, UpgradeCoreError,
                                     InvalidPipelineConfiguration, UnexpectedConfigFound)
+
+logger = get_logger()
 
 
 def __is_64bit_python():
@@ -1137,10 +1123,26 @@ def main(**kwargs):
 
     :returns: Error code for the process.
     """
-    logger.debug("Running main from %s" % __file__)
+
     app_bootstrap = _BootstrapProxy(kwargs["app_bootstrap"])
     app_bootstrap.add_logger_to_logfile(logger)
 
+    logger.info("------------------ Desktop Engine Startup ------------------")
+    logger.debug("Running main from %s" % __file__)
+
+    # Add shotgun_api3 bundled with tk-core to the path.
+    shotgun_api3_path = os.path.normpath(os.path.join(os.path.split(__file__)[0], "..", "tk-core", "python", "tank_vendor"))
+    sys.path.insert(0, shotgun_api3_path)
+    logger.info("Using shotgun_api3 from '%s'" % shotgun_api3_path)
+    # Add the Shotgun Desktop Server source to the Python path
+    if "SGTK_DESKTOP_SERVER_LOCATION" in os.environ:
+        desktop_server_root = os.environ["SGTK_DESKTOP_SERVER_LOCATION"]
+    else:
+        desktop_server_root = os.path.normpath(os.path.join(os.path.split(__file__)[0], "..", "server"))
+    sys.path.insert(0, os.path.join(desktop_server_root, "python"))
+    logger.info("Using browser integration from '%s'" % desktop_server_root)
+
+    # Reading user settings from disk.
     settings = Settings(app_bootstrap)
     settings.dump(logger)
 
