@@ -775,6 +775,12 @@ def __launch_app(app, splash, connection, app_bootstrap, server, settings):
 
     engine = sgtk.platform.start_engine("tk-desktop", tk, ctx)
 
+    # If the engine that just started up is using the legacy core logging code and our core has
+    # logging, tear it down.
+    if not __desktop_engine_uses_core_logging(engine) and __is_logging_supported(sgtk):
+        logger.info("Engine doesn't use core-based logging, so tearing-down core based logging.")
+        sgtk.LogManager().uninitialize_base_file_handler()
+
     if not __desktop_engine_supports_authentication_module(engine):
         raise UpgradeEngineError(
             "This version of the Shotgun Desktop only supports tk-desktop engine 2.0.0 and higher.",
