@@ -9,14 +9,14 @@
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
 import os
-import logging
 from distutils.version import LooseVersion
 from shotgun_desktop.location import get_location, write_location
 from shotgun_desktop.desktop_message_box import DesktopMessageBox
+from .logger import get_logger
 
 import httplib
 
-logger = logging.getLogger("tk-desktop.startup")
+logger = get_logger("upgrade_startup")
 
 
 def _supports_get_from_location_and_paths(sgtk):

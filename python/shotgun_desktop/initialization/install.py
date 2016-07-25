@@ -13,7 +13,6 @@ import sys
 import uuid
 import errno
 import shutil
-import logging
 import tempfile
 import traceback
 
@@ -21,8 +20,6 @@ from .zipfilehelper import unzip_file
 from distutils.version import LooseVersion
 
 from PySide import QtCore
-
-from shotgun_api3 import Shotgun
 
 from .. import utils
 from . import constants
@@ -225,6 +222,8 @@ class InstallThread(QtCore.QThread):
         # download latest core from the app store
         sg_studio_version = ".".join([str(x) for x in self._connection.server_info["version"]])
 
+        # Lazy-init since at import type it won't be defined.
+        from shotgun_api3 import Shotgun
         sg_app_store = Shotgun(
             constants.SGTK_APP_STORE, self._app_store_script, self._app_store_key,
             http_proxy=self._actual_app_store_http_proxy

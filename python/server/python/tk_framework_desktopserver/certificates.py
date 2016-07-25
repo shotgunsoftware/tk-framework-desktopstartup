@@ -106,6 +106,7 @@ class _CertificateHandler(object):
 
         # Do not use popen.check_call because it won't redirect stderr to stdout properly
         # and it can't close stdin which causes issues in certain configurations on Windows.
+        self._logger.debug("%s: %s" % (ctx.capitalize(), cmd))
         if sys.platform == "win32":
             # More on this Windows specific fix here: https://bugs.python.org/issue3905
             p = subprocess.Popen(
@@ -119,8 +120,8 @@ class _CertificateHandler(object):
         else:
             p = subprocess.Popen(cmd, stderr=subprocess.STDOUT, stdout=subprocess.PIPE, shell=True)
         stdout, _ = p.communicate()
+        self._logger.debug("Stdout:\n%s" % stdout)
         if p.returncode != 0:
-            self._logger.error("Unexpected output:\n%s" % stdout)
             raise CertificateRegistrationError("There was a problem %s." % ctx)
         return stdout
 
@@ -255,10 +256,17 @@ class _WindowsCertificateHandler(_CertificateHandler):
 
         :returns: True on success, False on failure.
         """
-        return self._check_call(
+        success = self._check_call(
             "registering the certificate",
             ("certutil", "-user", "-addstore", "root", self._cert_path.replace("/", "\\"))
         )
+        # On Windows, a Windows Server can push a group policy that prevents certificate registration
+        # from succeeding. When that happens, certutil actually silently fails. Detect this and
+        # report it.
+        if success and not self.is_registered():
+            raise CertificateRegistrationError(
+                "Certificate registration silently failed. Please contact support@shotgunsoftware.com."
+            )
 
     def unregister(self):
         """
