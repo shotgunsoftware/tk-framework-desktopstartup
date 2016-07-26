@@ -69,7 +69,7 @@ def _get_cache_location():
     return root
 
 
-def _get_site_cache_location(base_url):
+def _get_017_site_cache_location(base_url):
     """
     Returns the location of the site cache root based on a site.
 
@@ -81,6 +81,20 @@ def _get_site_cache_location(base_url):
         _get_cache_location(),
         # get site only; https://www.foo.com:8080 -> www.foo.com
         urlparse.urlparse(base_url)[1].split(":")[0].lower()
+    )
+
+def _get_018_site_cache_location(base_url):
+    """
+    Returns the location of the site cache root based on a site.
+
+    :param base_url: Site we need to compute the root path for.
+
+    :returns: An absolute path to the site cache root.
+    """
+    return os.path.join(
+        _get_cache_location(),
+        # get site only; https://www.foo.com:8080 -> www.foo.com
+        urlparse.urlparse(base_url)[1].split(":")[0].lower().replace(".shotgunstudio.com", "")
     )
 
 
@@ -106,10 +120,21 @@ def _get_site_authentication_file_location(base_url):
 
     :returns: Path to the login information.
     """
-    return os.path.join(
-        _get_site_cache_location(base_url),
+
+    # Try the new 0.18 location first, then try the 0.17 one afterwards.
+    session_file_018 = os.path.join(
+        _get_018_site_cache_location(base_url),
         _SESSION_CACHE_FILE_NAME
     )
+    session_file_017 = os.path.join(
+        _get_017_site_cache_location(base_url),
+        _SESSION_CACHE_FILE_NAME
+    )
+    for path in [session_file_018, session_file_017]:
+        if os.path.exists(path):
+            return path
+
+    return session_file_018
 
 
 def _ensure_folder_for_file(filepath):
