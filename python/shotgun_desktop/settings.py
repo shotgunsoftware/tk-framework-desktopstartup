@@ -58,17 +58,28 @@ class Settings(object):
         else:
             return os.path.join(bootstrap.get_app_root(), "config.ini")
 
-    def _get_user_dir_config_location(self, bootstrap):
+    def _get_desktop_dir_config_location(self, bootstrap):
         """
         :param bootstrap: The application bootstrap.
 
-        :returns: Path to the config.ini within the user folder.
+        :returns: Path to the config.ini within the desktop's user folder.
         """
         return os.path.join(
             bootstrap.get_shotgun_desktop_cache_location(),
             "config",
             "config.ini"
         )
+
+    def _get_user_dir_config_location(self, bootstrap):
+        """
+        :param bootstrap: The application bootstrap.
+
+        :returns: Path to the config.ini within the user folder.
+        """
+        if sys.platform == "darwin":
+            return os.path.expanduser("~/Library/Application Support/Shotgun/config.ini")
+        else:
+            return os.path.dirname(bootstrap.get_shotgun_desktop_cache_location())
 
     def get_config_location(self):
         """
@@ -79,14 +90,18 @@ class Settings(object):
         :returns: The location where to read the configuration file from.
         """
         # Look inside the user folder. If it exists, return that path.
-        location = self._get_user_dir_config_location(self._bootstrap)
-        if os.path.exists(location):
-            return location
 
-        return os.environ.get(
-            "SGTK_DESKTOP_CONFIG_LOCATION",
-            self._get_install_dir_config_location(self._bootstrap)
-        )
+        file_locations = [
+            os.environ.get("SGTK_CONFIG_LOCATION"),
+            os.environ.get("SGTK_DESKTOP_CONFIG_LOCATION"),
+            self._get_user_dir_config_location(self._bootstrap),
+            self._get_desktop_dir_config_location(self._bootstrap),
+        ]
+        for loc in file_locations:
+            if loc and os.path.exists(loc):
+                return loc
+
+        return self._get_install_dir_config_location(self._bootstrap)
 
     def _load_config(self, path):
         """

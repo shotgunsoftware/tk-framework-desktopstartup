@@ -63,4 +63,4 @@ class ShotgunSystemTrayIcon(QtGui.QSystemTrayIcon):
         """
         When About is selected, launch the Shotgun browser integration support page.
         """
-        QtGui.QDesktopServices.openUrl("https://support.shotgunsoftware.com/entries/95402178")
+        QtGui.QDesktopServices.openUrl("https://support.shotgunsoftware.com/hc/en-us/articles/219030858")
