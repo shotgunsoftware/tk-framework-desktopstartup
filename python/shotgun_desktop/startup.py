@@ -1137,9 +1137,6 @@ def main(**kwargs):
     sys.path.insert(0, os.path.join(desktop_server_root, "python"))
     logger.info("Using browser integration from '%s'" % desktop_server_root)
 
-    # Reading user settings from disk.
-    settings = Settings(app_bootstrap)
-    settings.dump(logger)
 
     # Create some ui related objects
     app, splash = __init_app()
@@ -1153,6 +1150,10 @@ def main(**kwargs):
     # We have to import this in a separate try catch block because we'll be using
     # shotgun_authentication in the following catch statements.
     try:
+        # Reading user settings from disk.
+        settings = Settings(app_bootstrap)
+        settings.dump(logger)
+    
         # get the shotgun authentication module.
         shotgun_authentication = __import_shotgun_authentication_from_path(app_bootstrap)
     except Exception, e:

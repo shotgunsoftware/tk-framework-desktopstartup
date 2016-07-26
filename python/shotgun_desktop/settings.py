@@ -12,6 +12,7 @@ import sys
 import os
 import ConfigParser
 from .logger import get_logger
+from .errors import EnvironmentVariableFileLookupError
 
 logger = get_logger("settings")
 
@@ -81,6 +82,30 @@ class Settings(object):
         else:
             return os.path.dirname(bootstrap.get_shotgun_desktop_cache_location())
 
+    def _evaluate_env_var(self, var_name):
+        """
+        Evaluates an environment variable.
+
+        :param var_name: Variable to evaluate.
+
+        :returns: Value if set, None otherwise.
+
+        :raises EnvironmentVariableFileLookupError: Raised if the variable is set, but the file doesn't
+                                                    exist.
+        """
+        if var_name not in os.environ:
+            return None
+
+        # If the path doesn't exist, raise an error.
+        raw_path = os.environ[var_name]
+        path = os.path.expanduser(raw_path)
+        path = os.path.expandvars(path)
+        if not os.path.exists(path):
+            raise EnvironmentVariableFileLookupError(var_name, raw_path)
+
+        # Path is set and exist, we've found it!
+        return path
+
     def get_config_location(self):
         """
         Retrieves the location of the config.ini file. It will first look inside
@@ -92,8 +117,8 @@ class Settings(object):
         # Look inside the user folder. If it exists, return that path.
 
         file_locations = [
-            os.environ.get("SGTK_CONFIG_LOCATION"),
-            os.environ.get("SGTK_DESKTOP_CONFIG_LOCATION"),
+            self._evaluate_env_var("SGTK_CONFIG_LOCATION"),
+            self._evaluate_env_var("SGTK_DESKTOP_CONFIG_LOCATION"),
             self._get_user_dir_config_location(self._bootstrap),
             self._get_desktop_dir_config_location(self._bootstrap),
         ]
