@@ -263,20 +263,10 @@ class _WindowsCertificateHandler(_CertificateHandler):
         # On Windows, a Windows Server can push a group policy that prevents certificate registration
         # from succeeding. When that happens, certutil actually silently fails. Detect this and
         # report it.
-        #
-        # Manne: Emergency patch to unblock clients who are suddenly getting this.
-        #        it seems on some machines, is_registered() returns false, even when
-        #        the test is successful.
-        #
-        #        is_registered() runs the command `certutil -user -store root`
-        #        which for (some clients) returns `CertUtil: -store La commande s'est terminée correctement.`
-        #        but the logic looks for the phrase shotgun in order to determine success, which is obviously
-        #        not part of the output returned fromt the command.
-        #
-        #if success and not self.is_registered():
-        #    raise CertificateRegistrationError(
-        #        "Certificate registration silently failed. Please contact support@shotgunsoftware.com."
-        #    )
+        if success and not self.is_registered():
+            raise CertificateRegistrationError(
+                "Certificate registration silently failed. Please contact support@shotgunsoftware.com."
+            )
 
     def unregister(self):
         """
