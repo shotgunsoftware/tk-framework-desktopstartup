@@ -269,9 +269,9 @@ class _WindowsCertificateHandler(_CertificateHandler):
         #        the test is successful.
         #
         #        is_registered() runs the command `certutil -user -store root`
-        #        which for (some clients) returns `CertUtil: -store La commande s'est termine correctement.`
+        #        which for (some clients) returns `CertUtil: -store La commande s'est terminée correctement.`
         #        but the logic looks for the phrase shotgun in order to determine success, which is obviously
-        #        not part of the output returned from the command.
+        #        not part of the output returned fromt the command.
         #
         #if success and not self.is_registered():
         #    raise CertificateRegistrationError(
