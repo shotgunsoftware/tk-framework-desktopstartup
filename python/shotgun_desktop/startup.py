@@ -80,8 +80,7 @@ def __desktop_engine_supports_authentication_module(engine):
 
 def __desktop_engine_uses_core_logging(engine):
     """
-    Tests if the engine uses the logging code from core. All versions above or equal to v2.0.14 support the
-    feature.
+    Tests if the engine uses the logging code from core. All versions above 3.0.0 suppor this feature.
 
     :param engine: The desktop engine to test.
 
@@ -90,7 +89,7 @@ def __desktop_engine_uses_core_logging(engine):
     if engine.version.lower() == "undefined":
         logger.warning("The version of the tk-desktop engine is undefined. Assuming logging is supported.")
         return True
-    return LooseVersion(engine.version) >= "v2.0.14"
+    return LooseVersion(engine.version) >= "v3.0.0"
 
 
 def __supports_pipeline_configuration_upgrade(pipeline_configuration):
