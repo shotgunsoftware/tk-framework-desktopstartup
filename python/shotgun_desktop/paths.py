@@ -11,9 +11,9 @@
 import os
 import sys
 import urlparse
-from .logger import get_logger
+import logging
 
-logger = get_logger("paths")
+logger = logging.getLogger("tk-desktop.paths")
 
 def get_python_path():
     """ returns the path to the default python interpreter """

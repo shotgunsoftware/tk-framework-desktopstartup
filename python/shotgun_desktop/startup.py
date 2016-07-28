@@ -18,8 +18,24 @@ import struct
 import traceback
 
 # initialize logging
+import logging
 import shotgun_desktop.splash
-from .logger import get_logger
+
+logger = logging.getLogger("tk-desktop.startup")
+logger.info("------------------ Desktop Engine Startup ------------------")
+
+# Add shotgun_api3 bundled with tk-core to the path.
+shotgun_api3_path = os.path.normpath(os.path.join(os.path.split(__file__)[0], "..", "tk-core", "python", "tank_vendor"))
+sys.path.insert(0, shotgun_api3_path)
+logger.info("Using shotgun_api3 from '%s'" % shotgun_api3_path)
+# Add the Shotgun Desktop Server source to the Python path
+if "SGTK_DESKTOP_SERVER_LOCATION" in os.environ:
+    desktop_server_root = os.environ["SGTK_DESKTOP_SERVER_LOCATION"]
+else:
+    desktop_server_root = os.path.normpath(os.path.join(os.path.split(__file__)[0], "..", "server"))
+sys.path.insert(0, os.path.join(desktop_server_root, "python"))
+logger.info("Using browser integration from '%s'" % desktop_server_root)
+
 
 # now proceed with non builtin imports
 from PySide import QtCore, QtGui
@@ -40,8 +56,6 @@ import shutil
 from shotgun_desktop.errors import (ShotgunDesktopError, RequestRestartException, UpgradeEngineError,
                                     ToolkitDisabledError, UpdatePermissionsError, UpgradeCoreError,
                                     InvalidPipelineConfiguration, UnexpectedConfigFound)
-
-logger = get_logger()
 
 
 def __is_64bit_python():
@@ -72,25 +86,10 @@ def __desktop_engine_supports_authentication_module(engine):
 
     :returns: True if the engine supports the authentication module, False otherwise.
     """
-    if engine.version.lower() == "undefined":
-        logger.warning("The version of the tk-desktop engine is undefined. Assuming authentication is supported.")
+    if engine.version.lower() == 'undefined':
+        logger.warning("The version of the tk-desktop engine is undefined.")
         return True
     return LooseVersion(engine.version) >= "v2.0.0"
-
-
-def __desktop_engine_uses_core_logging(engine):
-    """
-    Tests if the engine uses the logging code from core. All versions above or equal to v2.0.14 support the
-    feature.
-
-    :param engine: The desktop engine to test.
-
-    :returns: True if the engine supports logging using core, False otherwise.
-    """
-    if engine.version.lower() == "undefined":
-        logger.warning("The version of the tk-desktop engine is undefined. Assuming logging is supported.")
-        return True
-    return LooseVersion(engine.version) >= "v2.0.14"
 
 
 def __supports_pipeline_configuration_upgrade(pipeline_configuration):
@@ -147,57 +146,45 @@ def is_toolkit_already_configured(site_configuration_path):
     return False
 
 
-def __is_logging_supported(sgtk):
-    """
-    :returns: True if LogManager.initialize_base_file_handler_from_path exists, False otherwise.
-    """
-    return hasattr(sgtk, "LogManager") and hasattr(sgtk.LogManager, "initialize_base_file_handler_from_path")
-
-
-def __initialize_sgtk(sgtk, app_bootstrap):
+def __initialize_sgtk(sgtk, user, app_bootstrap):
     """
     Sets the authenticated user if available. Also registers the authentication module's
     logger with the Desktop's.
 
     :param sgtk: The Toolkit API handle.
+    :param user: ShotgunUser from authentication.
     :param app_bootstrap: The application bootstrap instance.
     """
-
-    # if we're importing a core that supports logging, tear down our logging
-    # to use the new one. The initial release of 0.18 didn't include the initialize_base_file_handler_from_path,
-    # so test for that as well.
-    if __is_logging_supported(sgtk):
-        logger.debug("Found a core that supports logging.")
-        # Tear down the logging
-        app_bootstrap.tear_down_logging()
-
-        sgtk.LogManager().initialize_base_file_handler_from_path(
-            app_bootstrap.get_logfile_location()
-        )
-        # Builtin core doesn't log debug messages by default, but the Shotgun Desktop does,
-        # so turn it on.
-        sgtk.LogManager().global_debug = True
-        logger.debug("Switch to core-based logging completed.")
 
     # If the version of Toolkit supports the new authentication mechanism
     if __toolkit_supports_authentication_module(sgtk):
         # import authentication
         from tank_vendor import shotgun_authentication
-
-        # Add the module to the log file, only if core isn't already logging for us.
-        if not __is_logging_supported(sgtk):
-            app_bootstrap.add_logger_to_logfile(shotgun_authentication.get_logger())
+        # Add the module to the log file.
+        app_bootstrap.add_logger_to_logfile(shotgun_authentication.get_logger())
 
         dm = sgtk.util.CoreDefaultsManager()
         sg_auth = shotgun_authentication.ShotgunAuthenticator(dm)
 
-        # get the current user
-        user = sg_auth.get_default_user()
-        logger.info("Setting current user: %r" % user)
-        sgtk.set_authenticated_user(user)
+        # FIXME: Because we can't integrate core 0.18 into Desktop yet, we have to assume the core
+        # we are switching to might not be looking at the right location for the session cache and have
+        # to force it to take out user instance.
+
+        # get the current user for the pipeline.
+        core_user = sg_auth.get_default_user()
+
+        # If there is a user and it's a script user, use that
+        if core_user and not core_user.login:
+            logger.info("Setting current user: %r" % user)
+            sgtk.set_authenticated_user(core_user)
+        else:
+            # We don't care what this core reports as the current user. It could be
+            # an old core that doesn't look at the new location for the current user. We need to use
+            # the one we authenticated with.
+            sgtk.set_authenticated_user(user)
 
 
-def __get_initialized_sgtk(path, app_bootstrap):
+def __get_initialized_sgtk(path, user, app_bootstrap):
     """
     Imports Toolkit from the given path. If that version of Toolkit supports the
     shotgun_authentication module, the authenticated user will be set.
@@ -208,7 +195,7 @@ def __get_initialized_sgtk(path, app_bootstrap):
     :returns: The imported sgtk module.
     """
     sgtk = __import_sgtk_from_path(path)
-    __initialize_sgtk(sgtk, app_bootstrap)
+    __initialize_sgtk(sgtk, user, app_bootstrap)
     return sgtk
 
 
@@ -422,9 +409,7 @@ def __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootst
             user = shotgun_authenticator.get_user()
     except shotgun_authentication.AuthenticationCancelled:
         return None
-    else:
-        connection = user.create_sg_connection()
-    return connection
+    return user
 
 
 def __do_login_or_tray(
@@ -458,10 +443,10 @@ def __do_login_or_tray(
 
     # Loop until there is a connection or the user wants to quit.
     while True:
-        connection = __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootstrap)
+        user = __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootstrap)
         # If we logged in, return the connection.
-        if connection:
-            return connection
+        if user:
+            return user
         else:
             # Now tell the user the Desktop is running in the tray.
             if __run_with_systray() == SystrayEventLoop.CLOSE_APP:
@@ -504,20 +489,22 @@ def __extract_command_line_argument(arg_name):
     return is_set
 
 
-def __launch_app(app, splash, connection, app_bootstrap, server, settings):
+def __launch_app(app, splash, user, app_bootstrap, server, settings):
     """
     Shows the splash screen, optionally downloads and configures Toolkit, imports it, optionally
     updates it and then launches the desktop engine.
 
     :param app: Application object for event processing.
     :param splash: Splash dialog to update user on what is currently going on
-    :param connection: Connection to the Shotgun server.
+    :param user: ShotgunUser object of the logged in user.
     :param server: The tk_framework_desktopserver.Server instance.
     :param settings: The application's settings.
 
     :returns: The error code to return to the shell.
     """
     # show the splash screen
+    connection = user.create_sg_connection()
+
     splash.show()
     splash.set_message("Looking up site configuration.")
     app.processEvents()
@@ -560,7 +547,7 @@ def __launch_app(app, splash, connection, app_bootstrap, server, settings):
     else:
         # Toolkit was imported, we need to initialize it now.
         if toolkit_imported:
-            __initialize_sgtk(sgtk, app_bootstrap)
+            __initialize_sgtk(sgtk, user, app_bootstrap)
 
     if not toolkit_imported:
         # sgtk not available. initialize core
@@ -583,7 +570,7 @@ def __launch_app(app, splash, connection, app_bootstrap, server, settings):
             # try again after the initialization is done
             logger.debug("Importing sgtk after initialization")
 
-            sgtk = __get_initialized_sgtk(core_path, app_bootstrap)
+            sgtk = __get_initialized_sgtk(core_path, user, app_bootstrap)
 
             if sgtk is None:
                 # Generate a generic error message, which will suggest to contact support.
@@ -661,7 +648,7 @@ def __launch_app(app, splash, connection, app_bootstrap, server, settings):
                     raise
 
             # and now try to load up sgtk through the config again
-            sgtk = __get_initialized_sgtk(default_site_config, app_bootstrap)
+            sgtk = __get_initialized_sgtk(default_site_config, user, app_bootstrap)
             tk = sgtk.sgtk_from_path(default_site_config)
 
             # now localize the core to the config
@@ -766,14 +753,6 @@ def __launch_app(app, splash, connection, app_bootstrap, server, settings):
     app.processEvents()
 
     ctx = tk.context_empty()
-
-    # We're about to start the engine and at this point the Desktop should use be using the logging
-    # behavior of the engine, so disable global logging and let the engine decide if it should be
-    # done.
-    if __is_logging_supported(sgtk):
-        logger.info("We're about to launch the engine, turning off global debug.")
-        sgtk.LogManager().global_debug = False
-
     engine = sgtk.platform.start_engine("tk-desktop", tk, ctx)
 
     if not __desktop_engine_supports_authentication_module(engine):
@@ -782,9 +761,7 @@ def __launch_app(app, splash, connection, app_bootstrap, server, settings):
             default_site_config
         )
 
-    # engine will take over logging. Note that when using core 0.18 this will have already been torn down
-    # and will be a no-op, but for previous versions of core, this is where we stop using the bootstrap's
-    # logging and start using the engine's.
+    # engine will take over logging
     app_bootstrap.tear_down_logging()
 
     # reset PYTHONPATH and PYTHONHOME if they were overridden by the application
@@ -1118,24 +1095,8 @@ def main(**kwargs):
 
     :returns: Error code for the process.
     """
-
-    app_bootstrap = _BootstrapProxy(kwargs["app_bootstrap"])
-    app_bootstrap.add_logger_to_logfile(logger)
-
-    logger.info("------------------ Desktop Engine Startup ------------------")
     logger.debug("Running main from %s" % __file__)
-
-    # Add shotgun_api3 bundled with tk-core to the path.
-    shotgun_api3_path = os.path.normpath(os.path.join(os.path.split(__file__)[0], "..", "tk-core", "python", "tank_vendor"))
-    sys.path.insert(0, shotgun_api3_path)
-    logger.info("Using shotgun_api3 from '%s'" % shotgun_api3_path)
-    # Add the Shotgun Desktop Server source to the Python path
-    if "SGTK_DESKTOP_SERVER_LOCATION" in os.environ:
-        desktop_server_root = os.environ["SGTK_DESKTOP_SERVER_LOCATION"]
-    else:
-        desktop_server_root = os.path.normpath(os.path.join(os.path.split(__file__)[0], "..", "server"))
-    sys.path.insert(0, os.path.join(desktop_server_root, "python"))
-    logger.info("Using browser integration from '%s'" % desktop_server_root)
+    app_bootstrap = _BootstrapProxy(kwargs["app_bootstrap"])
 
 
     # Create some ui related objects
@@ -1182,7 +1143,7 @@ def main(**kwargs):
         # If the server is up and running, we want the workflow where we can either not login
         # and keep the websocket running in the background or choose to login
         if server:
-            connection = __do_login_or_tray(
+            user = __do_login_or_tray(
                 splash,
                 shotgun_authentication,
                 shotgun_authenticator,
@@ -1191,7 +1152,7 @@ def main(**kwargs):
             )
         else:
             # The server is not running, so simply offer to login.
-            connection = __do_login(
+            user = __do_login(
                 splash,
                 shotgun_authentication,
                 shotgun_authenticator,
@@ -1199,7 +1160,7 @@ def main(**kwargs):
             )
 
         # If we didn't authenticate a user
-        if not connection:
+        if not user:
             # We're done for the day.
             logger.info("Login canceled. Quitting.")
             return 0
@@ -1209,7 +1170,7 @@ def main(**kwargs):
             return __launch_app(
                 app,
                 splash,
-                connection,
+                user,
                 app_bootstrap,
                 server,
                 settings

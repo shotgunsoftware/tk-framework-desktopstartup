@@ -11,6 +11,8 @@
 from PySide import QtCore, QtGui
 import sys
 
+_BROWSER_INTEGRATION_SUPPORT_URL = "https://support.shotgunsoftware.com/hc/en-us/articles/219030858"
+
 
 class ShotgunSystemTrayIcon(QtGui.QSystemTrayIcon):
     """
@@ -63,4 +65,4 @@ class ShotgunSystemTrayIcon(QtGui.QSystemTrayIcon):
         """
         When About is selected, launch the Shotgun browser integration support page.
         """
-        QtGui.QDesktopServices.openUrl("https://support.shotgunsoftware.com/hc/en-us/articles/219030858")
+        QtGui.QDesktopServices.openUrl(_BROWSER_INTEGRATION_SUPPORT_URL)

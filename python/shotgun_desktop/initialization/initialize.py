@@ -10,17 +10,17 @@
 
 import os
 import sys
+import logging
 import tempfile
 
 from . import install
 from . import shotgun
 from .. import paths
-from .. logger import get_logger
 
 
 def initialize(splash, connection, app_store_http_proxy):
     """ initialize toolkit for this computer for a single site """
-    logger = get_logger("initialization")
+    logger = logging.getLogger("tk-desktop.initialization")
 
     # grab the paths that will be used during the install
     temp_dir = tempfile.mkdtemp(prefix="tk-desktop")

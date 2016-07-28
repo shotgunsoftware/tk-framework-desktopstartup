@@ -20,6 +20,6 @@ def get_logger(name=None):
     :returns: A Python logger named tk-desktop.<name>
     """
     if name:
-        return logging.getLogger("sgtk.ext.tk-framework-desktopstartup.%s" % name)
+        return logging.getLogger("tk-desktop.%s" % name)
     else:
-        return logging.getLogger("sgtk.ext.tk-framework-desktopstartup")
+        return logging.getLogger("tk-desktop")

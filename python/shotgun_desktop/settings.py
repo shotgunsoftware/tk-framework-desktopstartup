@@ -12,7 +12,7 @@ import sys
 import os
 import ConfigParser
 from .logger import get_logger
-from .errors import EnvironmentVariableFileLookupError
+from .errors import EnvironmentVariableFileLookupError, ShotgunDesktopError
 
 logger = get_logger("settings")
 
@@ -78,9 +78,13 @@ class Settings(object):
         :returns: Path to the config.ini within the user folder.
         """
         if sys.platform == "darwin":
-            return os.path.expanduser("~/Library/Application Support/Shotgun/config.ini")
+            return os.path.expanduser("~/Library/Preferences/Shotgun/toolkit.ini")
+        elif sys.platform == "win32":
+            return os.path.join(os.environ.get("APPDATA", "APPDATA_NOT_SET"), "Shotgun", "Preferences", "toolkit.ini")
+        elif sys.platform.startswith("linux"):
+            return os.path.expanduser("~/.shotgun/preferences/toolkit.ini")
         else:
-            return os.path.dirname(bootstrap.get_shotgun_desktop_cache_location())
+            raise ShotgunDesktopError("Unknown platform: %s" % sys.platform)
 
     def _evaluate_env_var(self, var_name):
         """
@@ -108,16 +112,17 @@ class Settings(object):
 
     def get_config_location(self):
         """
-        Retrieves the location of the config.ini file. It will first look inside
-        the user folder, then look at the  SGTK_DESKTOP_CONFIG_LOCATION environment
-        variable and finally in the installation folder.
+        Retrieves the location of the config.ini file. It will first look inside at the
+        SGTK_PREFERENCES_LOCATION variable, then SGTK_DESKTOP_CONFIG_LOCATION variable,
+        then the user preferences folder, then the desktop preferences folder and
+        finally the installation directory.
 
         :returns: The location where to read the configuration file from.
         """
         # Look inside the user folder. If it exists, return that path.
 
         file_locations = [
-            self._evaluate_env_var("SGTK_CONFIG_LOCATION"),
+            self._evaluate_env_var("SGTK_PREFERENCES_LOCATION"),
             self._evaluate_env_var("SGTK_DESKTOP_CONFIG_LOCATION"),
             self._get_user_dir_config_location(self._bootstrap),
             self._get_desktop_dir_config_location(self._bootstrap),
