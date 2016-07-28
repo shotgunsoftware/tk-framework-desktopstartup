@@ -166,6 +166,10 @@ def __initialize_sgtk(sgtk, user, app_bootstrap):
         dm = sgtk.util.CoreDefaultsManager()
         sg_auth = shotgun_authentication.ShotgunAuthenticator(dm)
 
+        # FIXME: Because we can't integrate core 0.18 into Desktop yet, we have to assume the core
+        # we are switching to might not be looking at the right location for the session cache and have
+        # to force it to take out user instance.
+
         # get the current user for the pipeline.
         core_user = sg_auth.get_default_user()
 

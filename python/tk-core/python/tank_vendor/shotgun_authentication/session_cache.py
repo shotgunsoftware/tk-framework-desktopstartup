@@ -69,6 +69,9 @@ def _get_cache_location():
     return root
 
 
+# FIXME: Because we can't integrate core 0.18 into Desktop yet, we have to resort to duplicating logic.
+# This should go away in Desktop 2.0.
+
 def _get_017_site_cache_location(base_url):
     """
     Returns the location of the site cache root based on a site.
