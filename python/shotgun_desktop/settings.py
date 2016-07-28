@@ -11,9 +11,10 @@
 import sys
 import os
 import ConfigParser
-import logging
+from .logger import get_logger
+from .errors import EnvironmentVariableFileLookupError, ShotgunDesktopError
 
-logger = logging.getLogger("tk-desktop.settings")
+logger = get_logger("settings")
 
 
 class Settings(object):
@@ -58,11 +59,11 @@ class Settings(object):
         else:
             return os.path.join(bootstrap.get_app_root(), "config.ini")
 
-    def _get_user_dir_config_location(self, bootstrap):
+    def _get_desktop_dir_config_location(self, bootstrap):
         """
         :param bootstrap: The application bootstrap.
 
-        :returns: Path to the config.ini within the user folder.
+        :returns: Path to the config.ini within the desktop's user folder.
         """
         return os.path.join(
             bootstrap.get_shotgun_desktop_cache_location(),
@@ -70,23 +71,67 @@ class Settings(object):
             "config.ini"
         )
 
+    def _get_user_dir_config_location(self, bootstrap):
+        """
+        :param bootstrap: The application bootstrap.
+
+        :returns: Path to the config.ini within the user folder.
+        """
+        if sys.platform == "darwin":
+            return os.path.expanduser("~/Library/Preferences/Shotgun/toolkit.ini")
+        elif sys.platform == "win32":
+            return os.path.join(os.environ.get("APPDATA", "APPDATA_NOT_SET"), "Shotgun", "Preferences", "toolkit.ini")
+        elif sys.platform.startswith("linux"):
+            return os.path.expanduser("~/.shotgun/preferences/toolkit.ini")
+        else:
+            raise ShotgunDesktopError("Unknown platform: %s" % sys.platform)
+
+    def _evaluate_env_var(self, var_name):
+        """
+        Evaluates an environment variable.
+
+        :param var_name: Variable to evaluate.
+
+        :returns: Value if set, None otherwise.
+
+        :raises EnvironmentVariableFileLookupError: Raised if the variable is set, but the file doesn't
+                                                    exist.
+        """
+        if var_name not in os.environ:
+            return None
+
+        # If the path doesn't exist, raise an error.
+        raw_path = os.environ[var_name]
+        path = os.path.expanduser(raw_path)
+        path = os.path.expandvars(path)
+        if not os.path.exists(path):
+            raise EnvironmentVariableFileLookupError(var_name, raw_path)
+
+        # Path is set and exist, we've found it!
+        return path
+
     def get_config_location(self):
         """
-        Retrieves the location of the config.ini file. It will first look inside
-        the user folder, then look at the  SGTK_DESKTOP_CONFIG_LOCATION environment
-        variable and finally in the installation folder.
+        Retrieves the location of the config.ini file. It will first look inside at the
+        SGTK_PREFERENCES_LOCATION variable, then SGTK_DESKTOP_CONFIG_LOCATION variable,
+        then the user preferences folder, then the desktop preferences folder and
+        finally the installation directory.
 
         :returns: The location where to read the configuration file from.
         """
         # Look inside the user folder. If it exists, return that path.
-        location = self._get_user_dir_config_location(self._bootstrap)
-        if os.path.exists(location):
-            return location
 
-        return os.environ.get(
-            "SGTK_DESKTOP_CONFIG_LOCATION",
-            self._get_install_dir_config_location(self._bootstrap)
-        )
+        file_locations = [
+            self._evaluate_env_var("SGTK_PREFERENCES_LOCATION"),
+            self._evaluate_env_var("SGTK_DESKTOP_CONFIG_LOCATION"),
+            self._get_user_dir_config_location(self._bootstrap),
+            self._get_desktop_dir_config_location(self._bootstrap),
+        ]
+        for loc in file_locations:
+            if loc and os.path.exists(loc):
+                return loc
+
+        return self._get_install_dir_config_location(self._bootstrap)
 
     def _load_config(self, path):
         """
