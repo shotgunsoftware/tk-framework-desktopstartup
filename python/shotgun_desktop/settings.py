@@ -11,9 +11,9 @@
 import sys
 import os
 import ConfigParser
-from .logger import get_logger
+import logging
 
-logger = get_logger("settings")
+logger = logging.getLogger("tk-desktop.settings")
 
 
 class Settings(object):

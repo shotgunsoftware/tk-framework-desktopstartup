@@ -18,8 +18,24 @@ import struct
 import traceback
 
 # initialize logging
+import logging
 import shotgun_desktop.splash
-from .logger import get_logger
+
+logger = logging.getLogger("tk-desktop.startup")
+logger.info("------------------ Desktop Engine Startup ------------------")
+
+# Add shotgun_api3 bundled with tk-core to the path.
+shotgun_api3_path = os.path.normpath(os.path.join(os.path.split(__file__)[0], "..", "tk-core", "python", "tank_vendor"))
+sys.path.insert(0, shotgun_api3_path)
+logger.info("Using shotgun_api3 from '%s'" % shotgun_api3_path)
+# Add the Shotgun Desktop Server source to the Python path
+if "SGTK_DESKTOP_SERVER_LOCATION" in os.environ:
+    desktop_server_root = os.environ["SGTK_DESKTOP_SERVER_LOCATION"]
+else:
+    desktop_server_root = os.path.normpath(os.path.join(os.path.split(__file__)[0], "..", "server"))
+sys.path.insert(0, os.path.join(desktop_server_root, "python"))
+logger.info("Using browser integration from '%s'" % desktop_server_root)
+
 
 # now proceed with non builtin imports
 from PySide import QtCore, QtGui
@@ -40,8 +56,6 @@ import shutil
 from shotgun_desktop.errors import (ShotgunDesktopError, RequestRestartException, UpgradeEngineError,
                                     ToolkitDisabledError, UpdatePermissionsError, UpgradeCoreError,
                                     InvalidPipelineConfiguration, UnexpectedConfigFound)
-
-logger = get_logger()
 
 
 def __is_64bit_python():
@@ -72,24 +86,10 @@ def __desktop_engine_supports_authentication_module(engine):
 
     :returns: True if the engine supports the authentication module, False otherwise.
     """
-    if engine.version.lower() == "undefined":
-        logger.warning("The version of the tk-desktop engine is undefined. Assuming authentication is supported.")
+    if engine.version.lower() == 'undefined':
+        logger.warning("The version of the tk-desktop engine is undefined.")
         return True
     return LooseVersion(engine.version) >= "v2.0.0"
-
-
-def __desktop_engine_uses_core_logging(engine):
-    """
-    Tests if the engine uses the logging code from core. All versions above 3.0.0 suppor this feature.
-
-    :param engine: The desktop engine to test.
-
-    :returns: True if the engine supports logging using core, False otherwise.
-    """
-    if engine.version.lower() == "undefined":
-        logger.warning("The version of the tk-desktop engine is undefined. Assuming logging is supported.")
-        return True
-    return LooseVersion(engine.version) >= "v3.0.0"
 
 
 def __supports_pipeline_configuration_upgrade(pipeline_configuration):
@@ -146,14 +146,7 @@ def is_toolkit_already_configured(site_configuration_path):
     return False
 
 
-def __is_logging_supported(sgtk):
-    """
-    :returns: True if LogManager.initialize_base_file_handler_from_path exists, False otherwise.
-    """
-    return hasattr(sgtk, "LogManager") and hasattr(sgtk.LogManager, "initialize_base_file_handler_from_path")
-
-
-def __initialize_sgtk(sgtk, app_bootstrap):
+def __initialize_sgtk_authentication(sgtk, app_bootstrap):
     """
     Sets the authenticated user if available. Also registers the authentication module's
     logger with the Desktop's.
@@ -162,30 +155,12 @@ def __initialize_sgtk(sgtk, app_bootstrap):
     :param app_bootstrap: The application bootstrap instance.
     """
 
-    # if we're importing a core that supports logging, tear down our logging
-    # to use the new one. The initial release of 0.18 didn't include the initialize_base_file_handler_from_path,
-    # so test for that as well.
-    if __is_logging_supported(sgtk):
-        logger.debug("Found a core that supports logging.")
-        # Tear down the logging
-        app_bootstrap.tear_down_logging()
-
-        sgtk.LogManager().initialize_base_file_handler_from_path(
-            app_bootstrap.get_logfile_location()
-        )
-        # Builtin core doesn't log debug messages by default, but the Shotgun Desktop does,
-        # so turn it on.
-        sgtk.LogManager().global_debug = True
-        logger.debug("Switch to core-based logging completed.")
-
     # If the version of Toolkit supports the new authentication mechanism
     if __toolkit_supports_authentication_module(sgtk):
         # import authentication
         from tank_vendor import shotgun_authentication
-
-        # Add the module to the log file, only if core isn't already logging for us.
-        if not __is_logging_supported(sgtk):
-            app_bootstrap.add_logger_to_logfile(shotgun_authentication.get_logger())
+        # Add the module to the log file.
+        app_bootstrap.add_logger_to_logfile(shotgun_authentication.get_logger())
 
         dm = sgtk.util.CoreDefaultsManager()
         sg_auth = shotgun_authentication.ShotgunAuthenticator(dm)
@@ -207,7 +182,7 @@ def __get_initialized_sgtk(path, app_bootstrap):
     :returns: The imported sgtk module.
     """
     sgtk = __import_sgtk_from_path(path)
-    __initialize_sgtk(sgtk, app_bootstrap)
+    __initialize_sgtk_authentication(sgtk, app_bootstrap)
     return sgtk
 
 
@@ -559,7 +534,7 @@ def __launch_app(app, splash, connection, app_bootstrap, server, settings):
     else:
         # Toolkit was imported, we need to initialize it now.
         if toolkit_imported:
-            __initialize_sgtk(sgtk, app_bootstrap)
+            __initialize_sgtk_authentication(sgtk, app_bootstrap)
 
     if not toolkit_imported:
         # sgtk not available. initialize core
@@ -765,14 +740,6 @@ def __launch_app(app, splash, connection, app_bootstrap, server, settings):
     app.processEvents()
 
     ctx = tk.context_empty()
-
-    # We're about to start the engine and at this point the Desktop should use be using the logging
-    # behavior of the engine, so disable global logging and let the engine decide if it should be
-    # done.
-    if __is_logging_supported(sgtk):
-        logger.info("We're about to launch the engine, turning off global debug.")
-        sgtk.LogManager().global_debug = False
-
     engine = sgtk.platform.start_engine("tk-desktop", tk, ctx)
 
     if not __desktop_engine_supports_authentication_module(engine):
@@ -781,9 +748,7 @@ def __launch_app(app, splash, connection, app_bootstrap, server, settings):
             default_site_config
         )
 
-    # engine will take over logging. Note that when using core 0.18 this will have already been torn down
-    # and will be a no-op, but for previous versions of core, this is where we stop using the bootstrap's
-    # logging and start using the engine's.
+    # engine will take over logging
     app_bootstrap.tear_down_logging()
 
     # reset PYTHONPATH and PYTHONHOME if they were overridden by the application
@@ -1117,26 +1082,9 @@ def main(**kwargs):
 
     :returns: Error code for the process.
     """
-
-    app_bootstrap = _BootstrapProxy(kwargs["app_bootstrap"])
-    app_bootstrap.add_logger_to_logfile(logger)
-
-    logger.info("------------------ Desktop Engine Startup ------------------")
     logger.debug("Running main from %s" % __file__)
+    app_bootstrap = _BootstrapProxy(kwargs["app_bootstrap"])
 
-    # Add shotgun_api3 bundled with tk-core to the path.
-    shotgun_api3_path = os.path.normpath(os.path.join(os.path.split(__file__)[0], "..", "tk-core", "python", "tank_vendor"))
-    sys.path.insert(0, shotgun_api3_path)
-    logger.info("Using shotgun_api3 from '%s'" % shotgun_api3_path)
-    # Add the Shotgun Desktop Server source to the Python path
-    if "SGTK_DESKTOP_SERVER_LOCATION" in os.environ:
-        desktop_server_root = os.environ["SGTK_DESKTOP_SERVER_LOCATION"]
-    else:
-        desktop_server_root = os.path.normpath(os.path.join(os.path.split(__file__)[0], "..", "server"))
-    sys.path.insert(0, os.path.join(desktop_server_root, "python"))
-    logger.info("Using browser integration from '%s'" % desktop_server_root)
-
-    # Reading user settings from disk.
     settings = Settings(app_bootstrap)
     settings.dump(logger)
 
