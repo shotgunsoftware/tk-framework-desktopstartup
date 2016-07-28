@@ -146,12 +146,13 @@ def is_toolkit_already_configured(site_configuration_path):
     return False
 
 
-def __initialize_sgtk_authentication(sgtk, app_bootstrap):
+def __initialize_sgtk(sgtk, user, app_bootstrap):
     """
     Sets the authenticated user if available. Also registers the authentication module's
     logger with the Desktop's.
 
     :param sgtk: The Toolkit API handle.
+    :param user: ShotgunUser from authentication.
     :param app_bootstrap: The application bootstrap instance.
     """
 
@@ -165,13 +166,25 @@ def __initialize_sgtk_authentication(sgtk, app_bootstrap):
         dm = sgtk.util.CoreDefaultsManager()
         sg_auth = shotgun_authentication.ShotgunAuthenticator(dm)
 
-        # get the current user
-        user = sg_auth.get_default_user()
-        logger.info("Setting current user: %r" % user)
-        sgtk.set_authenticated_user(user)
+        # FIXME: Because we can't integrate core 0.18 into Desktop yet, we have to assume the core
+        # we are switching to might not be looking at the right location for the session cache and have
+        # to force it to take out user instance.
+
+        # get the current user for the pipeline.
+        core_user = sg_auth.get_default_user()
+
+        # If there is a user and it's a script user, use that
+        if core_user and not core_user.login:
+            logger.info("Setting current user: %r" % user)
+            sgtk.set_authenticated_user(core_user)
+        else:
+            # We don't care what this core reports as the current user. It could be
+            # an old core that doesn't look at the new location for the current user. We need to use
+            # the one we authenticated with.
+            sgtk.set_authenticated_user(user)
 
 
-def __get_initialized_sgtk(path, app_bootstrap):
+def __get_initialized_sgtk(path, user, app_bootstrap):
     """
     Imports Toolkit from the given path. If that version of Toolkit supports the
     shotgun_authentication module, the authenticated user will be set.
@@ -182,7 +195,7 @@ def __get_initialized_sgtk(path, app_bootstrap):
     :returns: The imported sgtk module.
     """
     sgtk = __import_sgtk_from_path(path)
-    __initialize_sgtk_authentication(sgtk, app_bootstrap)
+    __initialize_sgtk(sgtk, user, app_bootstrap)
     return sgtk
 
 
@@ -396,9 +409,7 @@ def __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootst
             user = shotgun_authenticator.get_user()
     except shotgun_authentication.AuthenticationCancelled:
         return None
-    else:
-        connection = user.create_sg_connection()
-    return connection
+    return user
 
 
 def __do_login_or_tray(
@@ -432,10 +443,10 @@ def __do_login_or_tray(
 
     # Loop until there is a connection or the user wants to quit.
     while True:
-        connection = __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootstrap)
+        user = __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootstrap)
         # If we logged in, return the connection.
-        if connection:
-            return connection
+        if user:
+            return user
         else:
             # Now tell the user the Desktop is running in the tray.
             if __run_with_systray() == SystrayEventLoop.CLOSE_APP:
@@ -478,20 +489,22 @@ def __extract_command_line_argument(arg_name):
     return is_set
 
 
-def __launch_app(app, splash, connection, app_bootstrap, server, settings):
+def __launch_app(app, splash, user, app_bootstrap, server, settings):
     """
     Shows the splash screen, optionally downloads and configures Toolkit, imports it, optionally
     updates it and then launches the desktop engine.
 
     :param app: Application object for event processing.
     :param splash: Splash dialog to update user on what is currently going on
-    :param connection: Connection to the Shotgun server.
+    :param user: ShotgunUser object of the logged in user.
     :param server: The tk_framework_desktopserver.Server instance.
     :param settings: The application's settings.
 
     :returns: The error code to return to the shell.
     """
     # show the splash screen
+    connection = user.create_sg_connection()
+
     splash.show()
     splash.set_message("Looking up site configuration.")
     app.processEvents()
@@ -534,7 +547,7 @@ def __launch_app(app, splash, connection, app_bootstrap, server, settings):
     else:
         # Toolkit was imported, we need to initialize it now.
         if toolkit_imported:
-            __initialize_sgtk_authentication(sgtk, app_bootstrap)
+            __initialize_sgtk(sgtk, user, app_bootstrap)
 
     if not toolkit_imported:
         # sgtk not available. initialize core
@@ -557,7 +570,7 @@ def __launch_app(app, splash, connection, app_bootstrap, server, settings):
             # try again after the initialization is done
             logger.debug("Importing sgtk after initialization")
 
-            sgtk = __get_initialized_sgtk(core_path, app_bootstrap)
+            sgtk = __get_initialized_sgtk(core_path, user, app_bootstrap)
 
             if sgtk is None:
                 # Generate a generic error message, which will suggest to contact support.
@@ -635,7 +648,7 @@ def __launch_app(app, splash, connection, app_bootstrap, server, settings):
                     raise
 
             # and now try to load up sgtk through the config again
-            sgtk = __get_initialized_sgtk(default_site_config, app_bootstrap)
+            sgtk = __get_initialized_sgtk(default_site_config, user, app_bootstrap)
             tk = sgtk.sgtk_from_path(default_site_config)
 
             # now localize the core to the config
@@ -1128,7 +1141,7 @@ def main(**kwargs):
         # If the server is up and running, we want the workflow where we can either not login
         # and keep the websocket running in the background or choose to login
         if server:
-            connection = __do_login_or_tray(
+            user = __do_login_or_tray(
                 splash,
                 shotgun_authentication,
                 shotgun_authenticator,
@@ -1137,7 +1150,7 @@ def main(**kwargs):
             )
         else:
             # The server is not running, so simply offer to login.
-            connection = __do_login(
+            user = __do_login(
                 splash,
                 shotgun_authentication,
                 shotgun_authenticator,
@@ -1145,7 +1158,7 @@ def main(**kwargs):
             )
 
         # If we didn't authenticate a user
-        if not connection:
+        if not user:
             # We're done for the day.
             logger.info("Login canceled. Quitting.")
             return 0
@@ -1155,7 +1168,7 @@ def main(**kwargs):
             return __launch_app(
                 app,
                 splash,
-                connection,
+                user,
                 app_bootstrap,
                 server,
                 settings
