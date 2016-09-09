@@ -805,6 +805,9 @@ def __handle_unexpected_exception(splash, shotgun_authenticator, error_message, 
     """
     if splash:
         splash.hide()
+
+    exc_type, exc_value, exc_traceback = sys.exc_info()
+
     logger.exception("Fatal error, user will be logged out.")
     DesktopMessageBox.critical(
         "Shotgun Desktop Error",
@@ -812,7 +815,7 @@ def __handle_unexpected_exception(splash, shotgun_authenticator, error_message, 
         "support@shotgunsoftware.com, we'll help you diagnose the issue.\n"
         "For more information, see the log file at %s.\n"
         "Error: %s" % (app_bootstrap.get_logfile_location(), str(error_message)),
-        detailed_text="".join(traceback.format_exception(sys.exc_type, sys.exc_value, sys.exc_traceback))
+        detailed_text="".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
     )
     # If we are logged in, we should log out so the user is not stuck in a loop of always
     # automatically logging in each time the app is launched again
