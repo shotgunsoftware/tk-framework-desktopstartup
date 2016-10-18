@@ -24,7 +24,7 @@ SGTK_DESKTOP_BUNDLED_DESCRIPTOR={name: tk-framework-qtwidgets, type: app_store, 
 
 # Allows to override the Shotgun Desktop's tk-framework-desktopstartup and use any one you
 # want. This disables updates.
-SGTK_DESKTOP_STARTUP_DEBUG_LOCATION=~/gitlocal/tk-framework-desktopstartup
+SGTK_DESKTOP_STARTUP_LOCATION=~/gitlocal/tk-framework-desktopstartup
 
 # Allows to override the bundled tk-framework-desktopserver and use any one you
 # want. This disables updates.
