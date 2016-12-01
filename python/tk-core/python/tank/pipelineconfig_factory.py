@@ -9,17 +9,22 @@
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
 import os
-import sys
-import urlparse
 import collections
+import logging
 import cPickle as pickle
 
 from .errors import TankError
-from .platform import constants
+from . import constants
+from . import LogManager
 from .util import shotgun
+from .util import filesystem
+from .util import ShotgunPath
+from . import constants
 from . import pipelineconfig_utils
 from .pipelineconfig import PipelineConfiguration
+from .util import LocalFileStorageManager
 
+log = LogManager.get_logger(__name__)
 
 def from_entity(entity_type, entity_id):
     """
@@ -79,7 +84,8 @@ def _from_entity(entity_type, entity_id, force_reread_shotgun_cache):
     # extract path data from the pipeline configuration shotgun data
     (all_pc_data, primary_pc_data) = _get_pipeline_configuration_data(associated_sg_pipeline_configs)
 
-    # figure out if we are running a tank command / api from a local pc or from a studio level install
+    # figure out if we are running a tank command / api from a local
+    # pipeline config or from a studio level install
     config_context_path = _get_configuration_context()
 
     if config_context_path:
@@ -96,7 +102,8 @@ def _from_entity(entity_type, entity_id, force_reread_shotgun_cache):
                             "in Shotgun." % (config_context_path, entity_type, entity_id))
 
         # ok we got a pipeline config matching the tank command from which we launched.
-        # because we found the PC in the list of PCs for this project, we know that it must be valid!
+        # because we found the pipeline config in the list of PCs for this project,
+        # we know that it must be valid!
         return PipelineConfiguration(config_context_path)
 
     else:
@@ -123,8 +130,8 @@ def _from_entity(entity_type, entity_id, force_reread_shotgun_cache):
             raise TankError("More than one primary pipeline configuration is associated "
                             "with the entity %s %s. This happens if more than one pipeline configuration "
                             "is using the same path. The paths that are matching are: %s. "
-                            "For more information, please contact Shotgun support at "
-                            "support@shotgunsoftware.com." % (entity_type, entity_id, pcs_msg))
+                            "For more information, please contact "
+                            "%s." % (entity_type, entity_id, pcs_msg, constants.SUPPORT_EMAIL))
 
         # looks good, we got a primary pipeline config that exists
         return PipelineConfiguration(primary_pc_data[0]["path"])
@@ -173,8 +180,9 @@ def _from_path(path, force_reread_shotgun_cache):
 
     # make sure folder exists on disk
     if not os.path.exists(path):
-        # there are cases when a PC is being created from a _file_ which does not yet
-        # exist on disk. To try to be reasonable with this case, try this check on the
+        # there are cases when a pipeline config is being created
+        # from a _file_ which does not yet exist on disk. To try to be
+        # reasonable with this case, try this check on the
         # parent folder of the path as a last resort.
         parent_path = os.path.dirname(path)
         if os.path.exists(parent_path):
@@ -210,7 +218,8 @@ def _from_path(path, force_reread_shotgun_cache):
     # extract current os path data from the pipeline configuration shotgun data
     (all_pc_data, primary_pc_data) = _get_pipeline_configuration_data(associated_sg_pipeline_configs)
 
-    # figure out if we are running a tank command / api from a local pc or from a studio level install
+    # figure out if we are running a tank command / api from a
+    # local pipeline config or from a studio level install
     config_context_path = _get_configuration_context()
 
     if config_context_path:
@@ -237,7 +246,7 @@ def _from_path(path, force_reread_shotgun_cache):
                             "to try to operate on a Shot or Asset that belongs to another "
                             "project." % (config_context_path, path, pcs_msg))
 
-        # okay so this PC is valid!
+        # okay so this pipeline config is valid!
         return PipelineConfiguration(config_context_path)
 
     else:
@@ -298,9 +307,9 @@ def _get_configuration_context():
         curr_pc_path = os.environ["TANK_CURRENT_PC"]
 
         # the path stored in the TANK_CURRENT_PC env var may be a symlink etc.
-        # now we need to find which PC entity this corresponds to in Shotgun.
+        # now we need to find which pipeline config entity this corresponds to in Shotgun.
         # Once found, we can double check that the current Entity is actually
-        # associated with the project that the PC is associated with.
+        # associated with the project that the pipeline config is associated with.
         val = pipelineconfig_utils.get_config_install_location(curr_pc_path)
 
     return val
@@ -328,21 +337,23 @@ def _get_pipeline_configuration_data(sg_pipeline_configs):
     :returns: (pc_data, primary_data) - tuple with two lists of dicts. See above.
     """
     # get list of local path to pipeline configurations that we have
-    platform_lookup = {"linux2": "linux_path", "win32": "windows_path", "darwin": "mac_path" }
     pc_data = []
     primary_data = []
 
     for pc in sg_pipeline_configs:
 
-        # prepare return data
-        curr_os_path = pipelineconfig_utils.sanitize_path(pc.get(platform_lookup[sys.platform]), os.path.sep)
+        # extract path from shotgun, sanitize and get curr os path
+        pc_path = ShotgunPath.from_shotgun_dict(pc)
+        curr_os_path = pc_path.current_os
 
-        if pc.get("project"):  # project is None for site config else dict
-            project_id = pc["project"]["id"]
-        else:
-            project_id = None
+        # project is None for site config else dict
+        project_id = pc["project"]["id"] if pc.get("project") else None
 
-        pc_entry = {"path": curr_os_path, "id": pc["id"], "project_id": project_id}
+        pc_entry = {
+            "path": curr_os_path,
+            "id": pc["id"],
+            "project_id": project_id
+        }
 
         # and append to our return data structures
         pc_data.append(pc_entry)
@@ -410,12 +421,10 @@ def _get_pipeline_configs_for_path(path, data):
     :param data: Cache data chunk, obtained using _get_pipeline_configs()
     :returns: list of pipeline configurations matching the path, [] if no match.
     """
-    platform_lookup = {"linux2": "linux_path", "win32": "windows_path", "darwin": "mac_path" }
-
     # step 1 - extract all storages for the current os
     storages = []
     for s in data["local_storages"]:
-        storage_path = s[ platform_lookup[sys.platform] ]
+        storage_path = ShotgunPath.from_shotgun_dict(s).current_os
         if storage_path:
             storages.append(storage_path)
 
@@ -446,10 +455,11 @@ def _get_pipeline_configs_for_path(path, data):
             project_path = os.path.join(s, project_name)
 
             # Associate this path with the pipeline configuration if it's not already.
-            # If there are multiple storages defined with the same path, this prevents the pc from
-            # being added multiple times. Ultimately we probably want to check that the storage
-            # is being used by the pipeline config by checking the roots.yml in the pipeline config
-            # before associating it here.
+            # If there are multiple storages defined with the same path,
+            # this prevents the pipeline config from being added multiple times.
+            # Ultimately we probably want to check that the storage
+            # is being used by the pipeline config by checking the roots.yml
+            # in the pipeline config before associating it here.
             if pc not in project_paths[project_path]:
                 project_paths[project_path].append(pc)
     
@@ -634,12 +644,15 @@ def _load_lookup_cache():
             cache_data = pickle.load(fh)
         finally:
             fh.close()
-    except Exception:
+    except Exception, e:
         # failed to load cache from file. Continue silently.
-        pass
+        log.debug(
+            "Failed to load lookup cache %s. Proceeding without cache. Error: %s" % (cache_file, e)
+        )
 
     return cache_data
 
+@filesystem.with_cleared_umask
 def _add_to_lookup_cache(key, data):
     """
     Add a key to the lookup cache. This method will silently
@@ -656,29 +669,25 @@ def _add_to_lookup_cache(key, data):
     # and write out the cache
     cache_file = _get_cache_location()
 
-    old_umask = os.umask(0)
     try:
-
-        # try to create the cache folder with as open permissions as possible
-        cache_dir = os.path.dirname(cache_file)
-        if not os.path.exists(cache_dir):
-            os.makedirs(cache_dir, 0777)
+        filesystem.ensure_folder_exists(os.path.dirname(cache_file))
 
         # write cache file
         fh = open(cache_file, "wb")
         try:
-            cache_data = pickle.dump(cache_data, fh)
+            pickle.dump(cache_data, fh)
         finally:
             fh.close()
         # and ensure the cache file has got open permissions
         os.chmod(cache_file, 0666)
 
-    except Exception:
+    except Exception, e:
         # silently continue in case exceptions are raised
-        pass
+        log.debug(
+            "Failed to add to lookup cache %s. Error: %s" % (cache_file, e)
+        )
 
-    finally:
-        os.umask(old_umask)
+
 
 def _get_cache_location():
     """
@@ -687,27 +696,9 @@ def _get_cache_location():
 
     :returns: A path on disk to the cache file
     """
-
     # optimized version of creating an sg instance and then calling sg.base_url
     # this is to avoid connecting to shotgun if possible.
     sg_base_url = shotgun.get_associated_sg_base_url()
-
-    # the default implementation will place things in the following locations:
-    # macosx: ~/Library/Caches/Shotgun/SITE_NAME/toolkit_init.cache
-    # windows: $APPDATA/Shotgun/SITE_NAME/toolkit_init.cache
-    # linux: ~/.shotgun/SITE_NAME/toolkit_init.cache
-
-    # first establish the root location
-    if sys.platform == "darwin":
-        root = os.path.expanduser("~/Library/Caches/Shotgun")
-    elif sys.platform == "win32":
-        root = os.path.join(os.environ["APPDATA"], "Shotgun")
-    elif sys.platform.startswith("linux"):
-        root = os.path.expanduser("~/.shotgun")
-
-    # get site only; https://www.foo.com:8080 -> www.foo.com
-    base_url = urlparse.urlparse(sg_base_url)[1].split(":")[0]
-
-    # now structure things by site, project id, and pipeline config id
-    return os.path.join(root, base_url, constants.SITE_INIT_CACHE_FILE_NAME)
+    root_path = LocalFileStorageManager.get_site_root(sg_base_url, LocalFileStorageManager.CACHE)
+    return os.path.join(root_path, constants.TOOLKIT_INIT_CACHE_FILE)
 
