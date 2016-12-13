@@ -15,16 +15,6 @@ import logging
 
 logger = logging.getLogger("tk-desktop.paths")
 
-def get_python_path():
-    """ returns the path to the default python interpreter """
-    if sys.platform == "darwin":
-        python = os.path.join(sys.prefix, "bin", "python")
-    elif sys.platform == "win32":
-        python = os.path.join(sys.prefix, "python.exe")
-    elif sys.platform.startswith("linux"):
-        python = os.path.join(sys.prefix, "bin", "python")
-    return python
-
 
 def get_default_site_config_root(connection):
     """
@@ -34,8 +24,8 @@ def get_default_site_config_root(connection):
         to find a configuration for.
 
     :returns (str, str, bool): The pipeline configuration root, the pipeline configuration
-        entity dictionary and a boolean indicating if the path was hardcoded from the
-        pipeline configuration. If True, the path was hardcoded.
+        entity dictionary and a boolean indicating if Toolkit classic is required. If True,
+        Toolkit classic is required.
     """
 
     # find what path field from the entity we need
@@ -111,7 +101,8 @@ def get_default_site_config_root(connection):
             "site config path '%s' when launching desktop." % str(env_site)
         )
         env_site = os.path.expanduser(os.path.expandvars(str(env_site)))
-        return (env_site, pc, False)
+        os.environ["TK_BOOTSTRAP_CONFIG_OVERRIDE"] = env_site
+        return (env_site, pc, True if pc.get(plat_key, "") else False)
 
     # see if we found a pipeline configuration
     if pc is not None and pc.get(plat_key, ""):
