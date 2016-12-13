@@ -27,7 +27,16 @@ def get_python_path():
 
 
 def get_default_site_config_root(connection):
-    """ return the path to the default configuration for the site """
+    """
+    Finds the site configuration root on disk.
+
+    :param shotgun_api3.Shotgun connection: Shotgun instance for the site we want
+        to find a configuration for.
+
+    :returns (str, str, bool): The pipeline configuration root, the pipeline configuration
+        entity dictionary and a boolean indicating if the path was hardcoded from the
+        pipeline configuration. If True, the path was hardcoded.
+    """
 
     # find what path field from the entity we need
     if sys.platform == "darwin":
@@ -101,14 +110,13 @@ def get_default_site_config_root(connection):
             "$TK_SITE_CONFIG_ROOT site config override found, using "
             "site config path '%s' when launching desktop." % str(env_site)
         )
-        if sys.platform in ["darwin", "linux"]:
-            env_site = os.path.expanduser(str(env_site))
-        return (env_site, pc)
+        env_site = os.path.expanduser(os.path.expandvars(str(env_site)))
+        return (env_site, pc, False)
 
     # see if we found a pipeline configuration
     if pc is not None and pc.get(plat_key, ""):
         # path is already set for us, just return it
-        return (str(pc[plat_key]), pc)
+        return (str(pc[plat_key]), pc, True)
 
     # get operating system specific root
     if sys.platform == "darwin":
@@ -122,7 +130,7 @@ def get_default_site_config_root(connection):
     site = __get_site_from_connection(connection)
     pc_root = os.path.join(pc_root, site, "site")
 
-    return (str(pc_root), pc)
+    return (str(pc_root), pc, False)
 
 
 def __get_site_from_connection(connection):
