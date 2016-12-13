@@ -134,7 +134,6 @@ def is_toolkit_already_configured(site_configuration_path):
     """
     Checks if there is already a Toolkit configuration at this location.
     """
-
     # This logic is lifted from tk-core in setup_project_params.py - validate_configuration_location
     if not os.path.exists(site_configuration_path):
         return False
@@ -234,7 +233,7 @@ def __import_shotgun_authentication_from_path(app_bootstrap):
 
     # finally try the import
     sg_auth = __uuid_import("shotgun_authentication", os.path.join(python_path, "tank_vendor"))
-    #app_bootstrap.add_logger_to_logfile(sg_auth.get_logger())
+    # app_bootstrap.add_logger_to_logfile(sg_auth.get_logger())
     return sg_auth
 
 
@@ -349,7 +348,6 @@ def __optional_state_cleanup(splash, shotgun_authenticator, app_bootstrap):
     :param shotgun_authenticator: Shotgun authenticator used to logout if alt is pressed.
     :params app_bootstrap: The application bootstrap.
     """
-
     # If the application was launched holding the alt key, log the user out.
     if (QtGui.QApplication.queryKeyboardModifiers() & QtCore.Qt.AltModifier) == QtCore.Qt.AltModifier:
         logger.info("Alt was pressed, clearing default user and startup descriptor")
@@ -371,7 +369,6 @@ def __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootst
     :returns: The tuple (ShotgunAuthenticator instance used to login, Shotgun connection to the
         server).
     """
-
     logger.debug("Retrieving credentials")
     try:
         user = shotgun_authenticator.get_user()
@@ -410,8 +407,6 @@ def __do_login_or_tray(
 
     :returns: The connection object if the user logged in, None if the user wants to quit the app.
     """
-    connection = None
-
     # The workflow is the following (fl stands for force login, du stands for default user)
     # 1. If you've never used the Desktop before, you will get the tray (!fl and !du)
     # 2. If you've used the desktop before but never logged in, you'll get the tray !fl and !du)
@@ -518,7 +513,6 @@ def __toolkit_classic_boostrap(app, splash, connection, user, app_bootstrap, ser
 
     :returns: The error code to return to the shell.
     """
-
     # try and import toolkit
     toolkit_imported = False
     config_folder_exists_at_startup = os.path.exists(default_site_config)
@@ -766,9 +760,10 @@ def __toolkit_classic_boostrap(app, splash, connection, user, app_bootstrap, ser
             default_site_config
         )
 
-    return __post_bootstrap_engine(splash, app_bootstrap, server, engine)
+    return __post_bootstrap_engine(sgtk, splash, app_bootstrap, server, engine)
 
-def __zero_config_boostrap(app, splash, connection, user, app_bootstrap, server, settings):
+
+def __zero_config_bootstrap(app, splash, connection, user, app_bootstrap, server, settings):
     """
     Launch into the engine using the new zero config based bootstrap.
 
@@ -783,20 +778,19 @@ def __zero_config_boostrap(app, splash, connection, user, app_bootstrap, server,
     :returns: The error code to return to the shell.
     """
     # import sgtk
-    import sys
     import sgtk
 
     mgr = sgtk.bootstrap.ToolkitManager(user)
 
     def progress_callback(progress_value, message):
-        '''
+        """
         Called whenever toolkit reports progress.
 
         :param progress_value: The current progress value as float number.
                                values will be reported in incremental order
                                and always in the range 0.0 to 1.0
         :param message:        Progress message string
-        '''
+        """
         splash.set_message("%s: %s" % (progress_value, message))
         app.processEvents()
 
@@ -806,10 +800,10 @@ def __zero_config_boostrap(app, splash, connection, user, app_bootstrap, server,
 
     engine = mgr.bootstrap_engine("tk-desktop")
 
-    return __post_bootstrap_engine(splash, app_bootstrap, server, engine)
+    return __post_bootstrap_engine(sgtk, splash, app_bootstrap, server, engine)
 
 
-def __post_bootstrap_engine(splash, app_bootstrap, server, engine)
+def __post_bootstrap_engine(sgtk, splash, app_bootstrap, server, engine):
 
     # engine will take over logging
     app_bootstrap.tear_down_logging()
@@ -1100,6 +1094,7 @@ class _BootstrapProxy(object):
     Wraps the application bootstrap code to add functionality that should have been present
     on it.
     """
+
     def __init__(self, app_bootstrap):
         """
         Constructor
@@ -1143,14 +1138,14 @@ def main(**kwargs):
 
     :params app_bootstrap: AppBootstrap instance, used to get information from
         the installed application as well as updating the startup description
-        location. See https://github.com/shotgunsoftware/tk-desktop-internal/blob/a31e9339b7e438cd111fb8f4a2b0436e77c98a17/Common/Shotgun/python/bootstrap.py#L133
+        location. See
+        https://github.com/shotgunsoftware/tk-desktop-internal/blob/a31e9339b7e438cd111fb8f4a2b0436e77c98a17/Common/Shotgun/python/bootstrap.py#L133
         for more info.
 
     :returns: Error code for the process.
     """
     logger.debug("Running main from %s" % __file__)
     app_bootstrap = _BootstrapProxy(kwargs["app_bootstrap"])
-
 
     # Create some ui related objects
     app, splash = __init_app()
@@ -1167,7 +1162,7 @@ def main(**kwargs):
         # Reading user settings from disk.
         settings = Settings(app_bootstrap)
         settings.dump(logger)
-    
+
         # get the shotgun authentication module.
         shotgun_authentication = __import_shotgun_authentication_from_path(app_bootstrap)
     except Exception, e:
