@@ -24,18 +24,28 @@ import shotgun_desktop.splash
 logger = logging.getLogger("tk-desktop.startup")
 logger.info("------------------ Desktop Engine Startup ------------------")
 
-# Add shotgun_api3 bundled with tk-core to the path.
-shotgun_api3_path = os.path.normpath(os.path.join(os.path.split(__file__)[0], "..", "tk-core", "python", "tank_vendor"))
-sys.path.insert(0, shotgun_api3_path)
-logger.info("Using shotgun_api3 from '%s'" % shotgun_api3_path)
-# Add the Shotgun Desktop Server source to the Python path
-if "SGTK_DESKTOP_SERVER_LOCATION" in os.environ:
-    desktop_server_root = os.environ["SGTK_DESKTOP_SERVER_LOCATION"]
-else:
-    desktop_server_root = os.path.normpath(os.path.join(os.path.split(__file__)[0], "..", "server"))
-sys.path.insert(0, os.path.join(desktop_server_root, "python"))
-logger.info("Using browser integration from '%s'" % desktop_server_root)
 
+def add_to_python_path(bundled_path, env_var_override, module_name):
+    """
+    Adds a packaged module into the Python Path unless an environment variable
+    overrides the setting.
+
+    :param str bundled_path: Path to the bundled code.
+    :param env_var_override: Name of the environment variable that can override that path.
+    :param module_name: Friendly name of the module.
+    """
+    if env_var_override in os.environ:
+        path = os.path.join(os.environ[env_var_override])
+        path = os.path.expanduser(os.path.expandvars(path))
+    else:
+        path = os.path.normpath(os.path.join(os.path.split(__file__)[0], bundled_path))
+    path = os.path.join(path, "python")
+    sys.path.insert(0, path)
+    logger.info("Using %s from '%s'", module_name, path)
+
+# Add Toolkit and desktop server to the path.
+add_to_python_path(os.path.join("..", "tk-core", ), "SGTK_CORE_DEBUG_LOCATION", "tk-core")
+add_to_python_path(os.path.join("..", "server"), "SGTK_DESKTOP_SERVER_LOCATION", "tk-framework-desktopserver")
 
 # now proceed with non builtin imports
 from PySide import QtCore, QtGui
@@ -43,7 +53,6 @@ from PySide import QtCore, QtGui
 import shotgun_desktop.paths
 from shotgun_desktop.turn_on_toolkit import TurnOnToolkit
 from shotgun_desktop.desktop_message_box import DesktopMessageBox
-from shotgun_desktop import authenticator
 from shotgun_desktop.upgrade_startup import upgrade_startup
 from shotgun_desktop.location import get_location
 from shotgun_desktop.settings import Settings
@@ -99,139 +108,6 @@ def __supports_pipeline_configuration_upgrade(pipeline_configuration):
     """
     # if the authentication module is not supported, this method won't be present on the core.
     return hasattr(pipeline_configuration, "convert_to_site_config")
-
-
-def __import_sgtk_from_path(path):
-    """
-    Imports Toolkit from the given path.
-
-    :param path: Path to import Toolkit from.
-
-    :returns: The Toolkit API handle.
-    """
-    # find where the install should be
-    python_path = os.path.join(path, "install", "core", "python")
-    logger.info("Prepending sgtk ('%s') to the pythonpath...", python_path)
-
-    # update sys.path with the install
-    if python_path not in sys.path:
-        sys.path.insert(0, os.path.normpath(python_path))
-
-    # clear the importer cache since the path could have been created
-    # since the last attempt to import toolkit
-    sys.path_importer_cache.clear()
-
-    # finally try the import
-    import sgtk
-    logger.info("SGTK API successfully imported: %s" % sgtk)
-    return sgtk
-
-
-def is_toolkit_already_configured(site_configuration_path):
-    """
-    Checks if there is already a Toolkit configuration at this location.
-    """
-    # This logic is lifted from tk-core in setup_project_params.py - validate_configuration_location
-    if not os.path.exists(site_configuration_path):
-        return False
-
-    for folder in ["config", "install"]:
-        if os.path.exists(os.path.join(site_configuration_path, folder)):
-            return True
-
-    return False
-
-
-def __initialize_sgtk_authentication(sgtk, app_bootstrap):
-    """
-    Sets the authenticated user if available. Also registers the authentication module's
-    logger with the Desktop's.
-
-    :param sgtk: The Toolkit API handle.
-    :param app_bootstrap: The application bootstrap instance.
-    """
-    # import authentication
-    dm = sgtk.util.CoreDefaultsManager()
-    sg_auth = sgtk.authentication.ShotgunAuthenticator(dm)
-
-    # get the current user
-    user = sg_auth.get_default_user()
-    logger.info("Setting current user: %r" % user)
-    sgtk.set_authenticated_user(user)
-
-
-def sgtk(path, app_bootstrap):
-    """
-    Imports Toolkit from the given path. If that version of Toolkit supports the
-    shotgun_authentication module, the authenticated user will be set.
-
-    :param sgtk: The Toolkit API handle.
-    :param app_bootstrap: The application bootstrap instance.
-
-    :returns: The imported sgtk module.
-    """
-    sgtk = __import_sgtk_from_path(path)
-    __initialize_sgtk_authentication(sgtk, app_bootstrap)
-    return sgtk
-
-
-def __uuid_import(module, path):
-    """
-    Imports a module with a given name at a given location with a decorated
-    namespace so that it can be reloaded multiple times at different locations.
-
-    :param module: Name of the module we are importing.
-    :param path: Path to the folder containing the module we are importing.
-
-    :returns: The imported module.
-    """
-    import uuid
-    import imp
-    logger.info("Trying to import module '%s' from path '%s'..." % (module, path))
-    spec = imp.find_module(module, [path])
-    module = imp.load_module("%s_%s" % (uuid.uuid4().hex, module), *spec)
-    logger.info("Successfully imported %s" % module)
-    return module
-
-
-def __import_shotgun_authentication_from_path(app_bootstrap):
-    """
-    Imports bundled Shotgun authentication module with a decorated name so
-    another instance can be loaded later on. If SGTK_CORE_DEBUG_LOCATION
-    is set, it will import the Shogun Authentication module bundled with that
-    core instead.
-
-    :params app_bootstrap: The application bootstrap.
-    """
-    logger.info("Initializing Shotgun Authenticator")
-
-    if "SGTK_CORE_DEBUG_LOCATION" in os.environ:
-        path = os.environ.get("SGTK_CORE_DEBUG_LOCATION")
-        logger.info("Using overridden SGTK_CORE_DEBUG_LOCATION: '%s'" % path)
-    else:
-        path = os.path.abspath(os.path.join(os.path.split(__file__)[0], "..", "tk-core"))
-        logger.info("Using built-in core located here: '%s'" % path)
-
-    # find where the install should be
-    # try to load from a non-configured core, that's the default behaviour.
-    python_path = os.path.join(path, "python")
-    if not os.path.exists(python_path):
-        # Non configured core not found at that location. Maybe it's a configured one?
-        python_path = os.path.join(path, "install", "core", "python")
-    logger.info("Prepending sgtk ('%s') to the pythonpath...", python_path)
-
-    # update sys.path with the install
-    if python_path not in sys.path:
-        sys.path.insert(0, os.path.normpath(python_path))
-
-    # clear the importer cache since the path could have been created
-    # since the last attempt to import toolkit
-    sys.path_importer_cache.clear()
-
-    # finally try the import
-    sg_auth = __uuid_import("shotgun_authentication", os.path.join(python_path, "tank_vendor"))
-    # app_bootstrap.add_logger_to_logfile(sg_auth.get_logger())
-    return sg_auth
 
 
 def _assert_toolkit_enabled(splash, connection):
@@ -353,24 +229,22 @@ def __optional_state_cleanup(splash, shotgun_authenticator, app_bootstrap):
         __restart_app_with_countdown(splash, "Desktop has been reinitialized.")
 
 
-def __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootstrap):
+def __do_login(splash, shotgun_authenticator):
     """
     Asks for the credentials of the user or automatically logs the user in if the credentials are
     cached on disk.
 
     :param splash: Splash screen widget.
-    :param shotgun_authentication: Shotgun authentication module.
     :param shotgun_authenticator: Instance of the Shotgun Authenticator to use for login.
-    :params app_bootstrap: The application bootstrap.
 
-    :returns: The tuple (ShotgunAuthenticator instance used to login, Shotgun connection to the
-        server).
+    :returns tank.authentication.ShotgunUser: The logged in user or None
     """
+    from sgtk.authentication import AuthenticationCancelled
     logger.debug("Retrieving credentials")
     try:
         user = shotgun_authenticator.get_user()
         # It it possible the user's credentials are expired now. If we don't check for that
-        # the user will be prompted to refresh their session by entering the passowrd further
+        # the user will be prompted to refresh their session by entering the password further
         # down the line when we start looking for a pipeline configuration.
 
         # In order to avoid this, we'll check to see if the credentials are expired.
@@ -381,28 +255,26 @@ def __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootst
             # the authentication module will prompt for full set of credentials and site
             # information.
             user = shotgun_authenticator.get_user()
-    except shotgun_authentication.AuthenticationCancelled:
+    except AuthenticationCancelled:
         return None
 
     return user
 
 
-def __do_login_or_tray(
+def __wait_for_login(
     splash,
-    shotgun_authentication, shotgun_authenticator,
-    app_bootstrap, force_login
+    shotgun_authenticator,
+    force_login
 ):
     """
     Runs the login dialog or the tray icon.
 
     :param splash: Splash screen widget.
-    :param shotgun_authentication: Shotgun authentication module.
     :param shotgun_authenticator: Instance of the Shotgun Authenticator to use for login.
-    :params app_bootstrap: The application bootstrap.
     :params force_login: If True, the prompt will be shown automatically instead of going
         into tray mode.
 
-    :returns tank.authentication.ShotgunUser: The authenticated user.
+    :returns tank.authentication.ShotgunUser: The authenticated user or None.
     """
     # The workflow is the following (fl stands for force login, du stands for default user)
     # 1. If you've never used the Desktop before, you will get the tray (!fl and !du)
@@ -416,7 +288,7 @@ def __do_login_or_tray(
 
     # Loop until there is a connection or the user wants to quit.
     while True:
-        user = __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootstrap)
+        user = __do_login(splash, shotgun_authenticator)
         # If we logged in, return the connection.
         if user:
             return user
@@ -462,14 +334,13 @@ def __extract_command_line_argument(arg_name):
     return is_set
 
 
-def __launch_app(app, splash, connection, user, app_bootstrap, server, settings):
+def __launch_app(app, splash, user, app_bootstrap, server, settings):
     """
     Shows the splash screen, optionally downloads and configures Toolkit, imports it, optionally
     updates it and then launches the desktop engine.
 
     :param app: Application object for event processing.
     :param splash: Splash dialog to update user on what is currently going on
-    :param connection: Connection to the Shotgun server.
     :param user: Current ShotgunUser.
     :param app_bootstrap: Application bootstrap.
     :param server: The tk_framework_desktopserver.Server instance.
@@ -479,27 +350,46 @@ def __launch_app(app, splash, connection, user, app_bootstrap, server, settings)
     """
     # show the splash screen
     splash.show()
+
+    import sgtk
+
+    sgtk.set_authenticated_user(user)
+
+    # Downloads an upgrade for the startup if available. The startup upgrade is independent from the
+    # auto_path state and has its own logic for auto-updating or not, so move this outside the
+    # if auto_path test.
+    startup_updated = upgrade_startup(
+        splash,
+        sgtk,
+        app_bootstrap
+    )
+    if startup_updated:
+        __restart_app_with_countdown(splash, "Shotgun Desktop updated.")
+
     splash.set_message("Looking up site configuration.")
     app.processEvents()
 
+    connection = user.create_sg_connection()
+
     _assert_toolkit_enabled(splash, connection)
 
-    logger.debug("Getting the default site config")
+    logger.debug("Getting the default site configuration.")
     default_site_config, pc, toolkit_classic_required = shotgun_desktop.paths.get_default_site_config_root(connection)
 
     if toolkit_classic_required:
-        return __toolkit_classic_boostrap(app, splash, connection, user, app_bootstrap, server, settings, default_site_config, pc)
+        return __toolkit_classic_boostrap(
+            app, splash, user, app_bootstrap, server, settings, default_site_config, pc
+        )
     else:
-        return __zero_config_bootstrap(app, splash, connection, user, app_bootstrap, server, settings)
+        return __zero_config_bootstrap(app, splash, user, app_bootstrap, server, settings)
 
 
-def __toolkit_classic_boostrap(app, splash, connection, user, app_bootstrap, server, settings, default_site_config, pc):
+def __toolkit_classic_boostrap(app, splash, user, app_bootstrap, server, settings, default_site_config, pc):
     """
     Launches the Shotgun Desktop using Toolkit Classic
 
     :param app: Application object for event processing.
     :param splash: Splash dialog to update user on what is currently going on
-    :param connection: Connection to the Shotgun server.
     :param user: Current ShotgunUser.
     :param app_bootstrap: Application bootstrap.
     :param server: The tk_framework_desktopserver.Server instance.
@@ -511,11 +401,47 @@ def __toolkit_classic_boostrap(app, splash, connection, user, app_bootstrap, ser
     """
     # try and import toolkit
 
-    sys.path.insert(0, os.path.join(default_site_config, "install", "core", "python"))
+    # import sgtk
+    # mgr = sgtk.bootstrap.ToolkitManager(user)
 
-    import sgtk
+    # def progress_callback(progress_value, message):
+    #     """
+    #     Called whenever toolkit reports progress.
+
+    #     :param progress_value: The current progress value as float number.
+    #                            values will be reported in incremental order
+    #                            and always in the range 0.0 to 1.0
+    #     :param message:        Progress message string
+    #     """
+    #     splash.set_message("%s: %s" % (progress_value, message))
+    #     logger.debug(message)
+    #     app.processEvents()
+
+    # mgr.do_shotgun_config_lookup = False
+    # mgr.base_configuration = "sgtk:descriptor:path?path=%s/config" % default_site_config
+    # mgr.progress_callback = progress_callback
+    # engine = mgr.bootstrap_engine("tk-desktop", None)
+
+    from sgtk.bootstrap.import_handler import CoreImportHandler
 
     try:
+        # Bootstrap into Toolkit Classic.
+        CoreImportHandler.swap_core(
+            os.path.join(default_site_config, "install", "core", "python")
+        )
+        # Clear references to the old core.
+        sgtk = None
+        CoreImportHandler = None
+
+        # Create the new Toolkit instance.
+        import sgtk
+
+        if not __toolkit_supports_authentication_module(sgtk):
+            raise UpgradeCoreError(
+                "This version of the Shotgun Desktop only supports core 0.16.4 and higher.",
+                default_site_config
+            )
+        sgtk.set_authenticated_user(user)
         tk = sgtk.sgtk_from_path(default_site_config)
     except:
         logger.exception("Can't import Toolkit module.")
@@ -525,49 +451,6 @@ def __toolkit_classic_boostrap(app, splash, connection, user, app_bootstrap, ser
     # problem.
     if pc["id"] != tk.pipeline_configuration.get_shotgun_id():
         raise InvalidPipelineConfiguration(pc, tk.pipeline_configuration)
-
-    is_auto_path = tk.pipeline_configuration.is_auto_path()
-
-    # Downloads an upgrade for the startup if available. The startup upgrade is independent from the
-    # auto_path state and has its own logic for auto-updating or not, so move this outside the
-    # if auto_path test.
-    startup_updated = upgrade_startup(
-        splash,
-        sgtk,
-        app_bootstrap
-    )
-
-    core_updated = False
-    if is_auto_path:
-        splash.set_message("Getting core and engine updates...")
-        logger.info("Getting updates...")
-        app.processEvents()
-
-        core_update = tk.get_command("core")
-        core_update.set_logger(logger)
-        result = core_update.execute({})
-
-        # If core was updated.
-        if result["status"] == "updated":
-            core_updated = True
-        else:
-            if result["status"] == "update_blocked":
-                # Core update should not be blocked. Warn, because it is not a fatal error.
-                logger.warning("Core update was blocked. Reason: %s" % result["reason"])
-            elif result["status"] != "up_to_date":
-                # Core update should not fail. Warn, because it is not a fatal error.
-                logger.warning("Unexpected Core upgrade result: %s" % str(result))
-    else:
-        logger.info("Pipeline configuration not in auto path mode, skipping core and engine "
-                    "updates...")
-
-    # Detect which kind of updates happened and restart the app if necessary
-    if core_updated and startup_updated:
-        return __restart_app_with_countdown(splash, "Shotgun Desktop and core updated.")
-    elif core_updated:
-        return __restart_app_with_countdown(splash, "Core updated.")
-    elif startup_updated:
-        return __restart_app_with_countdown(splash, "Shotgun Desktop updated.")
 
     # This is important that this happens AFTER the core upgrade so that if there is a bug in the
     # migration code we can release a new core that fixes it.
@@ -587,16 +470,6 @@ def __toolkit_classic_boostrap(app, splash, connection, user, app_bootstrap, ser
         if not tk.pipeline_configuration.is_site_configuration():
             tk.pipeline_configuration.convert_to_site_config()
 
-    if is_auto_path:
-        updates = tk.get_command("updates")
-        updates.set_logger(logger)
-        updates.execute({})
-
-    if not __toolkit_supports_authentication_module(sgtk):
-        raise UpgradeCoreError(
-            "This version of the Shotgun Desktop only supports core 0.16.4 and higher.",
-            default_site_config
-        )
     # initialize the tk-desktop engine for an empty context
     splash.set_message("Starting desktop engine.")
     app.processEvents()
@@ -613,13 +486,12 @@ def __toolkit_classic_boostrap(app, splash, connection, user, app_bootstrap, ser
     return __post_bootstrap_engine(sgtk, splash, app_bootstrap, server, engine)
 
 
-def __zero_config_bootstrap(app, splash, connection, user, app_bootstrap, server, settings):
+def __zero_config_bootstrap(app, splash, user, app_bootstrap, server, settings):
     """
     Launch into the engine using the new zero config based bootstrap.
 
     :param app: Application object for event processing.
     :param splash: Splash dialog to update user on what is currently going on
-    :param connection: Connection to the Shotgun server.
     :param user: Current ShotgunUser.
     :param app_bootstrap: Application bootstrap.
     :param server: The tk_framework_desktopserver.Server instance.
@@ -627,23 +499,8 @@ def __zero_config_bootstrap(app, splash, connection, user, app_bootstrap, server
 
     :returns: The error code to return to the shell.
     """
-    # import sgtk
-    import sgtk
-
-    # Downloads an upgrade for the startup if available. The startup upgrade is independent from the
-    # auto_path state and has its own logic for auto-updating or not, so move this outside the
-    # if auto_path test.
-    startup_updated = upgrade_startup(
-        splash,
-        sgtk,
-        app_bootstrap
-    )
-
-    # Restart the app if the Desktop Startup has been updated.
-    if startup_updated:
-        return __restart_app_with_countdown(splash, "Shotgun Desktop updated.")
-
     # The startup is up to date, now it's time to bootstrap Toolkit.
+    import sgtk
     mgr = sgtk.bootstrap.ToolkitManager(user)
 
     def progress_callback(progress_value, message):
@@ -911,7 +768,7 @@ def __init_websockets(splash, app_bootstrap, settings):
 
     # Read the browser integration settings in the same file as the desktop integration settings.
     integration_settings = tk_framework_desktopserver.Settings(
-        settings.get_config_location(),
+        settings.location,
         os.path.join(
             app_bootstrap.get_shotgun_desktop_cache_location(),
             "config",
@@ -1020,22 +877,22 @@ def main(**kwargs):
     # it right away.
     shotgun_authenticator = None
 
-    # We have to import this in a separate try catch block because we'll be using
-    # shotgun_authentication in the following catch statements.
-    try:
-        # Reading user settings from disk.
-        settings = Settings(app_bootstrap)
-        settings.dump(logger)
-
-        # get the shotgun authentication module.
-        shotgun_authentication = __import_shotgun_authentication_from_path(app_bootstrap)
-    except Exception, e:
-        __handle_unexpected_exception(splash, shotgun_authenticator, e, app_bootstrap)
-        return -1
+    # Do not import sgtk globally to avoid using the wrong sgtk once we bootstrap in
+    # the right config.
+    import sgtk
+    sgtk.LogManager().global_debug = True
+    app_bootstrap.add_logger_to_logfile(
+        sgtk.LogManager().root_logger
+    )
 
     # We have gui, websocket library and the authentication module, now do the rest.
     server = None
+    clean_exit = False
     try:
+        # Reading user settings from disk.
+        settings = Settings()
+        settings.dump(logger)
+
         server, keep_running = __init_websockets(splash, app_bootstrap, settings)
         if keep_running is False:
             return 0
@@ -1046,53 +903,40 @@ def main(**kwargs):
         # It is very important to decouple logging in from creating the shotgun authenticator.
         # If there is an error during auto login, for example proxy settings changed and you
         # can't connect anymore, we need to be able to log the user out.
-        shotgun_authenticator = authenticator.get_configured_shotgun_authenticator(
-            shotgun_authentication, settings
-        )
+        shotgun_authenticator = sgtk.authentication.ShotgunAuthenticator()
 
         __optional_state_cleanup(splash, shotgun_authenticator, app_bootstrap)
 
         # If the server is up and running, we want the workflow where we can either not login
         # and keep the websocket running in the background or choose to login
         if server:
-            user = __do_login_or_tray(
+            user = __wait_for_login(
                 splash,
-                shotgun_authentication,
                 shotgun_authenticator,
-                app_bootstrap,
                 show_login
             )
         else:
             # The server is not running, so simply offer to login.
             user = __do_login(
                 splash,
-                shotgun_authentication,
-                shotgun_authenticator,
-                app_bootstrap
+                shotgun_authenticator
             )
 
-        if user:
-            connection = user.create_sg_connection()
-        else:
-            connection = None
-
-        # If we didn't authenticate a user
-        if not connection:
-            # We're done for the day.
+        if not user:
             logger.info("Login canceled. Quitting.")
             return 0
-        else:
-            # Now that we are logged, we can proceed with launching the
-            # application.
-            return __launch_app(
-                app,
-                splash,
-                connection,
-                user,
-                app_bootstrap,
-                server,
-                settings
-            )
+
+        # Now that we are logged, we can proceed with launching the
+        # application.
+        exit_code = __launch_app(
+            app,
+            splash,
+            user,
+            app_bootstrap,
+            server,
+            settings
+        )
+        return exit_code
     except RequestRestartException:
         subprocess.Popen(sys.argv, close_fds=True)
         return 0
