@@ -399,8 +399,6 @@ def __toolkit_classic_boostrap(app, splash, user, app_bootstrap, server, setting
 
     :returns: The error code to return to the shell.
     """
-    # try and import toolkit
-
     # import sgtk
     # mgr = sgtk.bootstrap.ToolkitManager(user)
 
@@ -420,6 +418,7 @@ def __toolkit_classic_boostrap(app, splash, user, app_bootstrap, server, setting
     # mgr.do_shotgun_config_lookup = False
     # mgr.base_configuration = "sgtk:descriptor:path?path=%s/config" % default_site_config
     # mgr.progress_callback = progress_callback
+    # mgr.bundle_cache_fallback_paths = os.path.join(default_site_config, "install")
     # engine = mgr.bootstrap_engine("tk-desktop", None)
 
     from sgtk.bootstrap.import_handler import CoreImportHandler
@@ -887,7 +886,7 @@ def main(**kwargs):
 
     # We have gui, websocket library and the authentication module, now do the rest.
     server = None
-    clean_exit = False
+    from sgtk import authentication
     try:
         # Reading user settings from disk.
         settings = Settings()
@@ -940,7 +939,7 @@ def main(**kwargs):
     except RequestRestartException:
         subprocess.Popen(sys.argv, close_fds=True)
         return 0
-    except shotgun_authentication.AuthenticationCancelled:
+    except authentication.AuthenticationCancelled:
         # The user cancelled an authentication request while the app was running, log him out.
         splash.hide()
         shotgun_authenticator.clear_default_user()
