@@ -1,3 +1,6 @@
+# To use any setting from this file, remove the # sign at the beginning and then
+# edit the value.
+
 # Login related settings
 #
 [Login]
@@ -6,13 +9,13 @@
 # with this value when logging into the Shotgun Desktop for the very first time.
 # Defaults to the user's OS login.
 #
-default_login=$USERNAME
+# default_login=$USERNAME
 
 # If specified, the site text input on the login screen will be populated with
 # this value when logging into the Shotgun Desktop for the very first time.
-# Defaults to https://mystudio.shotgunstudio.com.
+# Empty by default.
 #
-default_site=https://your-site-here.shotgunstudio.com
+# default_site=https://your-site-here.shotgunstudio.com
 
 # If specified, the Shotgun Desktop will use these proxy settings to connect to
 # the Shotgun site and the Toolkit App Store. The proxy string should be of the
@@ -20,7 +23,7 @@ default_site=https://your-site-here.shotgunstudio.com
 # username:pass@123.123.123.123:8888.
 # Empty by default.
 #
-http_proxy=123.234.345.456:8888
+# http_proxy=123.234.345.456:8888
 
 # If specified, the Shotgun API Desktop will use these proxy settings to connect
 # to the Toolkit App Store. The proxy string format is the same as http_proxy.
@@ -29,7 +32,7 @@ http_proxy=123.234.345.456:8888
 # setting.
 # Empty by default.
 #
-app_store_http_proxy=123.234.345.456:8888
+# app_store_http_proxy=123.234.345.456:8888
 
 # This is the browser integration settings section
 #
@@ -38,16 +41,13 @@ app_store_http_proxy=123.234.345.456:8888
 # If set to 0, this setting disables the browser integration.
 # Defaults to 1.
 #
-enabled=1
+# enabled=1
 
 # Location where the certificate will be stored. If not specified, defaults to
 # ../resources/keys.
 #
-certificate_folder=/path/to/your/certificate/folder
-# For reference, here are the paths that the Shotgun Desktop uses. If you want
-# to reuse the same certificate as the Shotgun Desktop, those are the settings
-# you need to use.
-# MacOS
+# For reference, here are the paths that the Shotgun Desktop uses.
+# MacOS: 
 # certificate_folder=~/Library/Caches/Shotgun/desktop/config/certificates
 # Windows
 # certificate_folder=$APPDATA\Shotgun\desktop\config\certificates
@@ -59,16 +59,16 @@ certificate_folder=/path/to/your/certificate/folder
 # your logs after debugging.
 # If set to 1, low level debugging messages from the server will be logged.
 #
-low_level_debug=0
+# low_level_debug=0
 
 # Port to listen for requests coming from the browser. If not specified,
 # defaults to 9000. Note that you will need to contact support at
 # support@shotgunsoftware.com in order to have your site communicate on a custom
 # port.
 #
-port=9000
+# port=9000
 
 # List of clients whitelisted to access this server. Use this when you have a
 # local server. If not specified, defaults to *.shotgunstudio.com.
 #
-whitelist=*.shotgunstudio.com
+# whitelist=*.shotgunstudio.com
