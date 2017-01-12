@@ -68,7 +68,7 @@
 #
 # port=9000
 
-# List of clients whitelisted to access this server. Use this when you have a
-# local server. If not specified, defaults to *.shotgunstudio.com.
+# Comma separated list of clients whitelisted to access this server. Use this when
+# you have a local server. If not specified, defaults to *.shotgunstudio.com.
 #
 # whitelist=*.shotgunstudio.com
