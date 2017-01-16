@@ -39,7 +39,7 @@ def get_default_site_config_root(connection):
         raise RuntimeError("unknown platform: %s" % sys.platform)
 
     # interesting fields to return
-    fields = ["id", "code", "windows_path", "mac_path", "linux_path", "project"]
+    fields = ["id", "code", "windows_path", "mac_path", "linux_path", "project", "sg_plugin_ids", "plugin_ids"]
 
     # Find the right pipeline configuration. We'll always pick a projectless
     # one over one with the Template Project. To have a deterministic behaviour,
@@ -74,10 +74,14 @@ def get_default_site_config_root(connection):
             # Sorting on the project id doesn't actually matter. We want
             # some sorting simply because this will force grouping between
             # configurations with a project and those that don't.
-            {'field_name':'project.Project.id','direction':'asc'}, 
-            {'field_name':'id','direction':'desc'}
+            {'field_name': 'project.Project.id', 'direction': 'asc'}, 
+            {'field_name': 'id', 'direction': 'desc'}
         ]
     )
+
+    # We don't filter in the Shotgun query for the plugin ids because not every site these fields yet.
+    # So if any pipeline configurations with a plugin id was returned, filter them it out.
+    pcs = filter(lambda pc: not("sg_plugin_ids" in pc or "plugin_ids" in pc), pcs)
 
     if len(pcs) == 0:
         pc = None

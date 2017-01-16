@@ -44,7 +44,7 @@ def add_to_python_path(bundled_path, env_var_override, module_name):
     logger.info("Using %s from '%s'", module_name, path)
 
 # Add Toolkit and desktop server to the path.
-add_to_python_path(os.path.join("..", "tk-core", ), "SGTK_CORE_DEBUG_LOCATION", "tk-core")
+add_to_python_path(os.path.join("..", "tk-core", ), "SGTK_CORE_LOCATION", "tk-core")
 add_to_python_path(os.path.join("..", "server"), "SGTK_DESKTOP_SERVER_LOCATION", "tk-framework-desktopserver")
 
 # now proceed with non builtin imports
@@ -61,7 +61,7 @@ from distutils.version import LooseVersion
 
 from shotgun_desktop.errors import (ShotgunDesktopError, RequestRestartException, UpgradeEngineError,
                                     ToolkitDisabledError, UpgradeCoreError,
-                                    InvalidPipelineConfiguration, MissingConfigError)
+                                    InvalidPipelineConfiguration)
 
 
 def __is_64bit_python():
@@ -374,17 +374,54 @@ def __launch_app(app, splash, user, app_bootstrap, server, settings):
     _assert_toolkit_enabled(splash, connection)
 
     logger.debug("Getting the default site configuration.")
-    default_site_config, pc, toolkit_classic_required = shotgun_desktop.paths.get_default_site_config_root(connection)
+    pc_path, pc, toolkit_classic_required = shotgun_desktop.paths.get_default_site_config_root(connection)
 
     if toolkit_classic_required:
-        return __toolkit_classic_boostrap(
-            app, splash, user, app_bootstrap, server, settings, default_site_config, pc
+        return __toolkit_classic_bootstrap(
+            app, splash, user, app_bootstrap, server, settings, pc_path, pc
         )
     else:
         return __zero_config_bootstrap(app, splash, user, app_bootstrap, server, settings)
 
 
-def __toolkit_classic_boostrap(app, splash, user, app_bootstrap, server, settings, default_site_config, pc):
+def __bootstrap_toolkit_into_legacy_config(app, splash, user, pc):
+    """
+    Create a Toolkit instance by boostraping into the pipeline configuration.
+
+    :param app: Application object for event processing.
+    :param splash: Splash dialog to update user on what is currently going on
+    :param user: Current ShotgunUser.
+    :param app_bootstrap: Application bootstrap.
+    :param server: The tk_framework_desktopserver.Server instance.
+    :param settings: The application's settings.
+    :param pc_path: Pipeline configuration path.
+    :param pc: Pipeline configuration entity dictionary.
+
+    :returns sgtk.Sgtk: An Sgtk instance.
+    """
+    import sgtk
+    mgr = sgtk.bootstrap.ToolkitManager(user)
+
+    def progress_callback(progress_value, message):
+        """
+        Called whenever toolkit reports progress.
+
+        :param progress_value: The current progress value as float number.
+                               values will be reported in incremental order
+                               and always in the range 0.0 to 1.0
+        :param message:        Progress message string
+        """
+        splash.set_message("[%02d]: %s" % (int(progress_value * 100), message))
+        logger.debug(message)
+        app.processEvents()
+
+    mgr.do_shotgun_config_lookup = True
+    mgr.progress_callback = progress_callback
+    mgr.pipeline_configuration = pc["id"]
+    return mgr.bootstrap_toolkit(None)
+
+
+def __toolkit_classic_bootstrap(app, splash, user, app_bootstrap, server, settings, pc_path, pc):
     """
     Launches the Shotgun Desktop using Toolkit Classic
 
@@ -394,65 +431,21 @@ def __toolkit_classic_boostrap(app, splash, user, app_bootstrap, server, setting
     :param app_bootstrap: Application bootstrap.
     :param server: The tk_framework_desktopserver.Server instance.
     :param settings: The application's settings.
-    :param default_site_config: Default site configuration root.
+    :param pc_path: Pipeline configuration path.
     :param pc: Pipeline configuration entity dictionary.
 
     :returns: The error code to return to the shell.
     """
-    # import sgtk
-    # mgr = sgtk.bootstrap.ToolkitManager(user)
-
-    # def progress_callback(progress_value, message):
-    #     """
-    #     Called whenever toolkit reports progress.
-
-    #     :param progress_value: The current progress value as float number.
-    #                            values will be reported in incremental order
-    #                            and always in the range 0.0 to 1.0
-    #     :param message:        Progress message string
-    #     """
-    #     splash.set_message("%s: %s" % (progress_value, message))
-    #     logger.debug(message)
-    #     app.processEvents()
-
-    # mgr.do_shotgun_config_lookup = False
-    # mgr.base_configuration = "sgtk:descriptor:path?path=%s/config" % default_site_config
-    # mgr.progress_callback = progress_callback
-    # mgr.bundle_cache_fallback_paths = os.path.join(default_site_config, "install")
-    # engine = mgr.bootstrap_engine("tk-desktop", None)
-
-    from sgtk.bootstrap.import_handler import CoreImportHandler
-
-    try:
-        # Bootstrap into Toolkit Classic.
-        CoreImportHandler.swap_core(
-            os.path.join(default_site_config, "install", "core", "python")
-        )
-        # Clear references to the old core.
-        sgtk = None
-        CoreImportHandler = None
-
-        # Create the new Toolkit instance.
-        import sgtk
-
-        if not __toolkit_supports_authentication_module(sgtk):
-            raise UpgradeCoreError(
-                "This version of the Shotgun Desktop only supports core 0.16.4 and higher.",
-                default_site_config
-            )
-        sgtk.set_authenticated_user(user)
-        tk = sgtk.sgtk_from_path(default_site_config)
-    except:
-        logger.exception("Can't import Toolkit module.")
-        raise MissingConfigError(default_site_config)
+    # Creates a Toolkit instance pointing a Toolkit classic pipeline configuration. Note that this
+    # also scopes the import of Toolkit so that we can reimport it later down the line to start
+    # the engine.
+    tk = __bootstrap_toolkit_into_legacy_config(app, splash, user, pc)
 
     # If the pipeline configuration found in Shotgun doesn't match what we have locally, we have a
     # problem.
     if pc["id"] != tk.pipeline_configuration.get_shotgun_id():
         raise InvalidPipelineConfiguration(pc, tk.pipeline_configuration)
 
-    # This is important that this happens AFTER the core upgrade so that if there is a bug in the
-    # migration code we can release a new core that fixes it.
     # If the pipeline configuration we got from Shotgun is not assigned to a project, we might have
     # some patching to be done to local site configuration.
     if pc["project"] is None:
@@ -462,7 +455,7 @@ def __toolkit_classic_boostrap(app, splash, user, app_bootstrap, server, setting
             raise UpgradeCoreError(
                 "Running a site configuration without the Template Project requires core v0.16.8 "
                 "or higher.",
-                default_site_config
+                pc_path
             )
 
         # If the configuration on disk is not the site configuration, update it to the site config.
@@ -470,16 +463,21 @@ def __toolkit_classic_boostrap(app, splash, user, app_bootstrap, server, setting
             tk.pipeline_configuration.convert_to_site_config()
 
     # initialize the tk-desktop engine for an empty context
-    splash.set_message("Starting desktop engine.")
+    splash.set_message("Resolving context...")
+    app.processEvents()
+    ctx = tk.context_empty()
+
+    splash.set_message("Launching Engine...")
     app.processEvents()
 
-    ctx = tk.context_empty()
+    # Now start the engine. This import will import the new Toolkit we've bootstrapped into.
+    import sgtk
     engine = sgtk.platform.start_engine("tk-desktop", tk, ctx)
 
     if not __desktop_engine_supports_authentication_module(engine):
         raise UpgradeEngineError(
             "This version of the Shotgun Desktop only supports tk-desktop engine 2.0.0 and higher.",
-            default_site_config
+            pc_path
         )
 
     return __post_bootstrap_engine(sgtk, splash, app_bootstrap, server, engine)
@@ -514,7 +512,10 @@ def __zero_config_bootstrap(app, splash, user, app_bootstrap, server, settings):
         splash.set_message("%s: %s" % (progress_value, message))
         app.processEvents()
 
-    mgr.base_configuration = "sgtk:descriptor:app_store?name=tk-config-basic"
+    mgr.base_configuration = os.environ.get(
+        "SHOTGUN_CONFIG_FALLBACK_DESCRIPTOR",
+        "sgtk:descriptor:app_store?name=tk-config-basic"
+    )
     mgr.progress_callback = progress_callback
     mgr.plugin_id = "basic.desktop"
 

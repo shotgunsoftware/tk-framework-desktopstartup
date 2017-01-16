@@ -34,7 +34,7 @@ class Settings(object):
         """
         # FIXME: Violating API, need to figure out how we'll find toolkit.ini from outside core.
         from sgtk.util.user_settings import UserSettings
-        self._path = UserSettings().location
+        self._path = UserSettings()._compute_config_location()
         logger.info("Reading global settings from %s" % self._path)
         self._global_config = self._load_config(self._path)
 
