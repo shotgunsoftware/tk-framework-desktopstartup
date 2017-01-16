@@ -16,11 +16,15 @@ Known constraints:
 
 """
 
-from . import constants
+import os
+
+from ..platform import constants
 from ..errors import TankError
 
 from ..path_cache import PathCache
     
+
+
 class FolderIOReceiver(object):
     """
     Class that encapsulates all the IO operations from the various folder classes.
@@ -48,7 +52,7 @@ class FolderIOReceiver(object):
     # methods to call to actually execute the folder creation logic
         
     @classmethod
-    def sync_path_cache(cls, tk, full_sync):
+    def sync_path_cache(cls, tk, full_sync, log):
         """
         Synchronizes the path cache folders.
         This happens as part of execute_folder_creation(), but sometimes it is 
@@ -56,6 +60,7 @@ class FolderIOReceiver(object):
 
         :param tk: A tk API instance
         :param full_sync: Do a full sync
+        :param log: Standard python logger
         :returns: A list of paths which were calculated to be created
         """        
         path_cache = PathCache(tk)
@@ -68,7 +73,7 @@ class FolderIOReceiver(object):
     
             # new items that were not locally available are returned
             # as a list of dicts with keys id, type, name, configuration and path
-            rd = path_cache.synchronize(full_sync)
+            rd = path_cache.synchronize(log, full_sync)
                 
             # for each item we get back from the path cache synchronization,
             # issue a remote entity folder request and pass that down to 

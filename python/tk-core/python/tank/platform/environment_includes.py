@@ -31,34 +31,32 @@ relative paths are always required and context based paths are always optional.
 import os
 import re
 import sys
-import copy
+import copy 
+
+from tank_vendor import yaml
 
 from ..errors import TankError
 from ..template import TemplatePath
 from ..templatekey import StringKey
-from ..log import LogManager
 
 from . import constants
 
 from ..util.yaml_cache import g_yaml_cache
-from ..util.includes import resolve_include
-
-log = LogManager.get_logger(__name__)
 
 def _resolve_includes(file_name, data, context):
     """
     Parses the includes section and returns a list of valid paths
     """
     includes = []
-    resolved_includes = set()
+    resolved_includes = []
     
     if constants.SINGLE_INCLUDE_SECTION in data:
         # single include section
-        includes.append( data[constants.SINGLE_INCLUDE_SECTION])
+        includes.append( data[constants.SINGLE_INCLUDE_SECTION] )
             
     if constants.MULTI_INCLUDE_SECTION in data:
         # multi include section
-        includes.extend( data[constants.MULTI_INCLUDE_SECTION])
+        includes.extend( data[constants.MULTI_INCLUDE_SECTION] )
 
     for include in includes:
         
@@ -66,10 +64,6 @@ def _resolve_includes(file_name, data, context):
             # it's a template path
             if context is None:
                 # skip - these paths are optional always
-                log.debug(
-                    "%s: Skipping template based include '%s' "
-                    "because there is no active context." % (file_name, include)
-                )
                 continue
             
             # extract all {tokens}
@@ -108,13 +102,42 @@ def _resolve_includes(file_name, data, context):
             if not os.path.exists(full_path):
                 # skip - these paths are optional always
                 continue       
+        
+        elif "/" in include and not include.startswith("/") and not include.startswith("$"):
+            # relative path: foo/bar.yml or ./foo.bar.yml
+            # note the $ check to avoid paths beginning with env vars to fall into this branch
+            adjusted = include.replace("/", os.path.sep)
+            full_path = os.path.join(os.path.dirname(file_name), adjusted)
+            # make sure that the paths all exist
+            if not os.path.exists(full_path):
+                raise TankError("Include Resolve error in %s: Included path %s ('%s') "
+                                "does not exist!" % (file_name, full_path, include))
+    
+        elif "\\" in include:
+            # windows absolute path
+            if sys.platform != "win32":
+                # ignore this on other platforms
+                continue
+            full_path = os.path.expandvars(include)
+            # make sure that the paths all exist
+            if not os.path.exists(full_path):
+                raise TankError("Include Resolve error in %s: Included path %s "
+                                "does not exist!" % (file_name, full_path))
+            
         else:
-            path = resolve_include(file_name, include)
+            # linux absolute path
+            if sys.platform == "win32":
+                # ignore this on other platforms
+                continue
+            full_path = os.path.expandvars(include)                    
+            # make sure that the paths all exist
+            if not os.path.exists(full_path):
+                raise TankError("Include Resolve error in %s: Included path %s "
+                                "does not exist!" % (file_name, full_path))
 
-        if path:
-            resolved_includes.add(path)
+        resolved_includes.append(full_path)
 
-    return list(resolved_includes)
+    return resolved_includes
 
 
 
@@ -292,4 +315,5 @@ def find_reference(file_name, context, token):
         
     return found_file
     
-
+    
+    

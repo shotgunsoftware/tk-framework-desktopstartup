@@ -16,38 +16,36 @@ Defines the base class for all Tank Apps.
 import os
 import sys
 
-from ..util.loader import load_plugin
-from . import constants
+from .. import loader
+from . import constants 
 
+from ..errors import TankError
 from .bundle import TankBundle
 from ..util import log_user_activity_metric, log_user_attribute_metric
 
 class Application(TankBundle):
     """
-    Base class for all Applications (Apps) running in Toolkit.
+    Base class for an app in Tank.
     """
     
     def __init__(self, engine, descriptor, settings, instance_name, env):
         """
-        Application instances are constructed by the toolkit launch process
-        and various factory methods such as :meth:`start_engine`.
+        Called by the app loader framework. The constructor
+        is not supposed to be overridden by deriving classes.
         
         :param engine: The engine instance to connect this app to
         :param app_name: The short name of this app (e.g. tk-nukepublish)
         :param settings: a settings dictionary for this app
         """
+
+        # init base class
+        TankBundle.__init__(self, engine.tank, engine.context, settings, descriptor, env)
+        
         self.__engine = engine
         self.__instance_name = instance_name
 
-        # create logger for this app
-        # log will be parented in a sgtk.env.environment_name.engine_instance_name.app_instance_name hierarchy
-        logger = self.__engine.get_child_logger(self.__instance_name)
-
-        # init base class
-        TankBundle.__init__(self, engine.tank, engine.context, settings, descriptor, env, logger)
-
         self.log_debug("App init: Instantiating %s" % self)
-
+                
         # now if a folder named python is defined in the app, add it to the pythonpath
         app_path = os.path.dirname(sys.modules[self.__module__].__file__)
         python_path = os.path.join(app_path, constants.BUNDLE_PYTHON_FOLDER)
@@ -78,10 +76,9 @@ class Application(TankBundle):
     @property
     def shotgun(self):
         """
-        Returns a Shotgun API handle associated with the currently running
-        environment. This method is a convenience method that calls out
-        to :meth:`~sgtk.Tank.shotgun`.
-
+        Delegates to the Sgtk API instance's shotgun connection, which is lazily
+        created the first time it is requested.
+        
         :returns: Shotgun API handle
         """
         # pass on information to the user agent manager which bundle is returning
@@ -89,7 +86,7 @@ class Application(TankBundle):
         # in the shotgun data centre and makes it easy to track which app and engine versions
         # are being used by clients
         try:
-            self.tank.shotgun.tk_user_agent_handler.set_current_app(self.name,
+            self.tank.shotgun.tk_user_agent_handler.set_current_app(self.name, 
                                                                     self.version,
                                                                     self.engine.name,
                                                                     self.engine.version)
@@ -120,7 +117,7 @@ class Application(TankBundle):
         The engine that this app is connected to.
         """
         return self.__engine
-
+        
     ##########################################################################################
     # init, destroy, and context changing
         
@@ -135,7 +132,7 @@ class Application(TankBundle):
         """
         Implemented by deriving classes in order to run code after the engine
         has completely finished initializing itself and all its apps.
-        At this point, the engine has a fully populated apps dictionary and
+        At this point, the engine has a fully populaed apps dictionary and
         all loaded apps have been fully initialized and validated.
         """
         pass
@@ -146,119 +143,35 @@ class Application(TankBundle):
         Called by the engine as it is being destroyed.
         """
         pass
-
-    ##########################################################################################
-    # event handling
-
-    def event_engine(self, event):
-        """
-        Called when the parent engine emits an event. This method
-        is intended to be overridden by deriving classes in order to
-        implement event-specific behavior.
-
-        .. note:: This method is called for all engine event types. If
-                  overriding this method to implement an event handler
-                  in a specific app, the event object received will need
-                  to be checked via isinstance (or via its event_type
-                  property) to know what event has been triggered. As
-                  there are also type specific event handlers available,
-                  it is considered best practice to use those in all
-                  cases except those where a generic handler is absolutely
-                  required.
-
-        .. warning:: It is possible that events will be triggered quite
-                     frequently. It is important to keep performance in
-                     mind when writing an event handler.
-
-        :param event:   The event object that was emitted.
-        :type event:    :class:`~sgtk.platform.events.EngineEvent`
-        """
-        pass
-
-    def event_file_open(self, event):
-        """
-        Called when the parent engine emits a file-open event. This method
-        is intended to be overridden by deriving classes.
-
-        .. warning:: It is possible that events will be triggered quite
-                     frequently. It is important to keep performance in
-                     mind when writing an event handler.
-
-        :param event:   The event object that was emitted.
-        :type event:    :class:`~sgtk.platform.events.FileOpenEvent`
-        """
-        pass
     
     ##########################################################################################
-    # logging methods
+    # logging methods, delegated to the current engine
 
     def log_debug(self, msg):
-        """
-        Logs a debug message.
-
-        .. deprecated:: 0.18
-            Use :meth:`Engine.logger` instead.
-
-        :param msg: Message to log.
-        """
-        self.logger.debug(msg)
+        self.engine.log_debug(msg)
 
     def log_info(self, msg):
-        """
-        Logs an info message.
-
-        .. deprecated:: 0.18
-            Use :meth:`Engine.logger` instead.
-
-        :param msg: Message to log.
-        """
-        self.logger.info(msg)
+        self.engine.log_info(msg)
 
     def log_warning(self, msg):
-        """
-        Logs an warning message.
-
-        .. deprecated:: 0.18
-            Use :meth:`Engine.logger` instead.
-
-        :param msg: Message to log.
-        """
-        self.logger.warning(msg)
+        self.engine.log_warning(msg)
 
     def log_error(self, msg):
-        """
-        Logs an error message.
-
-        .. deprecated:: 0.18
-            Use :meth:`Engine.logger` instead.
-
-        :param msg: Message to log.
-        """
-        self.logger.error(msg)
+        self.engine.log_error(msg)
 
     def log_exception(self, msg):
-        """
-        Logs an exception message.
-
-        .. deprecated:: 0.18
-            Use :meth:`Engine.logger` instead.
-
-        :param msg: Message to log.
-        """
-        self.logger.exception(msg)
+        self.engine.log_exception(msg)
 
 
     ##########################################################################################
     # internal API
 
-    def log_metric(self, action, log_version=False, log_once=False):
+    def log_metric(self, action, log_version=False):
         """Logs an app metric.
 
         :param action: Action string to log, e.g. 'Execute Action'
         :param log_version: If True, also log a user attribute metric for the
             version of the app. Default is `False`.
-        :param bool log_once: ``True`` if this metric should be ignored if it
-            has already been logged. Defaults to ``False``.
 
         Logs a user activity metric as performed within an app. This is a
         convenience method that auto-populates the module portion of
@@ -275,12 +188,11 @@ class Application(TankBundle):
         # module: tk-multi-loader2
         # action: (tk-maya) tk-multi-loader2 - Load...
         full_action = "(%s) %s %s" % (self.engine.name, self.name, action)
-        log_user_activity_metric(self.name, full_action, log_once=log_once)
+        log_user_activity_metric(self.name, full_action)
 
         if log_version:
             # log the app version as a user attribute
-            log_user_attribute_metric(
-                "%s version" % (self.name,), self.version, log_once=log_once)
+            log_user_attribute_metric("%s version" % (self.name,), self.version)
 
 def get_application(engine, app_folder, descriptor, settings, instance_name, env):
     """
@@ -296,7 +208,7 @@ def get_application(engine, app_folder, descriptor, settings, instance_name, env
     plugin_file = os.path.join(app_folder, constants.APP_FILE)
         
     # Instantiate the app
-    class_obj = load_plugin(plugin_file, Application)
+    class_obj = loader.load_plugin(plugin_file, Application)
     obj = class_obj(engine, descriptor, settings, instance_name, env)
     return obj
 

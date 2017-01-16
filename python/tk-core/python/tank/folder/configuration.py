@@ -19,7 +19,7 @@ import fnmatch
 from .folder_types import Static, ListField, Entity, Project, UserWorkspace, ShotgunStep, ShotgunTask
 
 from ..errors import TankError, TankUnreadableFileError
-from . import constants
+from ..platform import constants
 from ..util import yaml_cache
 
 

@@ -25,8 +25,9 @@ app methods, environment etc. and should allow for some sophisticated
 introspection inside the hook.
 """
 
-from sgtk.util import filesystem
-from sgtk import Hook
+from tank import Hook
+import os
+import errno
 
 class EnsureFolderExists(Hook):
     
@@ -35,8 +36,18 @@ class EnsureFolderExists(Hook):
         Handle folder creation issued from an app, framework or engine.
         
         :param path: path to create
-        :param bundle_object: object requesting the creation. This is a legacy
-                              parameter and we recommend using self.parent instead.
+        :param bundle_object: object requesting the creation
         """
-        filesystem.ensure_folder_exists(path, permissions=0777)
-
+        if not os.path.exists(path):
+            old_umask = os.umask(0)
+            try:
+                os.makedirs(path, 0777)
+            except OSError, e:
+                # Race conditions are perfectly possible on some network storage setups
+                # so make sure that we ignore any file already exists errors, as they 
+                # are not really errors!
+                if e.errno != errno.EEXIST: 
+                    raise e
+            finally:
+                os.umask(old_umask)
+            

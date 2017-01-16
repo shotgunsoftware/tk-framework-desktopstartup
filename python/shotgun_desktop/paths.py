@@ -96,18 +96,6 @@ def get_default_site_config_root(connection):
                 (", ".join([str(p["id"]) for p in pcs]), pc["id"])
             )
 
-    # If the TK_SITE_CONFIG_ROOT env variable is set and contains
-    # something useful, we will use that.
-    env_site = os.environ.get("TK_SITE_CONFIG_ROOT")
-    if env_site:
-        logger.info(
-            "$TK_SITE_CONFIG_ROOT site config override found, using "
-            "site config path '%s' when launching desktop." % str(env_site)
-        )
-        env_site = os.path.expanduser(os.path.expandvars(str(env_site)))
-        os.environ["TK_BOOTSTRAP_CONFIG_OVERRIDE"] = env_site
-        return (env_site, pc, True if pc.get(plat_key, "") else False)
-
     # see if we found a pipeline configuration
     if pc is not None and pc.get(plat_key, ""):
         # path is already set for us, just return it

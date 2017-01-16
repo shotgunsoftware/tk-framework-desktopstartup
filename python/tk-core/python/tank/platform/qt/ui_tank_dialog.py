@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'tank_dialog.ui'
 #
-#      by: pyside-uic 0.2.15 running on PySide 1.2.2
+#      by: pyside-uic 0.2.15 running on PySide 1.2.1
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -12,7 +12,6 @@ class Ui_TankDialog(object):
     def setupUi(self, TankDialog):
         TankDialog.setObjectName("TankDialog")
         TankDialog.resize(879, 551)
-        TankDialog.setStyleSheet("")
         self.verticalLayout_3 = QtGui.QVBoxLayout(TankDialog)
         self.verticalLayout_3.setSpacing(0)
         self.verticalLayout_3.setContentsMargins(0, 0, 0, 0)
@@ -34,6 +33,7 @@ class Ui_TankDialog(object):
 "border: none;\n"
 "border-bottom:1px solid #606161\n"
 "}\n"
+"\n"
 "")
         self.top_group.setTitle("")
         self.top_group.setFlat(False)
@@ -55,22 +55,17 @@ class Ui_TankDialog(object):
         self.label = QtGui.QLabel(self.top_group)
         self.label.setStyleSheet("/* want this stylesheet to apply to the label but not the tooltip */\n"
 "QLabel{\n"
-"    color: white;\n"
-"    font-size: 20px;\n"
-"    margin-left: 5px;\n"
-"    font-family: \"Open Sans\";\n"
-"    font-style: \"Regular\";\n"
+"color: white;\n"
+"font-size: 20px;\n"
+"margin-left: 5px;\n"
 "}")
         self.label.setObjectName("label")
         self.horizontalLayout.addWidget(self.label)
         self.lbl_context = QtGui.QLabel(self.top_group)
         self.lbl_context.setStyleSheet("/* want this stylesheet to apply to the label but not the tooltip */\n"
-"QLabel { \n"
-"    color: rgba(250,250,250,180);\n"
-"    font-size: 11px;\n"
-"    margin-right: 8px;\n"
-"    font-family: \"Open Sans\";\n"
-"    font-style: \"Regular\";\n"
+"QLabel { color: rgba(250,250,250,180);\n"
+"font-size: 11px;\n"
+"margin-right: 8px;\n"
 "} \n"
 "\n"
 "\n"
@@ -109,10 +104,7 @@ class Ui_TankDialog(object):
         self.verticalLayout.addLayout(self.target)
         self.stackedWidget.addWidget(self.page_1)
         self.page_2 = QtGui.QWidget()
-        self.page_2.setStyleSheet("QWidget {\n"
-"    font-family: \"Open Sans\";\n"
-"    font-style: \"Regular\";\n"
-"}")
+        self.page_2.setStyleSheet("")
         self.page_2.setObjectName("page_2")
         self.verticalLayout_2 = QtGui.QVBoxLayout(self.page_2)
         self.verticalLayout_2.setContentsMargins(1, 1, 1, 1)

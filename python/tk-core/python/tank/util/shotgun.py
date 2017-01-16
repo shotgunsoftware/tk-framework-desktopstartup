@@ -12,33 +12,26 @@
 Shotgun utilities
 
 """
-from __future__ import with_statement
 
 import os
 import sys
-import uuid
+import urllib
 import urllib2
 import urlparse
-import pprint
-import time
-import threading
-import tempfile
+
+from tank_vendor import yaml
 
 # use api json to cover py 2.5
 from tank_vendor import shotgun_api3
+json = shotgun_api3.shotgun.json
+from tank_vendor.shotgun_authentication import ShotgunAuthenticator, AuthenticationError
 
-from .errors import UnresolvableCoreConfigurationError, ShotgunAttachmentDownloadError
 from ..errors import TankError
-from ..log import LogManager
 from .. import hook
-from . import constants
+from ..platform import constants
 from . import login
+from .defaults_manager import CoreDefaultsManager
 from . import yaml_cache
-from .zip import unzip_file
-from . import filesystem
-from .metrics import log_user_attribute_metric
-
-log = LogManager.get_logger(__name__)
 
 
 def __get_api_core_config_location():
@@ -64,7 +57,10 @@ def __get_api_core_config_location():
 
     if not os.path.exists(core_cfg):
         full_path_to_file = os.path.abspath(os.path.dirname(__file__))
-        raise UnresolvableCoreConfigurationError(full_path_to_file)
+        raise TankError("Cannot resolve the core configuration from the location of the Sgtk Code! "
+                        "This can happen if you try to move or symlink the Sgtk API. The "
+                        "Sgtk API is currently picked up from %s which is an "
+                        "invalid location." % full_path_to_file)
 
     return core_cfg
 
@@ -75,8 +71,7 @@ def __get_sg_config():
     :returns: full path to to shotgun.yml config file
     """
     core_cfg = __get_api_core_config_location()
-    path = os.path.join(core_cfg, "shotgun.yml")
-    return path
+    return os.path.join(core_cfg, "shotgun.yml")
 
 def get_project_name_studio_hook_location():
     """
@@ -94,8 +89,7 @@ def get_project_name_studio_hook_location():
     # pipeline configuration/Toolkit project.
     
     core_cfg = __get_api_core_config_location()
-    path = os.path.join(core_cfg, constants.STUDIO_HOOK_PROJECT_NAME)
-    return path
+    return os.path.join(core_cfg, constants.STUDIO_HOOK_PROJECT_NAME)
 
 def __get_sg_config_data(shotgun_cfg_path, user="default"):
     """
@@ -205,26 +199,63 @@ def _parse_config_data(file_data, user, shotgun_cfg_path):
     if not config_data.get("api_script") and config_data.get("api_key"):
         _raise_missing_key("api_script")
 
-    # If the appstore proxy is set, but the value is falsy.
-    if "app_store_http_proxy" in config_data and not config_data["app_store_http_proxy"]:
-        # Make sure it is None.
-        config_data["app_store_http_proxy"] = None
-
     return config_data
 
-@LogManager.log_timing
+
+def __create_sg_connection(config_data=None, user=None):
+    """
+    Creates a standard Toolkit shotgun connection.
+
+    :param config_data: Configuration data dictionary. Keys host, api_script and api_key are
+                        expected, while http_proxy is optional. If None, the user parameter will be
+                        used to determine which credentials to use.
+    :param user: Shotgun user from the shotgun_authentication module to use to create the
+                 connection. Won't be used if config_data is set. Can be None.
+
+    :raises TankError: Raised if both config_data and user are None.
+
+    :returns: A Shotgun connection.
+    """
+
+    if config_data:
+        # Credentials were passed in, so let's run the legacy authentication
+        # mechanism for script user.
+        sg = shotgun_api3.Shotgun(
+            config_data["host"],
+            script_name=config_data["api_script"], api_key=config_data["api_key"],
+            http_proxy=config_data.get("http_proxy"), connect=config_data.get("connect", True))
+
+        if "timeout_secs" in config_data:
+            sg.config.timeout_secs = config_data.get("timeout_secs")
+            # The timeout can't be set until after the sg instance is created (when it has already
+            # stored the timeout setting in the connection). We have to force it to re-spawn
+            # the connection with the new timeout settings. It will create a new conneciton 
+            # automatically the next time it's called. There shouldn't be a connection yet, but
+            # if there is, let's close it just in case.
+            sg.close()
+    elif user:
+        sg = user.create_sg_connection()
+    else:
+        raise TankError("No Shotgun user available.")
+
+    # bolt on our custom user agent manager
+    sg.tk_user_agent_handler = ToolkitUserAgentHandler(sg)
+
+    return sg
+
+
 def download_url(sg, url, location):
     """
     Convenience method that downloads a file from a given url.
     This method will take into account any proxy settings which have
     been defined in the Shotgun connection parameters.
     
-    :param sg: Shotgun API instance to get proxy connection settings from
+    :param sg: sg API to get proxy connection settings from
     :param url: url to download
     :param location: path on disk where the payload should be written.
                      this path needs to exists and the current user needs
                      to have write permissions
-    :raises: :class:`TankError` on failure.
+    :returns: nothing
     """
     # grab proxy server settings from the shotgun API
     if sg.config.proxy_handler:
@@ -250,75 +281,7 @@ def download_url(sg, url, location):
             f.close()
     except Exception, e:
         raise TankError("Could not download contents of url '%s'. Error reported: %s" % (url, e))
-
-@LogManager.log_timing
-def download_and_unpack_attachment(sg, attachment_id, target, retries=5):
-    """
-    Downloads the given attachment from Shotgun, assumes it is a zip file
-    and attempts to unpack it into the given location.
-
-    :param sg: Shotgun API instance
-    :param attachment_id: Attachment to download
-    :param target: Folder to unpack zip to. if not created, the method will
-                   try to create it.
-    :param retries: Number of times to retry before giving up
-    :raises: ShotgunAttachmentDownloadError on failure
-    """
-    # @todo: progress feedback here - when the SG api supports it!
-    # sometimes people report that this download fails (because of flaky connections etc)
-    # engines can often be 30-50MiB - as a quick fix, just retry the download if it fails
-    attempt = 0
-    done = False
-
-    while not done and attempt < retries:
-
-        zip_tmp = os.path.join(tempfile.gettempdir(), "%s_tank.zip" % uuid.uuid4().hex)
-        try:
-            time_before = time.time()
-            log.debug("Downloading attachment id %s..." % attachment_id)
-            bundle_content = sg.download_attachment(attachment_id)
-
-            log.debug("Download complete. Saving into %s" % zip_tmp)
-            with open(zip_tmp, "wb") as fh:
-                fh.write(bundle_content)
-
-            file_size = os.path.getsize(zip_tmp)
-
-            # log connection speed
-            time_to_download = time.time() - time_before
-            broadband_speed_bps = file_size * 8.0 / time_to_download
-            broadband_speed_mibps = broadband_speed_bps / (1024 * 1024)
-            log.debug("Download speed: %4f Mbit/s" % broadband_speed_mibps)
-            log_user_attribute_metric("Tk attachment download speed", "%4f Mbit/s" % broadband_speed_mibps)
-
-
-            log.debug("Unpacking %s bytes to %s..." % (file_size, target))
-            filesystem.ensure_folder_exists(target)
-            unzip_file(zip_tmp, target)
-
-        except Exception, e:
-            log.warning(
-                "Attempt %s: Attachment download of id %s from %s failed: %s" % (attempt, attachment_id, sg.base_url, e)
-            )
-            attempt += 1
-            # sleep 500ms before we retry
-            time.sleep(0.5)
-        else:
-            done = True
-        finally:
-            # remove zip file
-            filesystem.safe_delete_file(zip_tmp)
-
-    if not done:
-        # we were not successful
-        raise ShotgunAttachmentDownloadError(
-            "Failed to download from '%s' after %s retries. See error log for details." % (sg.base_url, retries)
-        )
-
-    else:
-        log.debug("Attachment download and unpack complete.")
-
-
+    
     
 def get_associated_sg_base_url():
     """
@@ -333,15 +296,7 @@ def get_associated_sg_base_url():
     
     :returns: The base url for the associated Shotgun site
     """
-    # Avoids cyclic imports.
-    from .. import api
-    sg_user = api.get_authenticated_user()
-
-    if sg_user:
-        return sg_user.host
-    else:
-        # look up in core/shotgun.yml
-        return get_associated_sg_config_data()["host"]
+    return get_associated_sg_config_data()["host"]
 
 
 def get_associated_sg_config_data():
@@ -353,53 +308,34 @@ def get_associated_sg_config_data():
     cfg = __get_sg_config()
     return __get_sg_config_data(cfg)
 
-def get_deferred_sg_connection():
-    """
-    Returns a shotgun API instance that is lazily initialized.
-    This is a method intended only to support certain legacy cases
-    where some operations in Toolkit are not fully authenticated.
-    When descriptor objects are constructed, they are associated with a
-    SG API handle. This handle is not necessary for basic operations such
-    as path resolution. By passing a deferred connection object to
-    descriptors, authentication is essentially deferred until the need
-    for more complex operations arises, allowing for simple, *legacy*
-    non-authenticated pathways.
-
-    :return: Proxied SG API handle
-    """
-    class DeferredInitShotgunProxy(object):
-        def __init__(self):
-            self._sg = None
-        def __getattr__(self, key):
-            if self._sg is None:
-                self._sg = get_sg_connection()
-            return getattr(self._sg, key)
-
-    return DeferredInitShotgunProxy()
-
-
-_g_sg_cached_connections = threading.local()
+    
+g_sg_cached_connection = None
 def get_sg_connection():
     """
-    Returns a shotgun connection and maintains a global cache of connections
-    so that only one API instance is ever returned per thread, no matter how many
-    times this call is made.
+    Returns a shotgun connection and maintains a global, cached connection so that only one
+    object is ever returned, no matter how many times this call is made.
+    
+    If you have access to a tk API handle, DO NOT USE THIS METHOD! Instead, use the 
+    tk.shotgun handle, which is also optimal and doesn't keep creating new instances.
+    
+    For all methods where no tk API handle is available (pre-init stuff and global 
+    tk commands for example), this method is useful for performance reasons.
+    
+    Whenever a Shotgun API instance is created, it pings the server to check that 
+    it is running the right versions etc. This is slow and inefficient and means that
+    there will be a delay every time create_sg_connection is called.
 
-        .. note:: Because Shotgun API instances are not safe to share across
-                  threads, this method caches SG Instances per-thread.
-
+    This method caches a global (non-threadsafe!) sg instance and thereby avoids
+    the penalty of connecting to sg every single time the method is called.
+    
     :return: SG API handle    
     """
-    global _g_sg_cached_connections
-    sg = getattr(_g_sg_cached_connections, "sg", None)
+    
+    global g_sg_cached_connection
+    if g_sg_cached_connection is None:
+        g_sg_cached_connection = create_sg_connection()
+    return g_sg_cached_connection
 
-    if sg is None:
-        sg = create_sg_connection()
-        _g_sg_cached_connections.sg = sg
-
-    return sg
-
-@LogManager.log_timing
 def create_sg_connection(user="default"):
     """
     Creates a standard tank shotgun connection.
@@ -412,9 +348,7 @@ def create_sg_connection(user="default"):
     it is running the right versions etc. This is slow and inefficient and means that
     there will be a delay every time create_sg_connection is called.
     
-    :param user: Optional shotgun config user to use when connecting to shotgun,
-                 as defined in shotgun.yml. This is a deprecated flag and should not
-                 be used.
+    :param user: Optional shotgun config user to use when connecting to shotgun, as defined in shotgun.yml
     :returns: SG API instance
     """
 
@@ -426,51 +360,138 @@ def create_sg_connection(user="default"):
     # the authenticated user concept. In that case, we'll do what we've always been doing in the
     # past, which is read shotgun.yml and expect there to be a script user.
     if sg_user is None:
-        log.debug(
-            "This tk session has no associated authenticated user. Falling back to "
-            "creating a shotgun API instance based on script based credentials in the "
-            "shotgun.yml configuration file."
-        )
-
-        # try to find the shotgun.yml path
-        try:
-            config_file_path = __get_sg_config()
-        except TankError, e:
-            log.error(
-                "Trying to create a shotgun connection but this tk session does not have "
-                "an associated authenticated user. Therefore attempted to fall back on "
-                "a legacy authentication method where script based credentials are "
-                "located in a file relative to the location of the core API code. This "
-                "lookup in turn failed. No credentials can be determined and no connection "
-                "to Shotgun can be made. Details: %s" % e
-            )
-            raise TankError("Cannot connect to Shotgun - this tk session does not have "
-                            "an associated user and attempts to determine a valid shotgun "
-                            "via legacy configuration files failed. Details: %s" % e)
-
-        log.debug("Creating shotgun connection based on details in %s" % config_file_path)
-        config_data = __get_sg_config_data_with_script_user(config_file_path, user)
-
-        # Credentials were passed in, so let's run the legacy authentication
-        # mechanism for script user.
-        api_handle = shotgun_api3.Shotgun(
-            config_data["host"],
-            script_name=config_data["api_script"],
-            api_key=config_data["api_key"],
-            http_proxy=config_data.get("http_proxy"),
-            connect=False
-        )
-
+        config_data = __get_sg_config_data_with_script_user(__get_sg_config(), user)
+        api_handle = __create_sg_connection(config_data)
     else:
         # Otherwise use the authenticated user to create the connection.
-        log.debug("Creating shotgun connection from %r..." % sg_user)
-        api_handle = sg_user.create_sg_connection()
-
-    # bolt on our custom user agent manager so that we can
-    # send basic version metrics back via http headers.
-    api_handle.tk_user_agent_handler = ToolkitUserAgentHandler(api_handle)
-
+        api_handle = __create_sg_connection(None, sg_user)
     return api_handle
+
+g_app_store_connection = None
+def create_sg_app_store_connection():
+    """
+    Creates a shotgun connection that can be used to access the Toolkit app store.
+
+    :returns: (sg, dict) where the first item is the shotgun api instance and the second 
+              is an sg entity dictionary (keys type/id) corresponding to to the user used
+              to connect to the app store.
+    """
+    global g_app_store_connection
+
+    # maintain a cache for performance
+    if g_app_store_connection is not None:
+        return g_app_store_connection
+
+    # Connect to associated Shotgun site and retrieve the credentials to use to
+    # connect to the app store site
+    config_data = _get_app_store_connection_information()
+
+    # get connection parameters
+    sg = __create_sg_connection(config_data)
+
+    script_user = None
+
+    # determine the script user running currently
+    # get the API script user ID from shotgun
+    script_user = sg.find_one(
+        "ApiUser",
+        [["firstname", "is", config_data["api_script"]]],
+        fields=["type", "id"]
+    )
+    if script_user is None:
+        raise TankError("Could not evaluate the current App Store User! Please contact support.")
+
+    g_app_store_connection = sg, script_user
+
+    return g_app_store_connection
+
+
+def _get_app_store_connection_information():
+    """
+    Get app store connection information
+    :returns: A dictionary with host, api_key, api_script and http_proxy
+    """
+    client_site_sg = get_sg_connection()
+    (script_name, script_key) = __get_app_store_key_from_shotgun(client_site_sg)
+
+    # connect to the app store
+    config_data = {}
+    config_data["host"] = constants.SGTK_APP_STORE
+    config_data["api_script"] = script_name
+    config_data["api_key"] = script_key
+    config_data["http_proxy"] = _get_app_store_proxy_setting(client_site_sg)
+    # For studios without internet access, the connection to the Toolkit app store won't succeed.
+    # This ensures that the request won't hang indefinitely if their firewall silently drops the 
+    # connection instead of rejecting it.
+    config_data["timeout_secs"] = 5
+    # We can't set the timeout in the Python API until after creating the instance so don't connect
+    # immediately. 
+    config_data["connect"] = False
+
+    return config_data
+
+
+def _get_app_store_proxy_setting(connection):
+    """
+    Retrieve the app store proxy settings. If the key
+    app_store_http_proxy is not found in the shotgun.yml file, the proxy
+    settings from the client site connection will be used. If the key is
+    found, than its value will be used. Note that if the app_store_http_proxy
+    setting is set to 'null' in the configuration file, it means that
+    the app store proxy is being forced to none and therefore won't be inherited
+    from the http proxy setting.
+
+    :param connection: A working connection to the site.
+
+    :returns: The http proxy connection string.
+    """
+    config_data = get_associated_sg_config_data()
+    if config_data and constants.APP_STORE_HTTP_PROXY in config_data:
+        return config_data[constants.APP_STORE_HTTP_PROXY]
+    else:
+        # Use the http proxy from the connection so we don't have to run
+        # the connection hook again.
+        return connection.config.raw_http_proxy
+
+
+def __get_app_store_key_from_shotgun(sg_connection):
+    """
+    Given a Shotgun url and script credentials, fetch the app store key
+    for this shotgun instance using a special controller method.
+    Returns a tuple with (app_store_script_name, app_store_auth_key)
+
+    :param sg_connection: SG connection to the client site for which
+                          app store credentials should be retrieved.
+    :returns: tuple of strings with contents (script_name, script_key)
+    """
+    # first check if there is an app_store.yml file associated with the 
+    # project. In that case, just use that.
+    core_cfg = __get_api_core_config_location()
+    app_store_yml_path = os.path.join(core_cfg, "app_store.yml")
+
+    if os.path.exists(app_store_yml_path):
+        # The file exists, so read the file expecting all values to be present.
+        config_data = __get_sg_config_data_with_script_user(app_store_yml_path)
+        # we got two values from the app store file!
+        return config_data["api_script"], config_data["api_key"]
+
+    # if app store connection details couldn't be read from the file for 
+    # whatever reason, talk to Shotgun to get the credentials.
+    # note that this functionality requires sg 6.0 or above.
+    
+    # handle proxy setup by pulling the proxy details from the main shotgun connection
+    if sg_connection.config.proxy_handler:
+        opener = urllib2.build_opener(sg_connection.config.proxy_handler)
+        urllib2.install_opener(opener)
+
+    # now connect to our site and use a special url to retrieve the app store script key
+    session_token = sg_connection.get_session_token()
+    post_data = {"session_token": session_token}
+    response = urllib2.urlopen("%s/api3/sgtk_install_script" % sg_connection.base_url, urllib.urlencode(post_data)) 
+    html = response.read()
+    data = json.loads(html)
+
+    return(data["script_name"], data["script_key"])
 
 
 g_entity_display_name_lookup = None
@@ -479,14 +500,12 @@ def get_entity_type_display_name(tk, entity_type_code):
     """
     Returns the display name for an entity type given its type name.
     For example, if a custom entity is named "Workspace" in the
-    Shotgun preferences, but is addressed as "CustomEntity03" in the
-    Shotgun API, this method will resolve the display name::
+    Shotgun preferences, but is addressed as CustomEntity03 in the
+    Shotgun API, this method will resolve
+    CustomEntity03 -> Workspace.
 
-        >>> get_entity_type_display_name(tk, "CustomEntity03")
-        'Workspace'
-
-    :param tk: :class:`~sgtk.Sgtk` instance
-    :param entity_type_code: API entity type name
+    :param tk: tank handle
+    :param entity_type code: API entity type name
     :returns: display name
     """
 
@@ -507,7 +526,6 @@ def get_entity_type_display_name(tk, entity_type_code):
 
     return display_name
 
-@LogManager.log_timing
 def find_publish(tk, list_of_paths, filters=None, fields=None):
     """
     Finds publishes in Shotgun given paths on disk.
@@ -524,17 +542,17 @@ def find_publish(tk, list_of_paths, filters=None, fields=None):
     the fields parameter.
 
     The method will return a dictionary, keyed by path. The value will be
-    a standard shotgun query result dictionary, for example::
+    a standard shotgun query result dictionary, for example
 
-        {
-            "/foo/bar" : { "id": 234, "type": "TankPublishedFile", "code": "some data" },
-            "/foo/baz" : { "id": 23,  "type": "TankPublishedFile", "code": "some more data" }
-        }
+    {
+        "/foo/bar" : { "id": 234, "type": "TankPublishedFile", "code": "some data" },
+        "/foo/baz" : { "id": 23,  "type": "TankPublishedFile", "code": "some more data" }
+    }
 
     Fields that are not found, or filtered out by the filters parameter,
     are not returned in the dictionary.
 
-    :param tk: :class:`~sgtk.Sgtk` instance
+    :param tk: Sgtk API Instance
     :param list_of_paths: List of full paths for which information should be retrieved
     :param filters: Optional list of shotgun filters to apply.
     :param fields: Optional list of fields from the matched entities to
@@ -668,26 +686,28 @@ def _group_by_storage(tk, list_of_paths):
     Returns a dictionary, keyed by storage name. Each storage in the dict contains another dict,
     with an item for each path_cache entry.
 
-    Examples::
 
-        ['/studio/project_code/foo/bar.0003.exr', '/secondary_storage/foo/bar']
+    Examples:
 
-        {'Tank':
-            {'project_code/foo/bar.%04d.exr': ['/studio/project_code/foo/bar.0003.exr'] }
+    ['/studio/project_code/foo/bar.0003.exr', '/secondary_storage/foo/bar']
 
-         'Secondary_Storage':
-            {'foo/bar': ['/secondary_storage/foo/bar'] }
-        }
+    {'Tank':
+        {'project_code/foo/bar.%04d.exr': ['/studio/project_code/foo/bar.0003.exr'] }
+
+     'Secondary_Storage':
+        {'foo/bar': ['/secondary_storage/foo/bar'] }
+    }
 
 
-        ['c:\studio\project_code\foo\bar', '/secondary_storage/foo/bar']
+    ['c:\studio\project_code\foo\bar', '/secondary_storage/foo/bar']
 
-        {'Tank':
-            {'project_code/foo/bar': ['c:\studio\project_code\foo\bar'] }
+    {'Tank':
+        {'project_code/foo/bar': ['c:\studio\project_code\foo\bar'] }
 
-         'Secondary_Storage':
-            {'foo/bar': ['/secondary_storage/foo/bar'] }
-        }
+     'Secondary_Storage':
+        {'foo/bar': ['/secondary_storage/foo/bar'] }
+    }
+
     """
     storages_paths = {}
 
@@ -710,21 +730,22 @@ def _group_by_storage(tk, list_of_paths):
 
     return storages_paths
 
-@LogManager.log_timing
+
 def create_event_log_entry(tk, context, event_type, description, metadata=None):
     """
     Creates an event log entry inside of Shotgun.
     Event log entries can be handy if you want to track a process or a sequence of events.
 
-    :param tk: :class:`~sgtk.Sgtk` instance
-    :param context: A :class:`~sgtk.Context` to associate with the event log entry.
+    :param tk: Sgtk API instance
+
+    :param context: Context which will be used to associate the event log entry
 
     :param event_type: String which defines the event type. The Shotgun standard suggests
-                       that this should be on the form Company_Item_Action. Examples include::
+                       that this should be on the form Company_Item_Action. Examples include:
 
-                           Shotgun_Asset_New
-                           Shotgun_Asset_Change
-                           Shotgun_User_Login
+                       Shotgun_Asset_New
+                       Shotgun_Asset_Change
+                       Shotgun_User_Login
 
     :param description: A verbose description explaining the meaning of this event.
 
@@ -750,60 +771,26 @@ def create_event_log_entry(tk, context, event_type, description, metadata=None):
 
 def get_published_file_entity_type(tk):
     """
-    Return the entity type that this toolkit uses for its Publishes.
-
-    .. note:: This is for backwards compatibility situations only.
-              Code targeting new installations can assume that
-              the published file type in Shotgun is always ``PublishedFile``.
-
-    :param tk: :class:`~sgtk.Sgtk` instance
-    :returns: "PublishedFile" or "TankPublishedFile"
-
+    Return the Published File entity type
+    currently being used in Shotgun
     """
     return tk.pipeline_configuration.get_published_file_entity_type()
 
-@LogManager.log_timing
 def register_publish(tk, context, path, name, version_number, **kwargs):
     """
-    Creates a Published File in Shotgun.
+    Creates a Tank Published File in Shotgun.
 
-    Example::
+    Required parameters:
 
-        >>> version_number = 1
-        >>> file_path = '/studio/demo_project/sequences/Sequence-1/shot_010/Anm/publish/layout.v001.ma'
-        >>> name = 'layout'
-        >>> sgtk.util.register_publish(tk, ctx, file_path, name, version_number)
-        {'code': 'layout.v001.ma',
-         'created_by': {'id': 40, 'name': 'John Smith', 'type': 'HumanUser'},
-         'description': None,
-         'entity': {'id': 2, 'name': 'shot_010', 'type': 'Shot'},
-         'id': 2,
-         'name': 'layout',
-         'path': {'content_type': None,
-          'link_type': 'local',
-          'local_path': '/studio/demo_project/sequences/Sequence-1/shot_010/Anm/publish/layout.v001.ma',
-          'local_path_linux': '/studio/demo_project/sequences/Sequence-1/shot_010/Anm/publish/layout.v001.ma',
-          'local_path_mac': '/studio/demo_project/sequences/Sequence-1/shot_010/Anm/publish/layout.v001.ma',
-          'local_path_windows': 'c:\\studio\\demo_project\\sequences\\Sequence-1\\shot_010\\Anm\\publish\\layout.v001.ma',
-          'local_storage': {'id': 1, 'name': 'primary', 'type': 'LocalStorage'},
-          'name': 'layout.v001.ma',
-          'url': 'file:///studio/demo_project/sequences/Sequence-1/shot_010/Anm/publish/layout.v001.ma'},
-         'path_cache': 'demo_project/sequences/Sequence-1/shot_010/Anm/publish/layout.v001.ma',
-         'project': {'id': 4, 'name': 'Demo Project', 'type': 'Project'},
-         'task': None,
-         'type': 'PublishedFile',
-         'version_number': 1}
+        tk - a Sgtk API instance
 
-    The above example shows a basic publish. In addition to the required parameters, it is
-    recommended to supply at least a description and a Publish Type.
+        context - the context we want to associate with the publish
 
-    :param tk: :class:`~sgtk.Sgtk` instance
-    :param context: A :class:`~sgtk.Context` to associate with the publish. This will
-                    populate the task and entity link in Shotgun.
-    :param path: The path to the file or sequence we want to publish. If the
-                 path is a sequence path it will be abstracted so that
-                 any sequence keys are replaced with their default values.
-    :param name: A name, without version number, which helps distinguish
+        path - the path to the file or sequence we want to publish. If the
+               path is a sequence path it will be abstracted so that
+               any sequence keys are replaced with their default values.
+
+        name - a name, without version number, which helps distinguish
                this publish from other publishes. This is typically
                used for grouping inside of Shotgun so that all the
                versions of the same "file" can be grouped into a cluster.
@@ -811,45 +798,43 @@ def register_publish(tk, context, path, name, version_number, **kwargs):
                the scene name, the name would simply be that: the scene
                name. For something like a render, it could be the scene
                name, the name of the AOV and the name of the render layer.
-    :param version_number: The version number of the item we are publishing.
 
+        version_number - the version numnber of the item we are publishing.
 
-    In addition to the above, the following optional arguments exist:
+    Optional arguments:
 
-        - ``task`` - A shotgun entity dictionary with id and type (which should always be Task).
-          if no value is specified, the task will be grabbed from the context object.
+        task - a shotgun entity dictionary with id and type (which should always be Task).
+               if no value is specified, the task will be grabbed from the context object.
 
-        - ``comment`` - A string containing a description of the comment
+        comment - a string containing a description of the comment
 
-        - ``thumbnail_path`` - A path to a thumbnail (png or jpeg) which will be uploaded to shotgun
-          and associated with the publish.
+        thumbnail_path - a path to a thumbnail (png or jpeg) which will be uploaded to shotgun
+                         and associated with the publish.
 
-        - ``dependency_paths`` - A list of file system paths that should be attempted to be registered
-          as dependencies. Files in this listing that do not appear as publishes in shotgun will be ignored.
+        dependency_paths - a list of file system paths that should be attempted to be registered
+                           as dependencies. Files in this listing that do not appear as publishes
+                           in shotgun will be ignored.
 
-        - ``dependency_ids`` - A list of publish ids which should be registered as dependencies.
+        dependency_ids - a list of publish ids which should be registered as dependencies.
 
-        - ``published_file_type`` - A tank type in the form of a string which should match a tank type
-          that is registered in Shotgun.
+        published_file_type - a tank type in the form of a string which should match a tank type
+                            that is registered in Shotgun.
 
-        - ``update_entity_thumbnail`` - Push thumbnail up to the attached entity
+        update_entity_thumbnail - push thumbnail up to the attached entity
 
-        - ``update_task_thumbnail`` - Push thumbnail up to the attached task
+        update_task_thumbnail - push thumbnail up to the attached task
 
-        - ``created_by`` - Override for the user that will be marked as creating the publish.  This should
-          be in the form of shotgun entity, e.g. {"type":"HumanUser", "id":7}
+        created_by - override for the user that will be marked as creating the publish.  This should
+                    be in the form of shotgun entity, e.g. {"type":"HumanUser", "id":7}
 
-        - ``created_at`` - Override for the date the publish is created at.  This should be a python
-          datetime object
+        created_at - override for the date the publish is created at.  This should be a python
+                    datetime object
                     
-        - ``version_entity`` - The Shotgun version entity this published file should be linked to
+        version_entity - the Shotgun version entity this published file should be linked to 
 
-        - ``sg_fields`` - Some additional Shotgun fields as a dict (e.g. ``{'tag_list': ['foo', 'bar']}``)
+        sg_fields - some additional Shotgun fields as a dict (e.g. {'tag_list': ['foo', 'bar']})
 
-    :returns: The created entity dictionary
     """
-    log.debug("Publish: Begin register publish")
-
     # get the task from the optional args, fall back on context task if not set
     task = kwargs.get("task")
     if task is None:
@@ -875,7 +860,6 @@ def register_publish(tk, context, path, name, version_number, **kwargs):
 
     published_file_entity_type = get_published_file_entity_type(tk)
 
-    log.debug("Publish: Resolving the published file type")
     sg_published_file_type = None
     # query shotgun for the published_file_type
     if published_file_type:
@@ -898,8 +882,7 @@ def register_publish(tk, context, path, name, version_number, **kwargs):
                 sg_published_file_type = tk.shotgun.create("TankType", {"code": published_file_type, "project": context.project})
 
     # create the publish
-    log.debug("Publish: Creating publish in Shotgun")
-    entity = _create_published_file(tk,
+    entity = _create_published_file(tk, 
                                     context, 
                                     path, 
                                     name, 
@@ -913,7 +896,6 @@ def register_publish(tk, context, path, name, version_number, **kwargs):
                                     sg_fields)
 
     # upload thumbnails
-    log.debug("Publish: Uploading thumbnails")
     if thumbnail_path and os.path.exists(thumbnail_path):
 
         # publish
@@ -932,15 +914,13 @@ def register_publish(tk, context, path, name, version_number, **kwargs):
     else:
         # no thumbnail found - instead use the default one
         this_folder = os.path.abspath(os.path.dirname(__file__))
-        no_thumb = os.path.join(this_folder, "resources", "no_preview.jpg")
+        no_thumb = os.path.join(this_folder, "no_preview.jpg")
         tk.shotgun.upload_thumbnail(published_file_entity_type, entity.get("id"), no_thumb)
 
 
     # register dependencies
-    log.debug("Publish: Register dependencies")
     _create_dependencies(tk, entity, dependency_paths, dependency_ids)
 
-    log.debug("Publish: Complete")
     return entity
 
 def _translate_abstract_fields(tk, path):
@@ -1091,60 +1071,13 @@ def _create_published_file(tk, context, path, name, version_number, task, commen
         "version_number": version_number,
         })
 
-    # handle the path definition
     if path_is_url:
-        data["path"] = {"url": path}
+        data["path"] = { "url":path }
     else:
-
         # Make path platform agnostic.
-        storage_name, path_cache = _calc_path_cache(tk, path)
-
-        # specify the full path in shotgun
-        data["path"] = {"local_path": path}
-
-        # note - #30005 - there appears to be an issue on the serverside
-        # related to the explicit storage format and paths containing
-        # sequence tokens such as %04d. Commenting out the logic to handle
-        # the new explicit storage format for the time being while this is
-        # being investigated.
-
-        # # check if the shotgun server supports the storage and relative_path parameters
-        # # which allows us to specify exactly which storage to bind a publish to rather
-        # # than relying on Shotgun to compute this
-        # supports_specific_storage_syntax = (
-        #     hasattr(tk.shotgun, "server_caps") and
-        #     tk.shotgun.server_caps.version and
-        #     tk.shotgun.server_caps.version >= (6, 3, 17)
-        # )
-        #
-        # if supports_specific_storage_syntax:
-        #     # explicitly pass relative path and storage to shotgun
-        #     storage = tk.shotgun.find_one("LocalStorage", [["code", "is", storage_name]])
-        #
-        #     if storage is None:
-        #         # there is no storage in Shotgun that matches the one toolkit expects.
-        #         # this *may* be ok because there may be another storage in Shotgun that
-        #         # magically picks up the publishes and associates with them. In this case,
-        #         # issue a warning and fall back on the server-side functionality
-        #         log.warning(
-        #             "Could not find the expected storage '%s' in Shotgun to associate "
-        #             "publish '%s' with - falling back to Shotgun's built-in storage "
-        #             "resolution logic. It is recommended that you add the '%s' storage "
-        #             "to Shotgun" % (storage_name, path, storage_name))
-        #         data["path"] = {"local_path": path}
-        #
-        #     else:
-        #         data["path"] = {"relative_path": path_cache, "local_storage": storage}
-        #
-        # else:
-        #     # use previous syntax where we pass the whole path to Shotgun
-        #     # and shotgun will do the storage/relative path split server side.
-        #     # This operation may do unexpected things if you have multiple
-        #     # storages that are identical or overlapping
-        #     data["path"] = {"local_path": path}
-
-        # fill in the path cache field which is used for filtering in Shotgun
-        # (because SG does not support
+        _, path_cache = _calc_path_cache(tk, path)
+        
+        data["path"] = { "local_path": path }
         data["path_cache"] = path_cache        
 
     if created_by_user:
@@ -1156,7 +1089,7 @@ def _create_published_file(tk, context, path, name, version_number, task, commen
             data["created_by"] = sg_user
 
     if created_at:
-        data["created_at"] = created_at
+        data['created_at'] = created_at
 
     if published_file_type:
         if published_file_entity_type == "PublishedFile":
@@ -1170,7 +1103,6 @@ def _create_published_file(tk, context, path, name, version_number, task, commen
     # now call out to hook just before publishing
     data = tk.execute_core_hook(constants.TANK_PUBLISH_HOOK_NAME, shotgun_data=data, context=context)
 
-    log.debug("Registering publish in Shotgun: %s" % pprint.pformat(data))
     return tk.shotgun.create(published_file_entity_type, data)
 
 def _calc_path_cache(tk, path):
@@ -1198,13 +1130,8 @@ def _calc_path_cache(tk, path):
             # Remove parent dir plus "/" - be careful to handle the case where
             # the parent dir ends with a '/', e.g. 'T:/' for a Windows drive
             path_cache = norm_path[len(norm_parent_dir):].lstrip("/")
-            log.debug(
-                "Split up path '%s' into storage %s and relative path '%s'" % (path, root_name, path_cache)
-            )
             return root_name, path_cache
-
     # not found, return None values
-    log.debug("Unable to split path '%s' into a storage and a relative path." % path)
     return None, None
 
 

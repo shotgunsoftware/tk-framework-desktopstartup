@@ -13,12 +13,12 @@ App configuration and schema validation.
 
 """
 import os
+import re
 import sys
 
 from . import constants
-from ..errors import TankError, TankNoDefaultValueError
+from ..errors import TankError
 from ..template import TemplateString
-from .bundle import resolve_default_value
 
 def validate_schema(app_or_engine_display_name, schema):
     """
@@ -49,7 +49,7 @@ def validate_context(descriptor, context):
     """
     # check that the context contains all the info that the app needs
     # this returns list of strings, e.g. ["user", "entity"]
-    req_ctx = descriptor.required_context
+    req_ctx = descriptor.get_required_context()
 
     context_check_ok = True
     if "user" in req_ctx and context.user is None:
@@ -74,7 +74,7 @@ def validate_platform(descriptor):
     current operating system
     """
     # make sure the current operating system platform is supported
-    supported_platforms = descriptor.supported_platforms
+    supported_platforms = descriptor.get_supported_platforms()
     if len(supported_platforms) > 0:
         # supported platforms defined in manifest
         # get a human friendly mapping of current platform: linux/mac/windows 
@@ -96,7 +96,7 @@ def get_missing_frameworks(descriptor, environment, yml_file):
     :returns: A list of dictionaries, each with a name and a version key, e.g.
         [{'version': 'v0.1.0', 'name': 'tk-framework-widget'}]
     """
-    required_frameworks = descriptor.required_frameworks
+    required_frameworks = descriptor.get_required_frameworks()
     current_framework_instances = environment.find_framework_instances_from(yml_file) 
 
     if len(required_frameworks) == 0:
@@ -126,7 +126,7 @@ def validate_and_return_frameworks(descriptor, environment):
     
     Will raise exceptions if there are frameworks missing from the environment. 
     """
-    required_frameworks = descriptor.required_frameworks
+    required_frameworks = descriptor.get_required_frameworks()
     
     if len(required_frameworks) == 0:
         return []
@@ -179,7 +179,7 @@ def validate_and_return_frameworks(descriptor, environment):
         #
         # note: this old form does not handle the 1.x.x syntax, only exact version numbers
         for (fw_instance_name, fw_instance) in fw_descriptors.items():
-            if fw_instance.version == version and fw_instance.system_name == name:
+            if fw_instance.get_version() == version and fw_instance.get_system_name() == name:
                 found = True
                 required_fw_instance_names.append(fw_instance_name)
                 break
@@ -194,8 +194,8 @@ def validate_and_return_frameworks(descriptor, environment):
                 msg += "The currently installed frameworks are: \n"
                 fw_strings = []
                 for x in fw_descriptors:
-                    fw_strings.append("Name: '%s', Version: '%s'" % (fw_descriptors[x].system_name,
-                                                                     fw_descriptors[x].version))
+                    fw_strings.append("Name: '%s', Version: '%s'" % (fw_descriptors[x].get_system_name(), 
+                                                                     fw_descriptors[x].get_version()))
                 msg += "\n".join(fw_strings)
                 
             raise TankError(msg) 
@@ -286,17 +286,9 @@ class _SchemaValidator:
         data_type = schema.get("type")
         self.__validate_schema_type(settings_key, data_type)
 
-        # Get a list of all keys that start with the default value key string.
-        # Some types, like hooks, allow for engine specific default values such
-        # as "default_value_tk-maya". Validate each of these key's values
-        # against the setting's data type.
-        default_value_keys = [k for k in schema
-            if k.startswith(constants.TANK_SCHEMA_DEFAULT_VALUE_KEY)]
-
-        for default_value_key in default_value_keys:
-
+        if "default_value" in schema:
             # validate the default value:
-            default_value = schema[default_value_key]
+            default_value = schema["default_value"]
 
             # handle template setting with default_value == null            
             if data_type == 'template' and default_value is None and schema.get('allows_empty', False):
@@ -304,12 +296,9 @@ class _SchemaValidator:
                 return
 
             if not _validate_expected_data_type(data_type, default_value):
-                params = (
-                    settings_key,
-                    self._display_name,
-                    type(default_value).__name__,
-                    data_type
-                )
+                params = (settings_key, 
+                          self._display_name, 
+                          type(default_value).__name__, data_type)
                 err_msg = "Invalid type for default value in schema '%s' for '%s' - found '%s', expected '%s'" % params
                 raise TankError(err_msg)
 
@@ -391,39 +380,16 @@ class _SettingsValidator:
         # first sanity check that the schema is correct
         validate_schema(self._display_name, self._schema)
         
-        # Ensure that all keys are in the settings or have a default value in
-        # the manifest. Also make sure values are appropriate.
+        # Ensure that all required keys are in the settings and that the
+        # values are appropriate.
         for settings_key in self._schema:
             value_schema = self._schema.get(settings_key, {})
-
-            if settings_key in settings:
-                # value exists in the settings. use it.
-                settings_value = settings[settings_key]
-            else:
-                # Use the fallback default with an unlikely to be used value to
-                # detect cases where there is no default value in the schema.
-                try:
-                    settings_value = resolve_default_value(value_schema,
-                        raise_if_missing=True)
-                except TankNoDefaultValueError:
-                    # could not identify a default value. that may be because
-                    # the default is engine-specific and there is no regular
-                    # "default_value". See if there are any engine-specific
-                    # keys. If so, continue with the assumption that one of them
-                    # is the right one. The default values have already been
-                    # validated against the type. Hopefully this is sufficient!
-                    default_value_keys = [k for k in value_schema
-                        if k.startswith(constants.TANK_SCHEMA_DEFAULT_VALUE_KEY)]
-                    if default_value_keys:
-                        continue
-                    else:
-                        raise TankError(
-                            "Could not determine value for key '%s' in "
-                            "settings! No specified value and no default value."
-                            % (settings_key,)
-                        )
-
-            self.__validate_settings_value(settings_key, value_schema, settings_value)
+            
+            # make sure the required key exists in the environment settings
+            if settings_key not in settings:
+                raise TankError("Missing required key '%s' in settings!" % settings_key)
+            
+            self.__validate_settings_value(settings_key, value_schema, settings[settings_key])
     
     def validate_setting(self, setting_name, setting_value):
         # first sanity check that the schema is correct
@@ -580,27 +546,14 @@ class _SettingsValidator:
         Validate that the value for a setting of type hook corresponds to a file in the hooks
         directory.
         """
-
-        if constants.TANK_HOOK_ENGINE_REFERENCE_TOKEN in hook_name:
-            # the hook name is engine-specific. see if there is an engine
-            # currently. If so, validate it. If not, then there's not much
-            # we can do.
-            from .engine import current_engine
-            if current_engine():
-                hook_name = hook_name.replace(
-                    constants.TANK_HOOK_ENGINE_REFERENCE_TOKEN,
-                    current_engine().name
-                )
-            else:
-                return
-
+        
         hooks_folder = self._tank_api.pipeline_configuration.get_hooks_location()
-
+        
         # if setting is default, assume everything is fine
         if hook_name == constants.TANK_BUNDLE_DEFAULT_HOOK_SETTING:
             # assume that each app contains its correct hooks
             return
-
+        
         elif hook_name.startswith("{self}"):
             # assume that each app contains its correct hooks
             return
@@ -650,15 +603,28 @@ class _SettingsValidator:
 
     def __validate_settings_config_path(self, settings_key, schema, config_value):
         """
-        Makes sure that the path is relative and not absolute.
-        """
+        Validate that the value for a setting of type config_path corresponds to a file in the 
+        config folder somewhere
+        """        
         if config_value.startswith("/"):
             msg = ("Invalid configuration setting '%s' for %s: "
                    "Config value '%s' starts with a / which is not valid." % (settings_key, 
                                                                               self._display_name,
                                                                               config_value) ) 
             raise TankError(msg)
+        
+        config_folder = self._tank_api.pipeline_configuration.get_config_location()
+        adjusted_value = config_value.replace("/", os.path.sep)
+        full_path = os.path.join(config_folder, adjusted_value)
 
+        if not os.path.exists(full_path):
+            msg = ("Invalid configuration setting '%s' for %s: "
+                   "The specified resource '%s' does not exist." % (settings_key, 
+                                                                    self._display_name,
+                                                                    full_path) ) 
+            raise TankError(msg)
+
+            
     def __validate_new_style_template(self, cur_template, fields_str):
         
         #################################################################################

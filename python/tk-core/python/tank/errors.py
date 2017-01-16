@@ -10,38 +10,50 @@
 
 """
 All custom exceptions that Tank emits are defined here.
+
 """
 
 
 class TankError(Exception):
     """
-    Top level exception for all toolkit-core level runtime errors
+    Exception that indicates an error has occurred.
     """
+    pass
+
+
+class TankContextChangeNotSupportedError(TankError):
+    """
+    Exception that indicates that a requested context change is not allowed
+    based on a check of the current engine and all of its active apps.
+    """
+    pass
 
 
 class TankUnreadableFileError(TankError):
     """
     Exception that indicates that a required file can't be read from disk.
     """
+    pass
 
 
 class TankFileDoesNotExistError(TankUnreadableFileError):
     """
     Exceptions that indicates that a required file does not exist.
     """
+    pass
 
 
-class TankNoDefaultValueError(TankError):
+class TankEngineInitError(TankError):
     """
-    Exception that can be raised when a default value is required but none is found.
+    Exception that indicates that an engine could not start up.
     """
-
+    pass
 
 class TankHookMethodDoesNotExistError(TankError):
     """
     Exception that indicates that a called method does not exist in the hook.
     """
-
+    pass
 
 class TankErrorProjectIsSetup(TankError):
     """
@@ -52,14 +64,5 @@ class TankErrorProjectIsSetup(TankError):
         """
         Include error message
         """
-        super(TankErrorProjectIsSetup, self).__init__(
-            "You are trying to set up a project which has already been set up. "
-            "If you want to do this, make sure to set the force parameter."
-        )
-
-
-class TankContextDeserializationError(TankError):
-    """
-    Exception that indicates that something went wrong while deserializating a context.
-    """
-
+        super(TankErrorProjectIsSetup, self).__init__("You are trying to set up a project which has already been set up. "
+                                                      "If you want to do this, make sure to set the force parameter.")
