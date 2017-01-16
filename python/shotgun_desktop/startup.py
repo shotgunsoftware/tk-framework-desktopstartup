@@ -384,6 +384,20 @@ def __launch_app(app, splash, user, app_bootstrap, server, settings):
         return __zero_config_bootstrap(app, splash, user, app_bootstrap, server, settings)
 
 
+def __bootstrap_progress_callback(splash, app, progress_value, message):
+    """
+    Called whenever toolkit reports progress.
+
+    :param progress_value: The current progress value as float number.
+                           values will be reported in incremental order
+                           and always in the range 0.0 to 1.0
+    :param message:        Progress message string
+    """
+    splash.set_message("[%02d%%]: %s" % (int(progress_value * 100), message))
+    logger.debug(message)
+    app.processEvents()
+
+
 def __bootstrap_toolkit_into_legacy_config(app, splash, user, pc):
     """
     Create a Toolkit instance by boostraping into the pipeline configuration.
@@ -401,22 +415,8 @@ def __bootstrap_toolkit_into_legacy_config(app, splash, user, pc):
     """
     import sgtk
     mgr = sgtk.bootstrap.ToolkitManager(user)
-
-    def progress_callback(progress_value, message):
-        """
-        Called whenever toolkit reports progress.
-
-        :param progress_value: The current progress value as float number.
-                               values will be reported in incremental order
-                               and always in the range 0.0 to 1.0
-        :param message:        Progress message string
-        """
-        splash.set_message("[%02d]: %s" % (int(progress_value * 100), message))
-        logger.debug(message)
-        app.processEvents()
-
     mgr.do_shotgun_config_lookup = True
-    mgr.progress_callback = progress_callback
+    mgr.progress_callback = lambda progress_value, message: __bootstrap_progress_callback(splash, app, progress_value, message)
     mgr.pipeline_configuration = pc["id"]
     return mgr.bootstrap_toolkit(None)
 
@@ -500,23 +500,11 @@ def __zero_config_bootstrap(app, splash, user, app_bootstrap, server, settings):
     import sgtk
     mgr = sgtk.bootstrap.ToolkitManager(user)
 
-    def progress_callback(progress_value, message):
-        """
-        Called whenever toolkit reports progress.
-
-        :param progress_value: The current progress value as float number.
-                               values will be reported in incremental order
-                               and always in the range 0.0 to 1.0
-        :param message:        Progress message string
-        """
-        splash.set_message("%s: %s" % (progress_value, message))
-        app.processEvents()
-
     mgr.base_configuration = os.environ.get(
         "SHOTGUN_CONFIG_FALLBACK_DESCRIPTOR",
         "sgtk:descriptor:app_store?name=tk-config-basic"
     )
-    mgr.progress_callback = progress_callback
+    mgr.progress_callback = lambda progress_value, message: __bootstrap_progress_callback(splash, app, progress_value, message)
     mgr.plugin_id = "basic.desktop"
 
     engine = mgr.bootstrap_engine("tk-desktop")
