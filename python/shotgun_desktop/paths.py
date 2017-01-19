@@ -16,7 +16,7 @@ import logging
 logger = logging.getLogger("tk-desktop.paths")
 
 
-def get_default_site_config_root(connection):
+def get_pipeline_configuration_info(connection):
     """
     Finds the site configuration root on disk.
 
@@ -74,8 +74,8 @@ def get_default_site_config_root(connection):
             # Sorting on the project id doesn't actually matter. We want
             # some sorting simply because this will force grouping between
             # configurations with a project and those that don't.
-            {'field_name': 'project.Project.id', 'direction': 'asc'}, 
-            {'field_name': 'id', 'direction': 'desc'}
+            {"field_name": "project.Project.id", "direction": "asc"},
+            {"field_name": "id", "direction": "desc"}
         ]
     )
 

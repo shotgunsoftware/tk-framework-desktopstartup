@@ -355,9 +355,7 @@ def __launch_app(app, splash, user, app_bootstrap, server, settings):
 
     sgtk.set_authenticated_user(user)
 
-    # Downloads an upgrade for the startup if available. The startup upgrade is independent from the
-    # auto_path state and has its own logic for auto-updating or not, so move this outside the
-    # if auto_path test.
+    # Downloads an upgrade for the startup if available.
     startup_updated = upgrade_startup(
         splash,
         sgtk,
@@ -367,14 +365,13 @@ def __launch_app(app, splash, user, app_bootstrap, server, settings):
         __restart_app_with_countdown(splash, "Shotgun Desktop updated.")
 
     splash.set_message("Looking up site configuration.")
-    app.processEvents()
 
     connection = user.create_sg_connection()
 
     _assert_toolkit_enabled(splash, connection)
 
     logger.debug("Getting the default site configuration.")
-    pc_path, pc, toolkit_classic_required = shotgun_desktop.paths.get_default_site_config_root(connection)
+    pc_path, pc, toolkit_classic_required = shotgun_desktop.paths.get_pipeline_configuration_info(connection)
 
     if toolkit_classic_required:
         return __toolkit_classic_bootstrap(
@@ -395,10 +392,9 @@ def __bootstrap_progress_callback(splash, app, progress_value, message):
     """
     splash.set_message("[%02d%%]: %s" % (int(progress_value * 100), message))
     logger.debug(message)
-    app.processEvents()
 
 
-def __bootstrap_toolkit_into_legacy_config(app, splash, user, pc):
+def __bootstrap_toolkit_into_classic_config(app, splash, user, pc):
     """
     Create a Toolkit instance by boostraping into the pipeline configuration.
 
@@ -415,8 +411,11 @@ def __bootstrap_toolkit_into_legacy_config(app, splash, user, pc):
     """
     import sgtk
     mgr = sgtk.bootstrap.ToolkitManager(user)
+    # Tell the manager to resolve the config in Shotgun so it can resolve the location on disk.
     mgr.do_shotgun_config_lookup = True
-    mgr.progress_callback = lambda progress_value, message: __bootstrap_progress_callback(splash, app, progress_value, message)
+    mgr.progress_callback = lambda progress_value, message: __bootstrap_progress_callback(
+        splash, app, progress_value, message
+    )
     mgr.pipeline_configuration = pc["id"]
     return mgr.bootstrap_toolkit(None)
 
@@ -439,7 +438,7 @@ def __toolkit_classic_bootstrap(app, splash, user, app_bootstrap, server, settin
     # Creates a Toolkit instance pointing a Toolkit classic pipeline configuration. Note that this
     # also scopes the import of Toolkit so that we can reimport it later down the line to start
     # the engine.
-    tk = __bootstrap_toolkit_into_legacy_config(app, splash, user, pc)
+    tk = __bootstrap_toolkit_into_classic_config(app, splash, user, pc)
 
     # If the pipeline configuration found in Shotgun doesn't match what we have locally, we have a
     # problem.
@@ -464,11 +463,9 @@ def __toolkit_classic_bootstrap(app, splash, user, app_bootstrap, server, settin
 
     # initialize the tk-desktop engine for an empty context
     splash.set_message("Resolving context...")
-    app.processEvents()
     ctx = tk.context_empty()
 
     splash.set_message("Launching Engine...")
-    app.processEvents()
 
     # Now start the engine. This import will import the new Toolkit we've bootstrapped into.
     import sgtk
@@ -500,11 +497,15 @@ def __zero_config_bootstrap(app, splash, user, app_bootstrap, server, settings):
     import sgtk
     mgr = sgtk.bootstrap.ToolkitManager(user)
 
+    # Allows to take over the site config to use with Desktop without impacting the projects
+    # configurations.
     mgr.base_configuration = os.environ.get(
-        "SHOTGUN_CONFIG_FALLBACK_DESCRIPTOR",
+        "SHOTGUN_DESKTOP_CONFIG_FALLBACK_DESCRIPTOR",
         "sgtk:descriptor:app_store?name=tk-config-basic"
     )
-    mgr.progress_callback = lambda progress_value, message: __bootstrap_progress_callback(splash, app, progress_value, message)
+    mgr.progress_callback = lambda progress_value, message: __bootstrap_progress_callback(
+        splash, app, progress_value, message
+    )
     mgr.plugin_id = "basic.desktop"
 
     engine = mgr.bootstrap_engine("tk-desktop")

@@ -61,7 +61,7 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
     logger.info("Getting Shotgun Desktop updates...")
 
     if not current_desc.has_remote_accesss():
-        logger.warning("Could not access the TK App Store (tank.shotgunstudio.com): %s" % e)
+        logger.warning("Could not update %r: remote access not available.", current_desc)
         return False
 
     try:
@@ -85,7 +85,7 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
 
     if not out_of_date:
         logger.debug(
-            "Desktop startup does not need upgrading. Currenty running version %s" % current_desc.get_version()
+            "Desktop startup is up to date. Currenty running version %s" % current_desc.get_version()
         )
         return False
 
