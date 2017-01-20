@@ -352,7 +352,6 @@ def __launch_app(app, splash, user, app_bootstrap, server, settings):
     splash.show()
 
     import sgtk
-
     sgtk.set_authenticated_user(user)
 
     # Downloads an upgrade for the startup if available.
@@ -373,12 +372,14 @@ def __launch_app(app, splash, user, app_bootstrap, server, settings):
     logger.debug("Getting the default site configuration.")
     pc_path, pc, toolkit_classic_required = shotgun_desktop.paths.get_pipeline_configuration_info(connection)
 
+    # Make sure the sgtk library is not reused after import
+    del sgtk
     if toolkit_classic_required:
-        return __toolkit_classic_bootstrap(
-            app, splash, user, app_bootstrap, server, settings, pc_path, pc
-        )
+        engine = __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path)
     else:
-        return __zero_config_bootstrap(app, splash, user, app_bootstrap, server, settings)
+        engine = __start_engine_in_zero_config(app, splash, user)
+
+    return __post_bootstrap_engine(splash, app_bootstrap, server, engine)
 
 
 def __bootstrap_progress_callback(splash, app, progress_value, message):
@@ -394,20 +395,17 @@ def __bootstrap_progress_callback(splash, app, progress_value, message):
     logger.debug(message)
 
 
-def __bootstrap_toolkit_into_classic_config(app, splash, user, pc):
+def __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path):
     """
     Create a Toolkit instance by boostraping into the pipeline configuration.
 
     :param app: Application object for event processing.
     :param splash: Splash dialog to update user on what is currently going on
     :param user: Current ShotgunUser.
-    :param app_bootstrap: Application bootstrap.
-    :param server: The tk_framework_desktopserver.Server instance.
-    :param settings: The application's settings.
-    :param pc_path: Pipeline configuration path.
     :param pc: Pipeline configuration entity dictionary.
+    :param pc_path: Path to the pipeline configuration.
 
-    :returns sgtk.Sgtk: An Sgtk instance.
+    :returns: Toolkit engine that was started.
     """
     import sgtk
     mgr = sgtk.bootstrap.ToolkitManager(user)
@@ -417,59 +415,35 @@ def __bootstrap_toolkit_into_classic_config(app, splash, user, pc):
         splash, app, progress_value, message
     )
     mgr.pipeline_configuration = pc["id"]
-    return mgr.bootstrap_toolkit(None)
 
+    def pre_engine_start_callback(tk, ctx):
+        # If the pipeline configuration found in Shotgun doesn't match what we have locally, we have a
+        # problem.
+        if pc["id"] != tk.pipeline_configuration.get_shotgun_id():
+            raise InvalidPipelineConfiguration(pc, tk.pipeline_configuration)
 
-def __toolkit_classic_bootstrap(app, splash, user, app_bootstrap, server, settings, pc_path, pc):
-    """
-    Launches the Shotgun Desktop using Toolkit Classic
+        # If the pipeline configuration we got from Shotgun is not assigned to a project, we might have
+        # some patching to be done to local site configuration.
+        if pc["project"] is None:
 
-    :param app: Application object for event processing.
-    :param splash: Splash dialog to update user on what is currently going on
-    :param user: Current ShotgunUser.
-    :param app_bootstrap: Application bootstrap.
-    :param server: The tk_framework_desktopserver.Server instance.
-    :param settings: The application's settings.
-    :param pc_path: Pipeline configuration path.
-    :param pc: Pipeline configuration entity dictionary.
+            # make sure that the version of core we are using supports the new-style site configuration
+            if not __supports_pipeline_configuration_upgrade(tk.pipeline_configuration):
+                raise UpgradeCoreError(
+                    "Running a site configuration without the Template Project requires core v0.16.8 "
+                    "or higher.",
+                    pc_path
+                )
 
-    :returns: The error code to return to the shell.
-    """
-    # Creates a Toolkit instance pointing a Toolkit classic pipeline configuration. Note that this
-    # also scopes the import of Toolkit so that we can reimport it later down the line to start
-    # the engine.
-    tk = __bootstrap_toolkit_into_classic_config(app, splash, user, pc)
+            # If the configuration on disk is not the site configuration, update it to the site config.
+            if not tk.pipeline_configuration.is_site_configuration():
+                tk.pipeline_configuration.convert_to_site_config()
 
-    # If the pipeline configuration found in Shotgun doesn't match what we have locally, we have a
-    # problem.
-    if pc["id"] != tk.pipeline_configuration.get_shotgun_id():
-        raise InvalidPipelineConfiguration(pc, tk.pipeline_configuration)
+        splash.set_message("Launching Engine...")
 
-    # If the pipeline configuration we got from Shotgun is not assigned to a project, we might have
-    # some patching to be done to local site configuration.
-    if pc["project"] is None:
+    # We need to validate a few things before the engine starts.
+    mgr.pre_engine_start_callback = pre_engine_start_callback
 
-        # make sure that the version of core we are using supports the new-style site configuration
-        if not __supports_pipeline_configuration_upgrade(tk.pipeline_configuration):
-            raise UpgradeCoreError(
-                "Running a site configuration without the Template Project requires core v0.16.8 "
-                "or higher.",
-                pc_path
-            )
-
-        # If the configuration on disk is not the site configuration, update it to the site config.
-        if not tk.pipeline_configuration.is_site_configuration():
-            tk.pipeline_configuration.convert_to_site_config()
-
-    # initialize the tk-desktop engine for an empty context
-    splash.set_message("Resolving context...")
-    ctx = tk.context_empty()
-
-    splash.set_message("Launching Engine...")
-
-    # Now start the engine. This import will import the new Toolkit we've bootstrapped into.
-    import sgtk
-    engine = sgtk.platform.start_engine("tk-desktop", tk, ctx)
+    engine = mgr.bootstrap_engine("tk-desktop")
 
     if not __desktop_engine_supports_authentication_module(engine):
         raise UpgradeEngineError(
@@ -477,21 +451,18 @@ def __toolkit_classic_bootstrap(app, splash, user, app_bootstrap, server, settin
             pc_path
         )
 
-    return __post_bootstrap_engine(sgtk, splash, app_bootstrap, server, engine)
+    return engine
 
 
-def __zero_config_bootstrap(app, splash, user, app_bootstrap, server, settings):
+def __start_engine_in_zero_config(app, splash, user):
     """
     Launch into the engine using the new zero config based bootstrap.
 
     :param app: Application object for event processing.
     :param splash: Splash dialog to update user on what is currently going on
     :param user: Current ShotgunUser.
-    :param app_bootstrap: Application bootstrap.
-    :param server: The tk_framework_desktopserver.Server instance.
-    :param settings: The application's settings.
 
-    :returns: The error code to return to the shell.
+    :returns: Toolkit engine that was started.
     """
     # The startup is up to date, now it's time to bootstrap Toolkit.
     import sgtk
@@ -508,12 +479,10 @@ def __zero_config_bootstrap(app, splash, user, app_bootstrap, server, settings):
     )
     mgr.plugin_id = "basic.desktop"
 
-    engine = mgr.bootstrap_engine("tk-desktop")
-
-    return __post_bootstrap_engine(sgtk, splash, app_bootstrap, server, engine)
+    return mgr.bootstrap_engine("tk-desktop")
 
 
-def __post_bootstrap_engine(sgtk, splash, app_bootstrap, server, engine):
+def __post_bootstrap_engine(splash, app_bootstrap, server, engine):
 
     # engine will take over logging
     app_bootstrap.tear_down_logging()
@@ -526,7 +495,7 @@ def __post_bootstrap_engine(sgtk, splash, app_bootstrap, server, engine):
 
     # and run the engine
     logger.debug("Running tk-desktop")
-    startup_version = get_location(sgtk, app_bootstrap).get("version") or "Undefined"
+    startup_version = get_location(app_bootstrap).get("version") or "Undefined"
 
     # Connect to the about to quit signal so that we can shut down the server automatically when the
     # desktop tries to quit the app.
@@ -869,6 +838,8 @@ def main(**kwargs):
     # Do not import sgtk globally to avoid using the wrong sgtk once we bootstrap in
     # the right config.
     import sgtk
+    # Shotgun Desktop has always been logging every debug string to console since the browser
+    # integration and the startup has been difficult to work with and debug.
     sgtk.LogManager().global_debug = True
     app_bootstrap.add_logger_to_logfile(
         sgtk.LogManager().root_logger

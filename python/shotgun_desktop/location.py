@@ -39,11 +39,10 @@ def _get_location_yaml_location(root):
     )
 
 
-def get_location(sgtk, app_bootstrap):
+def get_location(app_bootstrap):
     """
     Returns a location dictionary for the bundled framework.
 
-    :param sgtk: Handle to the Toolkit API
     :param app_bootstrap: Instance of the application bootstrap.
 
     :returns: A dictionary with keys and values following the Toolkit location

@@ -48,7 +48,7 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
     current_desc = sgtk.descriptor.create_descriptor(
         sgtk.get_authenticated_user().create_sg_connection(),
         sgtk.descriptor.Descriptor.FRAMEWORK,
-        get_location(sgtk, app_bootstrap)
+        get_location(app_bootstrap)
     )
 
     # A Dev descriptor means there is nothing to update. Early out so that we don't show
