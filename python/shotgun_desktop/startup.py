@@ -416,18 +416,18 @@ def __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path):
     )
     mgr.pipeline_configuration = pc["id"]
 
-    def pre_engine_start_callback(tk, ctx):
+    def pre_engine_start_callback(ctx):
         # If the pipeline configuration found in Shotgun doesn't match what we have locally, we have a
         # problem.
-        if pc["id"] != tk.pipeline_configuration.get_shotgun_id():
-            raise InvalidPipelineConfiguration(pc, tk.pipeline_configuration)
+        if pc["id"] != ctx.sgtk.pipeline_configuration.get_shotgun_id():
+            raise InvalidPipelineConfiguration(pc, ctx.sgtk.pipeline_configuration)
 
         # If the pipeline configuration we got from Shotgun is not assigned to a project, we might have
         # some patching to be done to local site configuration.
         if pc["project"] is None:
 
             # make sure that the version of core we are using supports the new-style site configuration
-            if not __supports_pipeline_configuration_upgrade(tk.pipeline_configuration):
+            if not __supports_pipeline_configuration_upgrade(ctx.sgtk.pipeline_configuration):
                 raise UpgradeCoreError(
                     "Running a site configuration without the Template Project requires core v0.16.8 "
                     "or higher.",
@@ -435,8 +435,8 @@ def __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path):
                 )
 
             # If the configuration on disk is not the site configuration, update it to the site config.
-            if not tk.pipeline_configuration.is_site_configuration():
-                tk.pipeline_configuration.convert_to_site_config()
+            if not ctx.sgtk.pipeline_configuration.is_site_configuration():
+                ctx.sgtk.pipeline_configuration.convert_to_site_config()
 
         splash.set_message("Launching Engine...")
 
