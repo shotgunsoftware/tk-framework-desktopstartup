@@ -372,7 +372,9 @@ def __launch_app(app, splash, user, app_bootstrap, server, settings):
     logger.debug("Getting the default site configuration.")
     pc_path, pc, toolkit_classic_required = shotgun_desktop.paths.get_pipeline_configuration_info(connection)
 
-    # Make sure the sgtk library is not reused after import
+    # We're about to bootstrap, so remove sgtk from our scope so that if we add
+    # code that uses it after the bootstrap we have to import the
+    # new core.
     del sgtk
     if toolkit_classic_required:
         engine = __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path)
@@ -417,6 +419,14 @@ def __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path):
     mgr.pipeline_configuration = pc["id"]
 
     def pre_engine_start_callback(ctx):
+        """
+        Called before the engine starts during bootstrap. This is used to
+        ensure that the pipeline configuration on disk is the expected one
+        and has the right stat.
+
+        :param ctx: Toolkit context we are bootstrapping into.
+        :type ctx: :class:`sgtk.Context`
+        """
         # If the pipeline configuration found in Shotgun doesn't match what we have locally, we have a
         # problem.
         if pc["id"] != ctx.sgtk.pipeline_configuration.get_shotgun_id():
@@ -478,11 +488,22 @@ def __start_engine_in_zero_config(app, splash, user):
         splash, app, progress_value, message
     )
     mgr.plugin_id = "basic.desktop"
-
+s
     return mgr.bootstrap_engine("tk-desktop")
 
 
 def __post_bootstrap_engine(splash, app_bootstrap, server, engine):
+    """
+    Called after bootstrapping the engine. Mainly use to transition logging to the
+    engine and launch the main event loop.
+
+    :param splash: Splash screen widget.
+    :param app_bootstrap: Application bootstrap logic.
+    :param server: Websocket server instance.
+    :param engine: Toolkit engine that was bootstrapped.
+
+    :returns: Application exit code.
+    """
 
     # engine will take over logging
     app_bootstrap.tear_down_logging()
