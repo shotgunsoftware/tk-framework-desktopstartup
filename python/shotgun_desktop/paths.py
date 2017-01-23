@@ -15,19 +15,18 @@ import logging
 
 logger = logging.getLogger("tk-desktop.paths")
 
-def get_python_path():
-    """ returns the path to the default python interpreter """
-    if sys.platform == "darwin":
-        python = os.path.join(sys.prefix, "bin", "python")
-    elif sys.platform == "win32":
-        python = os.path.join(sys.prefix, "python.exe")
-    elif sys.platform.startswith("linux"):
-        python = os.path.join(sys.prefix, "bin", "python")
-    return python
 
+def get_pipeline_configuration_info(connection):
+    """
+    Finds the site configuration root on disk.
 
-def get_default_site_config_root(connection):
-    """ return the path to the default configuration for the site """
+    :param shotgun_api3.Shotgun connection: Shotgun instance for the site we want
+        to find a configuration for.
+
+    :returns (str, str, bool): The pipeline configuration root, the pipeline configuration
+        entity dictionary and a boolean indicating if Toolkit classic is required. If True,
+        Toolkit classic is required.
+    """
 
     # find what path field from the entity we need
     if sys.platform == "darwin":
@@ -40,7 +39,7 @@ def get_default_site_config_root(connection):
         raise RuntimeError("unknown platform: %s" % sys.platform)
 
     # interesting fields to return
-    fields = ["id", "code", "windows_path", "mac_path", "linux_path", "project"]
+    fields = ["id", "code", "windows_path", "mac_path", "linux_path", "project", "sg_plugin_ids", "plugin_ids"]
 
     # Find the right pipeline configuration. We'll always pick a projectless
     # one over one with the Template Project. To have a deterministic behaviour,
@@ -75,10 +74,14 @@ def get_default_site_config_root(connection):
             # Sorting on the project id doesn't actually matter. We want
             # some sorting simply because this will force grouping between
             # configurations with a project and those that don't.
-            {'field_name':'project.Project.id','direction':'asc'}, 
-            {'field_name':'id','direction':'desc'}
+            {"field_name": "project.Project.id", "direction": "asc"},
+            {"field_name": "id", "direction": "desc"}
         ]
     )
+
+    # We don't filter in the Shotgun query for the plugin ids because not every site these fields yet.
+    # So if any pipeline configurations with a plugin id was returned, filter them it out.
+    pcs = filter(lambda pc: not("sg_plugin_ids" in pc or "plugin_ids" in pc), pcs)
 
     if len(pcs) == 0:
         pc = None
@@ -93,22 +96,10 @@ def get_default_site_config_root(connection):
                 (", ".join([str(p["id"]) for p in pcs]), pc["id"])
             )
 
-    # If the TK_SITE_CONFIG_ROOT env variable is set and contains
-    # something useful, we will use that.
-    env_site = os.environ.get("TK_SITE_CONFIG_ROOT")
-    if env_site:
-        logger.info(
-            "$TK_SITE_CONFIG_ROOT site config override found, using "
-            "site config path '%s' when launching desktop." % str(env_site)
-        )
-        if sys.platform in ["darwin", "linux"]:
-            env_site = os.path.expanduser(str(env_site))
-        return (env_site, pc)
-
     # see if we found a pipeline configuration
     if pc is not None and pc.get(plat_key, ""):
         # path is already set for us, just return it
-        return (str(pc[plat_key]), pc)
+        return (str(pc[plat_key]), pc, True)
 
     # get operating system specific root
     if sys.platform == "darwin":
@@ -122,7 +113,7 @@ def get_default_site_config_root(connection):
     site = __get_site_from_connection(connection)
     pc_root = os.path.join(pc_root, site, "site")
 
-    return (str(pc_root), pc)
+    return (str(pc_root), pc, False)
 
 
 def __get_site_from_connection(connection):

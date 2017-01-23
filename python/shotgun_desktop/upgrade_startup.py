@@ -8,13 +8,10 @@
 # agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
-import os
 import logging
 from distutils.version import LooseVersion
 from shotgun_desktop.location import get_location, write_location
 from shotgun_desktop.desktop_message_box import DesktopMessageBox
-
-import httplib
 
 logger = logging.getLogger("tk-desktop.startup")
 
@@ -48,49 +45,32 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
     if not _supports_get_from_location_and_paths(sgtk):
         return False
 
-    current_desc = sgtk.deploy.descriptor.get_from_location_and_paths(
-        sgtk.deploy.descriptor.AppDescriptor.FRAMEWORK,
-        app_bootstrap.get_shotgun_desktop_cache_location(),
-        os.path.join(
-            app_bootstrap.get_shotgun_desktop_cache_location(), "install"
-        ),
-        get_location(sgtk, app_bootstrap)
+    current_desc = sgtk.descriptor.create_descriptor(
+        sgtk.get_authenticated_user().create_sg_connection(),
+        sgtk.descriptor.Descriptor.FRAMEWORK,
+        get_location(app_bootstrap)
     )
 
     # A Dev descriptor means there is nothing to update. Early out so that we don't show
     # "Getting Shotgun Desktop updates...""
-    if isinstance(current_desc, sgtk.deploy.dev_descriptor.TankDevDescriptor):
+    if current_desc.is_dev():
         logger.info("Desktop startup using a dev descriptor, skipping update...")
+        return False
+
+    logger.debug("Testing for remote access.", current_desc)
+
+    if not current_desc.has_remote_accesss():
+        logger.info("Could not update %r: remote access not available.", current_desc)
         return False
 
     splash.set_message("Getting Shotgun Desktop updates...")
     logger.info("Getting Shotgun Desktop updates...")
 
-    # Some clients block tank.shotgunstudio.com with a proxy. Normally, this isn't an issue
-    # because those clients will be using a locked site config, which won't try to connect
-    # to tank.shotgunstudio.com. The Desktop startup update code however always phones home.
-    # Beacuse of this, we'll try to find the latest version but accept that it may fail.
-
-    # Local import because sgtk can't be imported globally in the desktop startup.
-    from tank_vendor.shotgun_api3.lib import httplib2
-
     try:
         latest_descriptor = current_desc.find_latest_version()
-    # Connection errors can occur for a variety of reasons. For example, there is no internet access
-    # or there is a proxy server blocking access to the Toolkit app store
-    except (httplib2.HttpLib2Error, httplib2.socks.HTTPError, httplib.HTTPException), e:
-        logger.warning("Could not access the TK App Store (tank.shotgunstudio.com): (%s)." % e)
+    except:
+        logger.exception("Unexpected error while downloading Shotgun Desktop update.")
         return False
-    # In cases where there is a firewall/proxy blocking access to the app store, sometimes the 
-    # firewall will drop the connection instead of rejecting it. The API request will timeout which
-    # unfortunately results in a generic SSLError with only the message text to give us a clue why
-    # the request failed. Issue a warning in this case and continue on. 
-    except httplib2.ssl.SSLError, e:
-        if "timed" in e.message:
-            logger.warning("Could not access the TK App Store (tank.shotgunstudio.com): %s" % e)
-            return False
-        else:
-            raise
 
     # check deprecation
     (is_dep, dep_msg) = latest_descriptor.get_deprecation_status()
@@ -106,9 +86,20 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
     out_of_date = (latest_descriptor.get_version() != current_desc.get_version())
 
     if not out_of_date:
-        logger.debug("Desktop startup does not need upgrading. Currenty running version %s" % current_desc.get_version())
+        logger.debug(
+            "Desktop startup is up to date. Currenty running version %s" % current_desc.get_version()
+        )
         return False
 
+    # FIXME: Violating internal API
+    from sgtk.commands.console_utils import _check_constraints
+    can_update, reason = _check_constraints(latest_descriptor)
+
+    if not can_update:
+        logger.warning("Cannot upgrade to the latest Desktop Startup %s. %s", latest_descriptor.get_version(), reason)
+        return False
+
+    # Is there a way we could get that into the core API?
     if latest_descriptor.get_version_constraints().get("min_desktop"):
         current_desktop_version = LooseVersion(app_bootstrap.get_version())
         minimal_desktop_version = LooseVersion(latest_descriptor.get_version_constraints()["min_desktop"])
@@ -144,7 +135,7 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
         # know something wrong is going on.
         logger.exception("Unexpected error when updating startup code.")
         DesktopMessageBox.critical(
-            "Desktop update failed",
+            "Shotgun Desktop update failed",
             "There is a new update of the Shotgun Desktop, but it couldn't be installed. Shotgun "
             "Desktop will be launched with the currently installed version of the code.\n"
             "If this problem persists, please contact Shotgun support at "
