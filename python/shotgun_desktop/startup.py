@@ -488,7 +488,7 @@ def __start_engine_in_zero_config(app, splash, user):
         splash, app, progress_value, message
     )
     mgr.plugin_id = "basic.desktop"
-s
+
     return mgr.bootstrap_engine("tk-desktop")
 
 
