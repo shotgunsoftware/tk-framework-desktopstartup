@@ -57,12 +57,14 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
         logger.info("Desktop startup using a dev descriptor, skipping update...")
         return False
 
-    splash.set_message("Getting Shotgun Desktop updates...")
-    logger.info("Getting Shotgun Desktop updates...")
+    logger.debug("Testing for remote access.", current_desc)
 
     if not current_desc.has_remote_accesss():
-        logger.warning("Could not update %r: remote access not available.", current_desc)
+        logger.info("Could not update %r: remote access not available.", current_desc)
         return False
+
+    splash.set_message("Getting Shotgun Desktop updates...")
+    logger.info("Getting Shotgun Desktop updates...")
 
     try:
         latest_descriptor = current_desc.find_latest_version()
