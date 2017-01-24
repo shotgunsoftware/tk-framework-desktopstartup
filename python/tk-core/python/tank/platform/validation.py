@@ -13,12 +13,19 @@ App configuration and schema validation.
 
 """
 import os
-import re
 import sys
 
 from . import constants
-from ..errors import TankError
+from ..errors import TankError, TankNoDefaultValueError
 from ..template import TemplateString
+from .bundle import resolve_default_value
+from ..util.version import is_version_older, is_version_number
+from ..log import LogManager
+
+# We're potentially running here in an environment with
+# no engine available via current_engine(), so we'll have
+# to make use of the standard core logger.
+core_logger = LogManager.get_logger(__name__)
 
 def validate_schema(app_or_engine_display_name, schema):
     """
@@ -29,6 +36,7 @@ def validate_schema(app_or_engine_display_name, schema):
     """
     v = _SchemaValidator(app_or_engine_display_name, schema)
     v.validate()
+
 
 def validate_settings(app_or_engine_display_name, tank_api, context, schema, settings):
     """
@@ -49,7 +57,7 @@ def validate_context(descriptor, context):
     """
     # check that the context contains all the info that the app needs
     # this returns list of strings, e.g. ["user", "entity"]
-    req_ctx = descriptor.get_required_context()
+    req_ctx = descriptor.required_context
 
     context_check_ok = True
     if "user" in req_ctx and context.user is None:
@@ -74,7 +82,7 @@ def validate_platform(descriptor):
     current operating system
     """
     # make sure the current operating system platform is supported
-    supported_platforms = descriptor.get_supported_platforms()
+    supported_platforms = descriptor.supported_platforms
     if len(supported_platforms) > 0:
         # supported platforms defined in manifest
         # get a human friendly mapping of current platform: linux/mac/windows 
@@ -96,7 +104,7 @@ def get_missing_frameworks(descriptor, environment, yml_file):
     :returns: A list of dictionaries, each with a name and a version key, e.g.
         [{'version': 'v0.1.0', 'name': 'tk-framework-widget'}]
     """
-    required_frameworks = descriptor.get_required_frameworks()
+    required_frameworks = descriptor.required_frameworks
     current_framework_instances = environment.find_framework_instances_from(yml_file) 
 
     if len(required_frameworks) == 0:
@@ -120,13 +128,13 @@ def get_missing_frameworks(descriptor, environment, yml_file):
 
 def validate_and_return_frameworks(descriptor, environment):
     """
-    Validates the frameworks needed for an given descriptor.
+    Validates the frameworks needed for a given descriptor.
     
     Returns a list of the instance names for each of the frameworks needed by the input descriptor.
     
     Will raise exceptions if there are frameworks missing from the environment. 
     """
-    required_frameworks = descriptor.get_required_frameworks()
+    required_frameworks = descriptor.required_frameworks
     
     if len(required_frameworks) == 0:
         return []
@@ -141,11 +149,13 @@ def validate_and_return_frameworks(descriptor, environment):
     
     # check that each framework required by this app is defined in the environment
     required_fw_instance_names = []
+
     for fw in required_frameworks:
         # the required_frameworks structure in the info.yml
         # is a list of dicts, each dict having a name and a version key
         name = fw.get("name")
         version = fw.get("version")
+        min_version = fw.get("minimum_version")
         found = False
 
         # find it by naming convention based on the instance name
@@ -156,18 +166,50 @@ def validate_and_return_frameworks(descriptor, environment):
         # (new) - {"name": "tk-framework-qtwidgets", "version": "v1.x.x"}
         # 
         # The new syntax requires a floating version number, meaning that 
-        # the framework instance defined in the environment needs to be on the form  
+        # the framework instance defined in the environment needs to be of the form  
         # 
         # frameworks:
         #   tk-framework-qtwidgets_v1.x.x:
         #     location: {name: tk-framework-qtwidgets, type: app_store, version: v1.3.34}
         #
         desired_fw_instance = "%s_%s" % (name, version)
-        for fw_instance_name in fw_instances:
+        min_version_satisfied = True
+
+        for fw_instance_name, fw_desc in fw_descriptors.iteritems():
+
+            # We've found a matching framework.
             if fw_instance_name == desired_fw_instance:
-                found = True
-                required_fw_instance_names.append(fw_instance_name)
-                break
+                # Now we need to see if there's a minimum required version
+                # of the framework. If we got a v2.x.x framework that flattens
+                # out to v2.1.0 and we have a minimum required version of v2.1.5,
+                # then we haven't actually found a compatible framework.
+                #
+                # If the descriptor for the framework doesn't contain a concrete
+                # version number (example: a "dev" descriptor won't have one), we
+                # simply skip the minimum-required version check. There's nothing
+                # we can do to confirm, so it's best to trust the config. It's
+                # likely that anyone using a non-app_store descriptor understands
+                # the caveats that come with them.
+                fw_version = fw_desc.version
+
+                if min_version and fw_version and fw_version != "Undefined":
+                    # If either were malformed, then we just skip the check.
+                    if is_version_number(min_version) and is_version_number(fw_version):
+                        # Example:  v1.0.1 is NOT older than v1.0.0, set to True
+                        #           v1.0.0 is NOT older than v1.0.0, set to True
+                        #           v0.9.0 IS older than v1.0.0, set to False
+                        min_version_satisfied = not is_version_older(fw_version, min_version)
+                    else:
+                        core_logger.warning(
+                            "Not checking minimum framework version compliance "
+                            "due to one or both versions being malformed: "
+                            "%s and %s." % (min_version, fw_version)
+                        )
+
+                if min_version_satisfied:
+                    found = True
+                    required_fw_instance_names.append(fw_instance_name)
+                    break
         
         # backwards compatibility pass - prior to the new syntax, we also technically accepted 
         # (however never used as part of toolkit itself) a different convention where the instance
@@ -179,7 +221,7 @@ def validate_and_return_frameworks(descriptor, environment):
         #
         # note: this old form does not handle the 1.x.x syntax, only exact version numbers
         for (fw_instance_name, fw_instance) in fw_descriptors.items():
-            if fw_instance.get_version() == version and fw_instance.get_system_name() == name:
+            if fw_instance.version == version and fw_instance.system_name == name:
                 found = True
                 required_fw_instance_names.append(fw_instance_name)
                 break
@@ -191,11 +233,14 @@ def validate_and_return_frameworks(descriptor, environment):
             if len(fw_descriptors) == 0:
                 msg += "No frameworks are currently installed!"
             else:
+                if not min_version_satisfied:
+                    msg += "The required minimum version (%s) was not met!\n" % min_version
+
                 msg += "The currently installed frameworks are: \n"
                 fw_strings = []
-                for x in fw_descriptors:
-                    fw_strings.append("Name: '%s', Version: '%s'" % (fw_descriptors[x].get_system_name(), 
-                                                                     fw_descriptors[x].get_version()))
+                for x, fw in fw_descriptors.iteritems():
+                    fw_strings.append("Name: '%s', Version: '%s'" % (fw.system_name,
+                                                                     fw.version))
                 msg += "\n".join(fw_strings)
                 
             raise TankError(msg) 
@@ -286,9 +331,17 @@ class _SchemaValidator:
         data_type = schema.get("type")
         self.__validate_schema_type(settings_key, data_type)
 
-        if "default_value" in schema:
+        # Get a list of all keys that start with the default value key string.
+        # Some types, like hooks, allow for engine specific default values such
+        # as "default_value_tk-maya". Validate each of these key's values
+        # against the setting's data type.
+        default_value_keys = [k for k in schema
+            if k.startswith(constants.TANK_SCHEMA_DEFAULT_VALUE_KEY)]
+
+        for default_value_key in default_value_keys:
+
             # validate the default value:
-            default_value = schema["default_value"]
+            default_value = schema[default_value_key]
 
             # handle template setting with default_value == null            
             if data_type == 'template' and default_value is None and schema.get('allows_empty', False):
@@ -296,9 +349,12 @@ class _SchemaValidator:
                 return
 
             if not _validate_expected_data_type(data_type, default_value):
-                params = (settings_key, 
-                          self._display_name, 
-                          type(default_value).__name__, data_type)
+                params = (
+                    settings_key,
+                    self._display_name,
+                    type(default_value).__name__,
+                    data_type
+                )
                 err_msg = "Invalid type for default value in schema '%s' for '%s' - found '%s', expected '%s'" % params
                 raise TankError(err_msg)
 
@@ -380,16 +436,39 @@ class _SettingsValidator:
         # first sanity check that the schema is correct
         validate_schema(self._display_name, self._schema)
         
-        # Ensure that all required keys are in the settings and that the
-        # values are appropriate.
+        # Ensure that all keys are in the settings or have a default value in
+        # the manifest. Also make sure values are appropriate.
         for settings_key in self._schema:
             value_schema = self._schema.get(settings_key, {})
-            
-            # make sure the required key exists in the environment settings
-            if settings_key not in settings:
-                raise TankError("Missing required key '%s' in settings!" % settings_key)
-            
-            self.__validate_settings_value(settings_key, value_schema, settings[settings_key])
+
+            if settings_key in settings:
+                # value exists in the settings. use it.
+                settings_value = settings[settings_key]
+            else:
+                # Use the fallback default with an unlikely to be used value to
+                # detect cases where there is no default value in the schema.
+                try:
+                    settings_value = resolve_default_value(value_schema,
+                        raise_if_missing=True)
+                except TankNoDefaultValueError:
+                    # could not identify a default value. that may be because
+                    # the default is engine-specific and there is no regular
+                    # "default_value". See if there are any engine-specific
+                    # keys. If so, continue with the assumption that one of them
+                    # is the right one. The default values have already been
+                    # validated against the type. Hopefully this is sufficient!
+                    default_value_keys = [k for k in value_schema
+                        if k.startswith(constants.TANK_SCHEMA_DEFAULT_VALUE_KEY)]
+                    if default_value_keys:
+                        continue
+                    else:
+                        raise TankError(
+                            "Could not determine value for key '%s' in "
+                            "settings! No specified value and no default value."
+                            % (settings_key,)
+                        )
+
+            self.__validate_settings_value(settings_key, value_schema, settings_value)
     
     def validate_setting(self, setting_name, setting_value):
         # first sanity check that the schema is correct
@@ -546,14 +625,27 @@ class _SettingsValidator:
         Validate that the value for a setting of type hook corresponds to a file in the hooks
         directory.
         """
-        
+
+        if constants.TANK_HOOK_ENGINE_REFERENCE_TOKEN in hook_name:
+            # the hook name is engine-specific. see if there is an engine
+            # currently. If so, validate it. If not, then there's not much
+            # we can do.
+            from .engine import current_engine
+            if current_engine():
+                hook_name = hook_name.replace(
+                    constants.TANK_HOOK_ENGINE_REFERENCE_TOKEN,
+                    current_engine().name
+                )
+            else:
+                return
+
         hooks_folder = self._tank_api.pipeline_configuration.get_hooks_location()
-        
+
         # if setting is default, assume everything is fine
         if hook_name == constants.TANK_BUNDLE_DEFAULT_HOOK_SETTING:
             # assume that each app contains its correct hooks
             return
-        
+
         elif hook_name.startswith("{self}"):
             # assume that each app contains its correct hooks
             return
@@ -603,28 +695,15 @@ class _SettingsValidator:
 
     def __validate_settings_config_path(self, settings_key, schema, config_value):
         """
-        Validate that the value for a setting of type config_path corresponds to a file in the 
-        config folder somewhere
-        """        
+        Makes sure that the path is relative and not absolute.
+        """
         if config_value.startswith("/"):
             msg = ("Invalid configuration setting '%s' for %s: "
                    "Config value '%s' starts with a / which is not valid." % (settings_key, 
                                                                               self._display_name,
                                                                               config_value) ) 
             raise TankError(msg)
-        
-        config_folder = self._tank_api.pipeline_configuration.get_config_location()
-        adjusted_value = config_value.replace("/", os.path.sep)
-        full_path = os.path.join(config_folder, adjusted_value)
 
-        if not os.path.exists(full_path):
-            msg = ("Invalid configuration setting '%s' for %s: "
-                   "The specified resource '%s' does not exist." % (settings_key, 
-                                                                    self._display_name,
-                                                                    full_path) ) 
-            raise TankError(msg)
-
-            
     def __validate_new_style_template(self, cur_template, fields_str):
         
         #################################################################################

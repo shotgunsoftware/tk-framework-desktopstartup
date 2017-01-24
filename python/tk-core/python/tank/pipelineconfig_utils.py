@@ -12,12 +12,26 @@
 Encapsulates the pipeline configuration and helps navigate and resolve paths
 across storages, configurations etc.
 """
+
+from __future__ import with_statement
+
 import os
 import sys
 
-from .errors import TankError, TankFileDoesNotExistError
-from .platform import constants
+from .errors import (
+    TankError,
+    TankNotPipelineConfigurationError,
+    TankInvalidInterpreterLocationError,
+    TankFileDoesNotExistError,
+    TankInvalidCoreLocationError
+)
+
+from . import constants
+from . import LogManager
 from .util import yaml_cache
+from .util import ShotgunPath
+
+log = LogManager.get_logger(__name__)
 
 
 def is_localized(pipeline_config_path):
@@ -46,7 +60,7 @@ def is_pipeline_config(pipeline_config_path):
     # probe by looking for the existence of a key config file.
     pc_file = os.path.join(pipeline_config_path, "config", "core", constants.STORAGE_ROOTS_FILE)
     return os.path.exists(pc_file)
-    
+
 def get_metadata(pipeline_config_path):
     """
     Loads the pipeline config metadata (the pipeline_configuration.yml) file from disk.
@@ -56,7 +70,12 @@ def get_metadata(pipeline_config_path):
     """
 
     # now read in the pipeline_configuration.yml file
-    cfg_yml = os.path.join(pipeline_config_path, "config", "core", "pipeline_configuration.yml")
+    cfg_yml = os.path.join(
+        pipeline_config_path,
+        "config",
+        "core",
+        constants.PIPELINECONFIG_FILE
+    )
 
     try:
         data = yaml_cache.g_yaml_cache.get(cfg_yml, deepcopy_data=False)
@@ -85,21 +104,22 @@ def get_roots_metadata(pipeline_config_path):
     :returns: A dictionary structure with an entry for each storage defined. Each
               storage will have three keys mac_path, windows_path and linux_path, 
               for example
-              { "primary"  : { "mac_path": "/tmp/foo", 
-                               "linux_path": None, 
-                               "windows_path": "z:\tmp\foo" },
-                "textures" : { "mac_path": "/tmp/textures", 
-                               "linux_path": None, 
-                               "windows_path": "z:\tmp\textures" },
+              { "primary"  : <ShotgunPath>,
+                "textures" : <ShotgunPath>
               }
     """
     # now read in the roots.yml file
     # this will contain something like
     # {'primary': {'mac_path': '/studio', 'windows_path': None, 'linux_path': '/studio'}}
-    roots_yml = os.path.join(pipeline_config_path, "config", "core", constants.STORAGE_ROOTS_FILE)
+    roots_yml = os.path.join(
+        pipeline_config_path,
+        "config",
+        "core",
+        constants.STORAGE_ROOTS_FILE
+    )
 
     try:
-        # if file is empty, initializae with empty dict...
+        # if file is empty, initialize with empty dict...
         data = yaml_cache.g_yaml_cache.get(roots_yml, deepcopy_data=False) or {}
     except Exception, e:
         raise TankError("Looks like the roots file is corrupt. Please contact "
@@ -110,78 +130,13 @@ def get_roots_metadata(pipeline_config_path):
         raise TankError("Could not find a primary storage in roots file "
                         "for configuration %s!" % pipeline_config_path)
 
-    # now use our helper function to process the paths    
-    for s in data:
-        data[s]["mac_path"] = sanitize_path(data[s]["mac_path"], "/")
-        data[s]["linux_path"] = sanitize_path(data[s]["linux_path"], "/")
-        data[s]["windows_path"] = sanitize_path(data[s]["windows_path"], "\\")
+    # sanitize path data by passing it through the ShotgunPath
+    shotgun_paths = {}
+    for storage_name in data:
+        shotgun_paths[storage_name] = ShotgunPath.from_shotgun_dict(data[storage_name])
 
-    return data
+    return shotgun_paths
 
-
-def sanitize_path(path, separator=os.path.sep):
-    """
-    Sanitize and clean up paths that may be incorrect.
-    
-    The following modifications will be carried out:
-    
-    None returns None
-    
-    Trailing slashes are removed:
-    1. /foo/bar      - unchanged
-    2. /foo/bar/     - /foo/bar
-    3. z:/foo/       - z:\foo
-    4. z:/           - z:\
-    5. z:\           - z:\
-    6. \\foo\bar\    - \\foo\bar
-
-    Double slashes are removed:
-    1. //foo//bar    - /foo/bar
-    2. \\foo\\bar    - \\foo\bar
-
-    Leading and trailing spaces are removed:
-    1. "   z:\foo  " - "Z:\foo"
-
-    :param path: the path to clean up
-    :param separator: the os.sep to adjust the path for. / on nix, \ on win.
-    :returns: cleaned up path
-    """
-    if path is None:
-        return None
-
-    # ensure there is no white space around the path
-    path = path.strip()
-
-    # get rid of any slashes at the end
-    # after this step, path value will be "/foo/bar", "c:" or "\\hello"
-    path = path.rstrip("/\\")
-    
-    # add slash for drive letters: c: --> c:/
-    if len(path) == 2 and path.endswith(":"):
-        path += "/"
-    
-    # and convert to the right separators
-    # after this we have a path with the correct slashes and no end slash
-    local_path = path.replace("\\", separator).replace("/", separator)
-
-    # now weed out any duplicated slashes. iterate until done
-    while True:
-        new_path = local_path.replace("//", "/")
-        if new_path == local_path:
-            break
-        else:
-            local_path = new_path
-    
-    # for windows, remove duplicated backslashes, except if they are 
-    # at the beginning of the path
-    while True:
-        new_path = local_path[0] + local_path[1:].replace("\\\\", "\\")
-        if new_path == local_path:
-            break
-        else:
-            local_path = new_path
-
-    return local_path
 
 
 
@@ -192,8 +147,8 @@ def get_path_to_current_core():
     """
     Returns the local path of the currently executing code, assuming that this code is 
     located inside a standard toolkit install setup. If the code that is running is part
-    of a localized pipeline configuration, the PC root path will be returned, otherwise 
-    a 'studio' root will be returned.
+    of a localized pipeline configuration, the pipeline config root path
+    will be returned, otherwise a 'studio' root will be returned.
     
     This method may not return valid results if there has been any symlinks set up as part of
     the install structure.
@@ -208,8 +163,8 @@ def get_path_to_current_core():
                         "Toolkit API is currently picked up from %s which is an "
                         "invalid location." % full_path_to_file)
     return curr_os_core_root    
-    
-    
+
+
 def get_core_path_for_config(pipeline_config_path):
     """
     Returns the core api install location associated with the given pipeline configuration.
@@ -219,55 +174,198 @@ def get_core_path_for_config(pipeline_config_path):
     :param pipeline_config_path: path to a pipeline configuration
     :returns: Path to the studio location root or pipeline configuration root or None if not resolved
     """
+    try:
+        return _get_core_path_for_config(pipeline_config_path)
+    except:
+        return None
 
+def _get_core_path_for_config(pipeline_config_path):
+    """
+    Returns the core api install location associated with the given pipeline configuration.
+    In the case of a localized PC, it just returns the given path.
+    Otherwise, it resolves the location via the core_xxxx.cfg files.
+
+    :param str pipeline_config_path: path to a pipeline configuration
+
+    :returns: Path to the studio location root or pipeline configuration root or None if not resolved
+    :rtype: str
+
+    :raises TankFileDoesNotExistError: Raised if the core_xxxx.cfg file is missing for the
+        pipeline configuration.
+    :raises TankNotPipelineConfigurationError: Raised if the path is not referencing a pipeline configuration.
+    :raises TankInvalidCoreLocationError: Raised if the core location specified in core_xxxx.cfg
+        does not exist.
+    """
     if is_localized(pipeline_config_path):
         # first, try to locate an install local to this pipeline configuration.
         # this would find any localized APIs.
         install_path = pipeline_config_path
 
     else:
-        # this PC is associated with a shared API (studio install)
-        # follow the links defined in the configuration to establish which 
+        # this pipeline config is associated with a shared API (studio install)
+        # follow the links defined in the configuration to establish which
         # setup it has been associated with.
-        studio_linkback_files = {"win32": os.path.join(pipeline_config_path, "install", "core", "core_Windows.cfg"), 
-                                 "linux2": os.path.join(pipeline_config_path, "install", "core", "core_Linux.cfg"), 
-                                 "darwin": os.path.join(pipeline_config_path, "install", "core", "core_Darwin.cfg")}
-        
-        curr_linkback_file = studio_linkback_files[sys.platform]
-        
+        studio_linkback_file = _get_current_platform_core_location_file_name(pipeline_config_path)
+
+        if not os.path.exists(studio_linkback_file):
+            raise TankFileDoesNotExistError(
+                "Configuration at '%s' without a localized core is missing a core location file at '%s'" %
+                (pipeline_config_path, studio_linkback_file)
+            )
+
         # this file will contain the path to the API which is meant to be used with this PC.
         install_path = None
-        try:
-            fh = open(curr_linkback_file, "rt")
+        with open(studio_linkback_file, "rt") as fh:
             data = fh.read().strip() # remove any whitespace, keep text
-            # expand any env vars that are used in the files. For example, you could have 
-            # an env variable $STUDIO_TANK_PATH=/sgtk/software/shotgun/studio and your 
-            # linkback file may just contain "$STUDIO_TANK_PATH" instead of an explicit path.
-            data = os.path.expandvars(data)
-            if data not in ["None", "undefined"] and os.path.exists(data):
-                install_path = data
-            fh.close()  
-        except Exception:
-            pass
-                
+
+        # expand any env vars that are used in the files. For example, you could have
+        # an env variable $STUDIO_TANK_PATH=/sgtk/software/shotgun/studio and your
+        # linkback file may just contain "$STUDIO_TANK_PATH" instead of an explicit path.
+        data = os.path.expanduser(os.path.expandvars(data))
+        if data not in ["None", "undefined"] and os.path.exists(data):
+            install_path = data
+        else:
+            raise TankInvalidCoreLocationError(
+                "Cannot find core location '%s' defined in "
+                "config file '%s'." %
+                (data, studio_linkback_file)
+            )
+
     return install_path
-    
+
+
+def _get_current_platform_file_suffix():
+    """
+    Find the suffix for the current platform's configuration file.
+
+    :returns: Suffix for the current platform's configuration file.
+    :rtype: str
+    """
+    # Now find out the appropriate python interpreter file to search for
+    if sys.platform == "darwin":
+        return "Darwin"
+    elif sys.platform == "win32":
+        return "Windows"
+    elif sys.platform.startswith("linux"):
+        return "Linux"
+    else:
+        raise TankError("Unknown platform: %s." % sys.platform)
+
+
+def _get_current_platform_interpreter_file_name(install_root):
+    """
+    Retrieves the path to the interpreter file for a given install root.
+
+    :param str install_root: This can be the root to a studio install for a core
+        or a pipeline configuration root.
+
+    :returns: Path for the current platform's interpreter file.
+    :rtype: str
+    """
+    return os.path.join(
+        install_root, "config", "core", "interpreter_%s.cfg" % _get_current_platform_file_suffix()
+    )
+
+
+def _get_current_platform_core_location_file_name(install_root):
+    """
+    Retrieves the path to the core location file for a given install root.
+
+    :param str install_root: This can be the root to a studio install for a core
+        or a pipeline configuration root.
+
+    :returns: Path for the current platform's core location file.
+    :rtype: str
+    """
+    return os.path.join(
+        install_root, "install", "core", "core_%s.cfg" % _get_current_platform_file_suffix()
+    )
+
+
+def _find_interpreter_location(pipeline_config_path):
+    """
+    Looks for a Python interpreter associated with this config.
+
+    :param str pipeline_config_path: Config root to look for the interpreter.
+
+    :raises TankInvalidInterpreterLocationError: Raised if the interpreter in the interpreter file doesn't
+        exist.
+    :raises TankFileDoesNotExistError: Raised if the interpreter file can't be found.
+
+    :returns: Path to the interpreter or None if the interpreter file was missing.
+    """
+    interpreter_config_file = _get_current_platform_interpreter_file_name(pipeline_config_path)
+    if os.path.exists(interpreter_config_file):
+        with open(interpreter_config_file, "r") as f:
+            path_to_python = f.read().strip()
+
+        if not path_to_python or not os.path.exists(path_to_python):
+            raise TankInvalidInterpreterLocationError(
+                "Cannot find interpreter '%s' defined in "
+                "config file '%s'." % (path_to_python, interpreter_config_file)
+            )
+        else:
+            return path_to_python
+    else:
+        raise TankFileDoesNotExistError(
+            "No interpreter file for the current platform found at '%s'." % interpreter_config_file
+        )
+
+
+def get_python_interpreter_for_config(pipeline_config_path):
+    """
+    Retrieves the path to the Python interpreter for a given pipeline configuration
+    path.
+
+    Each pipeline configuration has three (one for Windows, one for macOS and one for Linux) interpreter
+    files that provide a path to the Python interpreter used to launch the ``tank``
+    command.
+
+    If you require a `python` executable to launch a script that will use a pipeline configuration, it is
+    recommended its associated Python interpreter.
+
+    :param str pipeline_config_path: Path to the pipeline configuration root.
+
+    :returns: Path to the Python interpreter for that configuration.
+    :rtype: str
+
+    :raises TankInvalidInterpreterLocationError: Raised if the interpreter in the interpreter file doesn't
+        exist.
+    :raises TankFileDoesNotExistError: Raised if the interpreter file can't be found.
+    :raises TankNotPipelineConfigurationError: Raised if the pipeline configuration path is not
+        a pipeline configuration.
+    :raises TankInvalidCoreLocationError: Raised if the core location specified in core_xxxx.cfg
+        does not exist.
+    """
+    if not is_pipeline_config(pipeline_config_path):
+        raise TankNotPipelineConfigurationError(
+            "The folder at '%s' does not contain a pipeline configuration." % pipeline_config_path
+        )
+    # Config is localized, we're supposed to find an interpreter file in it.
+    if is_localized(pipeline_config_path):
+        return _find_interpreter_location(pipeline_config_path)
+    else:
+        studio_path = _get_core_path_for_config(pipeline_config_path)
+        return _find_interpreter_location(studio_path)
+
+
 def resolve_all_os_paths_to_core(core_path):
     """
     Given a core path on the current os platform, 
     return paths for all platforms, 
     as cached in the install_locations system file
-    
+
     :returns: dictionary with keys linux2, darwin and win32
     """
-    return _get_install_locations(core_path)
+    # @todo - refactor this to return a ShotgunPath
+    return _get_install_locations(core_path).as_system_dict()
 
 def resolve_all_os_paths_to_config(pc_path):
     """
     Given a pipeline configuration path on the current os platform, 
     return paths for all platforms, as cached in the install_locations system file
-    
-    :returns: dictionary with keys linux2, darwin and win32
+
+    :returns: ShotgunPath object
     """
     return _get_install_locations(pc_path)
 
@@ -277,7 +375,7 @@ def get_config_install_location(path):
     on the current platform.
     
     Loads the location metadata file from install_location.yml
-    This contains a reflection of the paths given in the pc entity.
+    This contains a reflection of the paths given in the pipeline config entity.
 
     Returns the path that has been registered for this pipeline configuration 
     for the current OS. This is the path that has been defined in shotgun.
@@ -290,17 +388,14 @@ def get_config_install_location(path):
     :param path: Path to a pipeline configuration on disk.
     :returns: registered path, may be None.
     """
-    # resolve
-    locations = _get_install_locations(path)
-    # do a bit of cleanup of the input data
-    return sanitize_path(locations[sys.platform])
+    return _get_install_locations(path).current_os
 
 def _get_install_locations(path):
     """
     Given a pipeline configuration OR core location, return paths on all platforms.
     
     :param path: Path to a pipeline configuration on disk.
-    :returns: dictionary with keys linux2, darwin and win32
+    :returns: ShotgunPath object
     """
     # basic sanity check
     if not os.path.exists(path):
@@ -338,9 +433,9 @@ def _get_install_locations(path):
     if not win_path or not (win_path.startswith("\\") or win_path[1] == ":"):
         win_path = None
 
-    # return data
-    return {"win32": win_path, "darwin": macosx_path, "linux2": linux_path }
-        
+    # sanitize data into a ShotgunPath and return data
+    return ShotgunPath(win_path, linux_path, macosx_path)
+
 
 
 
@@ -389,4 +484,5 @@ def _get_version_from_manifest(info_yml_path):
         data = "unknown"
 
     return data
-    
+
+

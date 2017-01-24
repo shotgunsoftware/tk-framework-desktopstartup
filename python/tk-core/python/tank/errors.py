@@ -10,50 +10,56 @@
 
 """
 All custom exceptions that Tank emits are defined here.
-
 """
 
 
 class TankError(Exception):
     """
-    Exception that indicates an error has occurred.
+    Top level exception for all toolkit-core level runtime errors
     """
-    pass
-
-
-class TankContextChangeNotSupportedError(TankError):
-    """
-    Exception that indicates that a requested context change is not allowed
-    based on a check of the current engine and all of its active apps.
-    """
-    pass
 
 
 class TankUnreadableFileError(TankError):
     """
     Exception that indicates that a required file can't be read from disk.
     """
-    pass
 
 
 class TankFileDoesNotExistError(TankUnreadableFileError):
     """
     Exceptions that indicates that a required file does not exist.
     """
-    pass
 
 
-class TankEngineInitError(TankError):
+class TankNoDefaultValueError(TankError):
     """
-    Exception that indicates that an engine could not start up.
+    Exception that can be raised when a default value is required but none is found.
     """
-    pass
+
 
 class TankHookMethodDoesNotExistError(TankError):
     """
     Exception that indicates that a called method does not exist in the hook.
     """
-    pass
+
+
+class TankInvalidInterpreterLocationError(TankError):
+    """
+    Exception that indicates that the interpreter specified in a file was not found.
+    """
+
+
+class TankInvalidCoreLocationError(TankError):
+    """
+    Exception that indicates the core location file contained an invalid path.
+    """
+
+
+class TankNotPipelineConfigurationError(TankError):
+    """
+    Exception that indicates that a folder doesn't contain a pipeline configuration.
+    """
+
 
 class TankErrorProjectIsSetup(TankError):
     """
@@ -64,5 +70,13 @@ class TankErrorProjectIsSetup(TankError):
         """
         Include error message
         """
-        super(TankErrorProjectIsSetup, self).__init__("You are trying to set up a project which has already been set up. "
-                                                      "If you want to do this, make sure to set the force parameter.")
+        super(TankErrorProjectIsSetup, self).__init__(
+            "You are trying to set up a project which has already been set up. "
+            "If you want to do this, make sure to set the force parameter."
+        )
+
+
+class TankContextDeserializationError(TankError):
+    """
+    Exception that indicates that something went wrong while deserializating a context.
+    """

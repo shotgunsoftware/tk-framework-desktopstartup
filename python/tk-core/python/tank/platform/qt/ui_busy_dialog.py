@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'busy_dialog.ui'
 #
-#      by: pyside-uic 0.2.15 running on PySide 1.2.1
+#      by: pyside-uic 0.2.15 running on PySide 1.2.2
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -11,7 +11,7 @@ from . import QtCore, QtGui
 class Ui_BusyDialog(object):
     def setupUi(self, BusyDialog):
         BusyDialog.setObjectName("BusyDialog")
-        BusyDialog.resize(418, 98)
+        BusyDialog.resize(500, 110)
         BusyDialog.setStyleSheet("/* Style for the window itself */\n"
 "#frame {\n"
 "border-color: #30A7E3;\n"

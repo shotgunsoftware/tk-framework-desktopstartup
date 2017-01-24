@@ -18,37 +18,53 @@ import pickle
 import copy
 
 from tank_vendor import yaml
-from tank_vendor import shotgun_authentication as sg_auth
+from . import authentication
 
 from .util import login
 from .util import shotgun_entity
 from .util import shotgun
-from .errors import TankError
+from . import constants
+from .errors import TankError, TankContextDeserializationError
 from .path_cache import PathCache
 from .template import TemplatePath
 
 
 class Context(object):
     """
-    Class which captures the current point in both shotgun and the file system which a
-    particular engine is connected to.
+    A context instance is used to collect a set of key fields describing the
+    current Context. We sometimes refer to the context as the current work area.
+    Typically this would be the current shot or asset that someone is working on.
 
-    Each engine is bound to a context - the context points the engine to a particular
+    The context captures the current point in both shotgun and the file system and context
+    objects are launch a toolkit engine via the :meth:`sgtk.platform.start_engine`
+    method. The context points the engine to a particular
     point in shotgun and on disk - it could be something as detailed as a task inside a Shot,
-    and something as vague as simply an empty context.
+    and something as vague as an empty context.
 
-    Typically, for tank to function at its most basic level, the project needs to be known.
-    Otherwise (if the context object is empty), it merely becomes an indication of the fact
-    that Tank doesn't understand what the context is pointing at.
+    The context is split up into several levels of granularity, reflecting the
+    fundamental hierarchy of Shotgun itself.
 
-    Contexts are always created via the factory methods. Avoid instantiating it by hand.
+    - The project level defines which shotgun project the context reflects.
+    - The entity level defines which entity the context reflects. For example,
+      this may be a Shot or an Asset. Note that in the case of a Shot, the context
+      does not contain any direct information of which sequence the shot is linked to,
+      however the context can still resolve such relationships implicitly if needed -
+      typically via the :meth:`Context.as_context_fields` method.
+    - The step level defines the current pipeline step. This is often a reflection of a
+      department or a general step in a workflow or pipeline (e.g. Modeling, Rigging).
+    - The task level defines a current Shotgun task.
+    - The user level defines the current user.
 
+    The data forms a hierarchy, so implicitly, the task belongs to the entity which in turn
+    belongs to the project. The exception to this is the user, which simply reflects the
+    currently operating user.
     """
 
     def __init__(self, tk, project=None, entity=None, step=None, task=None, user=None, additional_entities=None):
         """
-        Do not create instances of this class directly.
-        Instead, use the factory methods.
+        Context objects are not constructed by hand but are fabricated by the
+        methods :meth:`Sgtk.context_from_entity`, :meth:`Sgtk.context_from_entity_dictionary`
+        and :meth:`Sgtk.context_from_path`.
         """
         self.__tk = tk
         self.__project = project
@@ -76,8 +92,9 @@ class Context(object):
         # smart looking string representation
         
         if self.project is None:
-            # empty context!
-            ctx_name = "Empty Context"
+            # We're in a "site" context, so we'll give the site's url
+            # minus the "https://" if that's attached.
+            ctx_name = self.shotgun_url.split("//")[-1]
         
         elif self.entity is None:
             # project-only!
@@ -220,10 +237,15 @@ class Context(object):
         """
         The shotgun project associated with this context.
 
-        ``{'type': 'Project', 'id': 4, 'name': 'demo_project'}.``
+        If the context is incomplete, it is possible that the property is None. Example::
 
-        :returns: A std shotgun link dictionary.
-                  May return None if this has not been defined
+            >>> import sgtk
+            >>> tk = sgtk.sgtk_from_path("/studio.08/demo_project")
+            >>> ctx = tk.context_from_path("/studio.08/demo_project/sequences/AAA/ABC/Light/work")
+            >>> ctx.project
+            {'type': 'Project', 'id': 4, 'name': 'demo_project'}
+
+        :returns: A std shotgun link dictionary with keys id, type and name, or None if not defined
         """
         return self.__project
 
@@ -233,10 +255,15 @@ class Context(object):
         """
         The shotgun entity associated with this context.
 
-        ``{'type': 'Shot', 'id': 4, 'name': 'AAA_123'}.``
+        If the context is incomplete, it is possible that the property is None. Example::
 
-        :returns: A std shotgun link dictionary.
-                  May return None if this has not been defined
+            >>> import sgtk
+            >>> tk = sgtk.sgtk_from_path("/studio.08/demo_project")
+            >>> ctx = tk.context_from_path("/studio.08/demo_project/sequences/AAA/ABC/Light/work")
+            >>> ctx.entity
+            {'type': 'Shot', 'id': 412, 'name': 'ABC'}
+
+        :returns: A std shotgun link dictionary with keys id, type and name, or None if not defined
         """
         return self.__entity
 
@@ -245,10 +272,15 @@ class Context(object):
         """
         The shotgun step associated with this context.
 
-        ``{'type': 'Step', 'id': 1, 'name': 'Client'}``
+        If the context is incomplete, it is possible that the property is None. Example::
 
-        :returns: A std shotgun link dictionary.
-                  May return None if this has not been defined
+            >>> import sgtk
+            >>> tk = sgtk.sgtk_from_path("/studio.08/demo_project")
+            >>> ctx = tk.context_from_path("/studio.08/demo_project/sequences/AAA/ABC/Light/work")
+            >>> ctx.step
+            {'type': 'Step', 'id': 12, 'name': 'Light'}
+
+        :returns: A std shotgun link dictionary with keys id, type and name, or None if not defined
         """
         return self.__step
 
@@ -257,22 +289,34 @@ class Context(object):
         """
         The shotgun task associated with this context.
 
-        ``{'type': 'Task', 'id': 212, 'name': 'first_pass_lgt'}``
+        If the context is incomplete, it is possible that the property is None. Example::
 
-        :returns: A std shotgun link dictionary.
-                  May return None if this has not been defined
+            >>> import sgtk
+            >>> tk = sgtk.sgtk_from_path("/studio.08/demo_project")
+            >>> ctx = tk.context_from_path("/studio.08/demo_project/sequences/AAA/ABC/Lighting/first_pass_lgt/work")
+            >>> ctx.task
+            {'type': 'Task', 'id': 212, 'name': 'first_pass_lgt'}
+
+        :returns: A std shotgun link dictionary with keys id, type and name, or None if not defined
         """
         return self.__task
 
     @property
     def user(self):
         """
-        The shotgun human user, associated with this context.
-        
-        ``{'type': 'HumanUser', 'id': 212, 'name': 'William Winter'}``
+        A property which holds the user associated with this context.
+        If the context is incomplete, it is possible that the property is None.
 
-        :returns: A std shotgun link dictionary.
-                  May return None if this has not been defined.
+        The user property is special - either it represents a user value that was baked
+        into a template path upon folder creation, or it represents the current user::
+
+            >>> import sgtk
+            >>> tk = sgtk.sgtk_from_path("/studio.08/demo_project")
+            >>> ctx = tk.context_from_path("/studio.08/demo_project/sequences/AAA/ABC/Lighting/dirk.gently/work")
+            >>> ctx.user
+            {'type': 'HumanUser', 'id': 23, 'name': 'Dirk Gently'}
+
+        :returns: A std shotgun link dictionary with keys id, type and name, or None if not defined
         """
         # NOTE! get_shotgun_user returns more fields than just type, id and name
         # so make sure we get rid of those. We should make sure we return the data
@@ -289,8 +333,11 @@ class Context(object):
     def additional_entities(self):
         """
         List of entities that are required to provide a full context in non-standard configurations.
-        The "context_additional_entities" core hook gives the context construction code hints about
-        how this data should be populated.
+        The "context_additional_entities" core hook gives the context construction code hints about how
+        this data should be populated.
+
+        .. warning:: This is an old and advanced option and may be deprecated in the future. We strongly
+                     recommend not using it.
 
         :returns: A list of std shotgun link dictionaries.
                   Will be an empty list in most cases.
@@ -300,7 +347,17 @@ class Context(object):
     @property
     def entity_locations(self):
         """
-        A list of disk locations where the entity associated with this context can be found.
+        A list of paths on disk which correspond to the **entity** which this context represents.
+        If no folders have been created for this context yet, the value of this property will be an empty list::
+
+
+            >>> import sgtk
+            >>> tk = sgtk.sgtk_from_path("/studio.08/demo_project")
+            >>> ctx = tk.context_from_entity("Task", 8)
+            >>> ctx.entity_locations
+            ['/studio.08/demo_project/sequences/AAA/ABC']
+
+        :returns: A list of paths
         """
         if self.entity is None:
             return []
@@ -315,6 +372,12 @@ class Context(object):
         Returns the shotgun detail page url that best represents this context. Depending on 
         the context, this may be a task, a shot, an asset or a project. If the context is 
         completely empty, the root url of the associated shotgun installation is returned.
+
+            >>> import sgtk
+            >>> tk = sgtk.sgtk_from_path("/studio.08/demo_project")
+            >>> ctx = tk.context_from_entity("Task", 8)
+            >>> ctx.shotgun_url
+            'https://mystudio.shotgunstudio.com/detail/Task/8'
         """
         
         # walk up task -> entity -> project -> site
@@ -334,7 +397,16 @@ class Context(object):
     @property
     def filesystem_locations(self):
         """
-        A list of filesystem locations associated with this context.
+        A property which holds a list of paths on disk which correspond to this context.
+        If no folders have been created for this context yet, the value of this property will be an empty list::
+
+            >>> import sgtk
+            >>> tk = sgtk.sgtk_from_path("/studio.08/demo_project")
+            >>> ctx = tk.context_from_entity("Task", 8)
+            >>> ctx.filesystem_locations
+            ['/studio.08/demo_project/sequences/AAA/ABC/light/initial_pass']
+
+        :returns: A list of paths
         """
         
         # first handle special cases: empty context
@@ -384,15 +456,22 @@ class Context(object):
         return matching_paths
                     
     @property
-    def tank(self):
+    def sgtk(self):
         """
-        An Sgtk API instance
+        The Toolkit API instance associated with this context
+
+        :returns: :class:`Sgtk`
         """
         return self.__tk
 
-    ################################################################################################
-    # new name
-    sgtk = tank
+    @property
+    def tank(self):
+        """
+        Legacy equivalent of :meth:`sgtk`
+
+        :returns: :class:`Sgtk`
+        """
+        return self.__tk
 
     ################################################################################################
     # public methods
@@ -400,21 +479,58 @@ class Context(object):
     def as_template_fields(self, template, validate=False):
         """
         Returns the context object as a dictionary of template fields.
-        This is useful if you want to use a Context object as part of a call to the Sgtk API.
+
+        This is useful if you want to use a Context object as part of a call to
+        the Sgtk API. In order for the system to pass suitable values, you need to
+        pass the template you intend to use the data with as a parameter to this method.
+        The values are derived from existing paths on disk, or in the case of keys with
+        shotgun_entity_type and shotgun_entity_field settings, direct queries to the Shotgun
+        server. The validate parameter can be used to ensure that the method returns all
+        context fields required by the template and if it can't then a :class:`TankError` will be raised.
+        Example::
 
             >>> import sgtk
-            >>> tk = sgtk.sgtk_from_path("/studio.08/demo_project/sequences/AAA/ABC/Lighting/work")
-            >>> template = tk.templates['lighting_work']
-            >>> ctx = tk.context_from_path("/studio.08/demo_project/sequences/AAA/ABC/Lighting/work")
-            >>> ctx.as_template_fields(template)
-            {'Step': 'Client', 'Shot': 'shot_010', 'Sequence': 'Sequence_1'}
+            >>> tk = sgtk.sgtk_from_path("/studio.08/demo_project")
 
-        :param template:    Template for which the fields will be used.
+            # Create a template based on a path on disk. Because this path has been
+            # generated through Toolkit's folder processing and there are corresponding
+            # FilesystemLocation entities stored in Shotgun, the context can resolve
+            # the path into a set of Shotgun entities.
+            #
+            # Note how the context object, once resolved, does not contain
+            # any information about the sequence associated with the Shot.
+            >>> ctx = tk.context_from_path("/studio.08/demo_project/sequences/AAA/ABC/Lighting/work")
+            >>> ctx.project
+            {'type': 'Project', 'id': 4, 'name': 'demo_project'}
+            >>> ctx.entity
+            {'type': 'Shot', 'id': 2, 'name': 'ABC'}
+            >>> ctx.step
+            {'type': 'Step', 'id': 1, 'name': 'Light'}
+
+            # now if we have a template object that we want to turn into a path,
+            # we can request that the context object attempts to resolve as many
+            # fields as it can. These fields can then be plugged into the template
+            # object to generate a path on disk
+            >>> templ = tk.templates["maya_shot_publish"]
+            >>> templ
+            <Sgtk TemplatePath maya_shot_publish: sequences/{Sequence}/{Shot}/{Step}/publish/{name}.v{version}.ma>
+
+            >>> fields = ctx.as_template_fields(templ)
+            >>> fields
+            {'Step': 'Lighting', 'Shot': 'ABC', 'Sequence': 'AAA'}
+
+            # the fields dictionary above contains all the 'high level' data that is necessary to realise
+            # the template path. An app or integration can now go ahead and populate the fields specific
+            # for the app's business logic - in this case name and version - and resolve the fields dictionary
+            # data into a path.
+
+
+        :param template:    :class:`Template` for which the fields will be used.
         :param validate:    If True then the fields found will be checked to ensure that all expected fields for
-                            the context were found.  If a field is missing then a TankError will be raised
-        :returns:           A dictionary of template files representing the context. Handy to pass in to the 
-                            various Sgtk API methods
-        :raises:            TankError if the fields can't be resolved for some reason or if 'validate' is True 
+                            the context were found.  If a field is missing then a :class:`TankError` will be raised
+        :returns:           A dictionary of template files representing the context. Handy to pass to for example
+                            :meth:`Template.apply_fields`.
+        :raises:            :class:`TankError` if the fields can't be resolved for some reason or if 'validate' is True
                             and any of the context fields for the template weren't found. 
         """
         # Get all entities into a dictionary
@@ -473,7 +589,7 @@ class Context(object):
             fields.update(self._fields_from_template_tree(template, non_none_fields, entities))
 
         # get values for shotgun query keys in template
-        fields.update(self._fields_from_shotgun(template, entities))
+        fields.update(self._fields_from_shotgun(template, entities, validate))
 
         if validate:
             # check that all context template fields were found and if not then raise a TankError
@@ -493,24 +609,142 @@ class Context(object):
 
     def create_copy_for_user(self, user):
         """
-        Duplicate the context for the specified 
-        user
-        
-        :param user:    overrides the user
-        
-        :returns: Context object
+        Provides the ability to create a copy of an existing Context for a specific user.
+
+        This is useful if you need to determine a user specific version of a path, e.g.
+        when copying files between different user sandboxes. Example::
+
+            >>> import sgtk
+            >>> tk = sgtk.sgtk_from_path("/studio.08/demo_project")
+            >>> ctx = tk.context_from_path("/studio.08/demo_project/sequences/AAA/ABC/Lighting/dirk.gently/work")
+            >>> ctx.user
+            {'type': 'HumanUser', 'id': 23, 'name': 'Dirk Gently'}
+            >>>
+            >>> copied_ctx = tk.create_copy_for_user({'type': 'HumanUser', 'id': 7, 'name': 'John Snow'})
+            >>> copied_ctx.user
+            {'type': 'HumanUser', 'id': 23, 'name': 'John Snow'}
+
+        :param user:  The Shotgun user entity dictionary that should be set on the copied context
+        :returns: :class:`Context`
         """
         ctx_copy = copy.deepcopy(self)
         ctx_copy.__user = user
-        return ctx_copy       
+        return ctx_copy
+
+    ################################################################################################
+    # serialization
+
+    def serialize(self, with_user_credentials=True):
+        """
+        Serializes the context into a string.
+
+        Any Context object can be serialized to/deserialized from a string.
+        This can be useful if you need to pass a Context between different processes.
+        As an example, the ``tk-multi-launchapp`` uses this mechanism to pass the Context
+        from the launch process (e.g. for example Shotgun Desktop) to the
+        Application (e.g. Maya) being launched. Example:
+
+            >>> import sgtk
+            >>> tk = sgtk.sgtk_from_path("/studio.08/demo_project")
+            >>> ctx = tk.context_from_path("/studio.08/demo_project/sequences/AAA/ABC/Lighting/dirk.gently/work")
+            >>> context_str = ctx.serialize(ctx)
+            >>> new_ctx = sgtk.Context.deserialize(context_str)
+
+        :param with_user_credentials: If ``True``, the currently authenticated user's credentials, as
+            returned by :meth:`sgtk.get_authenticated_user`, will also be serialized with the context.
+
+        .. note:: For example, credentials should be omitted (``with_user_credentials=False``) when
+            serializing the context from a user's current session to send it to a render farm. By doing
+            so, invoking :meth:`sgtk.Context.deserialize` on the render farm will only restore the
+            context and not the authenticated user.
+
+        :returns: String representation
+        """
+        # Avoids cyclic imports
+        from .api import get_authenticated_user
+
+        data = {
+            "project": self.project,
+            "entity": self.entity,
+            "user": self.user,
+            "step": self.step,
+            "task": self.task,
+            "additional_entities": self.additional_entities,
+            "_pc_path": self.tank.pipeline_configuration.get_path()
+        }
+
+        if with_user_credentials:
+            # If there is an authenticated user.
+            user = get_authenticated_user()
+            if user:
+                # We should serialize it as well so that the next process knows who to
+                # run as.
+                data["_current_user"] = authentication.serialize_user(user)
+        return pickle.dumps(data)
+
+    @classmethod
+    def deserialize(cls, context_str):
+        """
+        The inverse of :meth:`Context.serialize`.
+
+        :param context_str: String representation of context, created with :meth:`Context.serialize`
+
+        .. note:: If the context was serialized with the user credentials, the currently authenticated
+            user will be updated with these credentials.
+
+        :returns: :class:`Context`
+        """
+        # lazy load this to avoid cyclic dependencies
+        from .api import Tank, set_authenticated_user
+
+        try:
+            data = pickle.loads(context_str)
+        except Exception, e:
+            raise TankContextDeserializationError(str(e))
+
+        # first get the pipeline config path out of the dict
+        pipeline_config_path = data["_pc_path"]
+        del data["_pc_path"]
+
+        # Authentication in Toolkit requires that credentials are passed from
+        # one process to another so the currently authenticated user is carried
+        # from one process to another. The current user needs to be part of the
+        # context because multiple DCCs can run at the same time under different
+        # users, e.g. launching Maya from the site as user A and Nuke from the tank
+        # command as user B.
+        user_string = data.get("_current_user")
+        if user_string:
+            # Remove it from the data
+            del data["_current_user"]
+            # and set the authenticated user user.
+            user = authentication.deserialize_user(user_string)
+            set_authenticated_user(user)
+
+        # create a Sgtk API instance.
+        tk = Tank(pipeline_config_path)
+
+        # add it to the constructor instance
+        data["tk"] = tk
+
+        # and lastly make the obejct
+        return cls(**data)
 
     ################################################################################################
     # private methods
 
-    def _fields_from_shotgun(self, template, entities):
+    def _fields_from_shotgun(self, template, entities, validate):
         """
         Query Shotgun server for keys used by this template whose values come directly
         from Shotgun fields.
+
+        :param template: Template to retrieve Shotgun fields for.
+        :param entities: Dictionary of entities for the current context.
+        :param validate: If True, missing fields will raise a TankError.
+
+        :returns: Dictionary of field values extracted from Shotgun.
+        :rtype: dict
+
+        :raises TankError: Raised if a key is missing from the entities list when ``validate`` is ``True``.
         """
         fields = {}
         # for any sg query field
@@ -522,9 +756,12 @@ class Context(object):
                 
                 # ensure that the context actually provides the desired entities
                 if not key.shotgun_entity_type in entities:
-                    raise TankError("Key '%s' in template '%s' could not be populated by "
-                                    "context '%s' because the context does not contain a "
-                                    "shotgun entity of type '%s'!" % (key, template, self, key.shotgun_entity_type))
+                    if validate:
+                        raise TankError("Key '%s' in template '%s' could not be populated by "
+                                        "context '%s' because the context does not contain a "
+                                        "shotgun entity of type '%s'!" % (key, template, self, key.shotgun_entity_type))
+                    else:
+                        continue
                     
                 entity = entities[key.shotgun_entity_type]
                 
@@ -773,16 +1010,13 @@ def create_empty(tk):
 def from_entity(tk, entity_type, entity_id):
     """
     Constructs a context from a shotgun entity.
-    Because we are constructing the context from an entity, we will get a context
-    which has a project, and an entity associated with it.
 
-    If the entity is a Task a call to the Shotgun Server will be made.
+    For more information, see :meth:`Sgtk.context_from_entity`.
 
     :param tk:           Sgtk API handle
     :param entity_type:  The shotgun entity type to produce a context for
     :param entity_id:    The shotgun entity id to produce a context for
-
-    :returns: a context object
+    :returns: :class:`Context`
     """
     
     if entity_type is None:
@@ -848,54 +1082,14 @@ def from_entity(tk, entity_type, entity_id):
 
 def from_entity_dictionary(tk, entity_dictionary):
     """
-    Constructs a context from a shotgun entity dictionary.  This method will
-    try to use any linked information available in the dictionary where possible
-    but if it can't determine a valid context then it will fall back to
-    'from_entity' which may result in a Shotgun path cache query and be considerably
-    slower.
-    
-    If the entity type is a PublishedFile (or legacy TankPublishedFile) then the code
-    will recurse down to the most relevant linked entity (Task, entity or Project,
-    in that order)
+    Constructs a context from a shotgun entity dictionary.
 
-    The following values for 'entity_dictionary' will result in a context being
-    created without falling back to a potential Shotgun query - each entity in the
-    dictionary (including linked entities) must have the fields: 'type', 'id' and 
-    'name' (or the name equivelent for specific entity types, e.g. 'content' for 
-    Step entities, 'code' for Shot entities, etc.):
+    For more information, see :meth:`Sgtk.context_from_entity_dictionary`.
 
-        - {"type":"Project", "id":123, "name":"My Project"}
-
-        - {"type":"Shot", "id":456, "code":"Shot 001", 
-            "project":{"type":"Project", "id":123, "name":"My Project"}
-            }
-
-        - {"type":"Task", "id":789, "name":"Animation",
-            "project":{"type":"Project", "id":123, "name":"My Project"}} 
-            "entity":{"type":"Shot", "id":456, "name":"Shot 001"}
-            "step":{"type":"Step", "id":101112, "name":"Anm"}
-            }
-
-    The following values for 'entity_dictionary' don't contain enough information to
-    fully form a context so the code will fall back to 'from_entity()' which may then
-    result in a Shotgun query to retrieve the missing information:
-
-        - # missing project name
-          {"type":"Project", "id":123}
-
-        - # missing linked project
-          {"type":"Shot", "id":456, "code":"Shot 001"}
-
-        - # missing linked project name and linked step
-          {"type":"Task", "id":789, "name":"Animation",
-            "project":{"type":"Project", "id":123}} 
-            "entity":{"type":"Shot", "id":456, "name":"Shot 001"}
-            }
-
-    :param tk:                  Sgtk API handle
-    :param entity_dictionary:   The entity dictionary to create the context from 
-                                containing at least: {"type":entity_type, "id":entity_id}
-    :returns:                   A Context object
+    :param tk: :class:`Sgtk`
+    :param entity_dictionary: The entity dictionary to create the context from
+                              containing at least: {"type":entity_type, "id":entity_id}
+    :returns: :class:`Context`
     """
     # perform validation of the entity dictionary:
     if not isinstance(entity_dictionary, dict):
@@ -1018,20 +1212,19 @@ def from_entity_dictionary(tk, entity_dictionary):
 
 def from_path(tk, path, previous_context=None):
     """
-    Constructs a context from a path to a folder or a file.
+    Factory method that constructs a context object from a path on disk.
+
     The algorithm will navigate upwards in the file system and collect
     as much tank metadata as possible to construct a Tank context.
 
-    Depending on the location, the context contents may vary.
-
-    :param tk:   Sgtk API handle
     :param path: a file system path
-    :param previous_context: a context object to use to try to automatically extend the generated
+    :param previous_context: A context object to use to try to automatically extend the generated
                              context if it is incomplete when extracted from the path. For example,
                              the Task may be carried across from the previous context if it is
                              suitable and if the task wasn't already expressed in the file system
                              path passed in via the path argument.
-    :returns: a context object
+    :type previous_context: :class:`Context`
+    :returns: :class:`Context`
     """
 
     # prep our return data structure
@@ -1155,71 +1348,28 @@ def from_path(tk, path, previous_context=None):
 
     return Context(**context)
 
+
 ################################################################################################
 # serialization
 
 def serialize(context):
     """
-    Serializes the context into a string
+    Serializes the context into a string.
+
+    .. deprecated:: v0.18.12
+       Use :meth:`Context.serialize`
     """
-    # Avoids cyclic imports
-    from .api import get_authenticated_user
-
-    data = {
-        "project": context.project,
-        "entity": context.entity,
-        "user": context.user,
-        "step": context.step,
-        "task": context.task,
-        "additional_entities": context.additional_entities,
-        "_pc_path": context.tank.pipeline_configuration.get_path()
-    }
-
-    # If there is an authenticated user.
-    user = get_authenticated_user()
-    if user:
-        # We should serialize it as well so that the next process knows who to
-        # run as.
-        data["_current_user"] = sg_auth.serialize_user(user)
-    return pickle.dumps(data)
+    return context.serialize()
 
 
 def deserialize(context_str):
     """
-    Deserializes a string created with serialize() into a context object
+    The inverse of :meth:`serialize`.
+
+    .. deprecated:: v0.18.12
+       Use :meth:`Context.deserialize`
     """
-    # lazy load this to avoid cyclic dependencies
-    from .api import Tank, set_authenticated_user
-
-    data = pickle.loads(context_str)
-
-    # first get the pc path out of the dict
-    pipeline_config_path = data["_pc_path"]
-    del data["_pc_path"]
-
-    # Authentication in Toolkit requires that credentials are passed from
-    # one process to another so the currently authenticated user is carried
-    # from one process to another. The current user needs to be part of the
-    # context because multiple DCCs can run at the same time under different
-    # users, e.g. launching Maya from the site as user A and Nuke from the tank
-    # command as user B.
-    user_string = data.get("_current_user")
-    if user_string:
-        # Remove it from the data
-        del data["_current_user"]
-        # and set the authenticated user user.
-        user = sg_auth.deserialize_user(user_string)
-        set_authenticated_user(user)
-
-    # create a Sgtk API instance.
-    tk = Tank(pipeline_config_path)
-
-    # add it to the constructor instance
-    data["tk"] = tk
-
-    # and lastly make the obejct
-    return Context(**data)
-
+    return Context.deserialize(context_str)
 
 ################################################################################################
 # YAML representer/constructor
@@ -1227,7 +1377,12 @@ def deserialize(context_str):
 def context_yaml_representer(dumper, context):
     """
     Custom serializer.
-    Creates yaml code for a context object
+    Creates yaml code for a context object.
+
+    Legacy, kept for compatibility reasons, can probably be removed at this point.
+
+    .. note:: Contrary to :meth:`sgtk.Context.serialize`, this method doesn't serialize the
+        currently authenticated user.
     """
     
     # first get the stuff which represents all the Context() 
@@ -1243,7 +1398,7 @@ def context_yaml_representer(dumper, context):
     
     # now we also need to pass a TK instance to the constructor when we 
     # are deserializing the object. For this purpose, pass a 
-    # PC path as part of the dict
+    # pipeline config path as part of the dict
     context_dict["_pc_path"] = context.tank.pipeline_configuration.get_path()
 
     return dumper.represent_mapping(u'!TankContext', context_dict)
@@ -1252,6 +1407,11 @@ def context_yaml_constructor(loader, node):
     """
     Custom deserializer.
     Constructs a context object given the yaml data provided.
+
+    Legacy, kept for compatibility reasons, can probably be removed at this point.
+
+    .. note:: Contrary to :meth:`sgtk.Context.deserialize`, this method doesn't can't restore the
+        currently authenticated user.
     """
     # lazy load this to avoid cyclic dependencies
     from .api import Tank
@@ -1259,7 +1419,7 @@ def context_yaml_constructor(loader, node):
     # get the dict from yaml
     context_constructor_dict = loader.construct_mapping(node)
     
-    # first get the pc path out of the dict
+    # first get the pipeline config path out of the dict
     pipeline_config_path = context_constructor_dict["_pc_path"] 
     del context_constructor_dict["_pc_path"]
     
@@ -1456,8 +1616,8 @@ def _context_data_from_cache(tk, entity_type, entity_id):
             # in the local storage defs and in the pipeline_configuration.yml file.
             raise TankError("The path '%s' associated with %s id %s does not " 
                             "resolve correctly. This may be an indication of an issue "
-                            "with the local storage setup. Please contact " 
-                            "support@shotgunsoftware.com" % (curr_path, entity_type, entity_id))
+                            "with the local storage setup. Please contact %s." 
+                            % (curr_path, entity_type, entity_id, constants.SUPPORT_EMAIL))
 
         # grab the name for the context entity
         if curr_entity["type"] == entity_type and curr_entity["id"] == entity_id:
