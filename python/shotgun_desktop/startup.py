@@ -729,7 +729,7 @@ def __init_websockets(splash, app_bootstrap, settings):
         logger.warning("Interpreter is not 64-bits, can't load desktop server")
         return None, True
 
-    if not settings.integration_enabled:
+    if settings.integration_enabled is False:
         # Do not import if server is disabled.
         logger.info("Integration was disabled in config.ini.")
         return None, True
@@ -747,7 +747,6 @@ def __init_websockets(splash, app_bootstrap, settings):
 
     # Read the browser integration settings in the same file as the desktop integration settings.
     integration_settings = tk_framework_desktopserver.Settings(
-        settings.location,
         os.path.join(
             app_bootstrap.get_shotgun_desktop_cache_location(),
             "config",
