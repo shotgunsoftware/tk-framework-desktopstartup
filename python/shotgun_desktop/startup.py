@@ -745,8 +745,11 @@ def __init_websockets(splash, app_bootstrap, settings):
     except Exception, e:
         return None, __handle_unexpected_exception_during_websocket_init(splash, app_bootstrap, e)
 
+    import sgtk
+
     # Read the browser integration settings in the same file as the desktop integration settings.
     integration_settings = tk_framework_desktopserver.Settings(
+        sgtk.util.UserSettings().path,
         os.path.join(
             app_bootstrap.get_shotgun_desktop_cache_location(),
             "config",
