@@ -95,7 +95,7 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
 
     can_update, reason = latest_descriptor.check_version_constraints(
         sg,
-        desktop_version="v1.0"
+        desktop_version=app_bootstrap.get_version()
     )
 
     if not can_update:
