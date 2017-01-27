@@ -729,7 +729,7 @@ def __init_websockets(splash, app_bootstrap, settings):
         logger.warning("Interpreter is not 64-bits, can't load desktop server")
         return None, True
 
-    if settings.integration_enabled is False:
+    if not settings.integration_enabled:
         # Do not import if server is disabled.
         logger.info("Integration was disabled in config.ini.")
         return None, True

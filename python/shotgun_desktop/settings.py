@@ -43,4 +43,11 @@ class Settings(object):
         """
         # Any non empty string is True, so convert it to int, which will accept 0 or 1 and then
         # we'll cast the return value to a boolean.
-        return UserSettings().get_boolean_setting(self._BROWSER_INTEGRATION, "enabled")
+        is_enabled = UserSettings().get_boolean_setting(self._BROWSER_INTEGRATION, "enabled")
+
+        # If the setting is set in the file.
+        if is_enabled is not None:
+            return is_enabled
+        else:
+            # Integration is enabled by default.
+            return True
