@@ -56,8 +56,6 @@ popd
 cp -R $DEST_REPO/* $DEST
 rm -rf $DEST/tests
 
-# Add the version in the info.yml
-sed -i "" -e "s/version: \"HEAD\"/version: \"$1\"/" $DEST/info.yml
 # Put files in the staging area.
 git add -A $DEST
 # Cleanup!
