@@ -31,6 +31,10 @@ class Settings(object):
     """
 
     _BROWSER_INTEGRATION = "BrowserIntegration"
+    _PORT_SETTING = "port"
+    _LOW_LEVEL_DEBUG_SETTING = "low_level_debug"
+    _WHITELIST_SETTING = "whitelist"
+    _CERTIFICATE_FOLDER_SETTING = "certificate_folder"
 
     def __init__(self, location, default_certificate_folder):
         """
@@ -39,12 +43,37 @@ class Settings(object):
         If the configuration file doesn't not exist, the configuration
         object will return the default values.
 
-        :param location: Path to the configuration file.
+        :param location: Path to the configuration file. If ``None``, Toolkit's sgtk.util.UserSettings module
+            will be used instead to retrieve the values.
         :param default_certificate_folder: Default location for the certificate file. This value
             is overridable for each app that can use this settings object.
         """
-        self._config = self._load_config(location)
+
         self._default_certificate_folder = default_certificate_folder
+
+        # Retrieve all the settings from the configuration file or the Tookit UserSettings object.
+        if location is not None:
+            config = self._load_config(location)
+            port = self._get_value(config, self._BROWSER_INTEGRATION, self._PORT_SETTING, int)
+            low_level_debug = bool(
+                self._get_value(config, self._BROWSER_INTEGRATION, self._LOW_LEVEL_DEBUG_SETTING, int)
+            )
+            whitelist = self._get_value(config, self._BROWSER_INTEGRATION, self._WHITELIST_SETTING)
+            certificate_folder = self._get_value(config, self._BROWSER_INTEGRATION, self._CERTIFICATE_FOLDER_SETTING)
+        else:
+            from sgtk.util import UserSettings
+            user_settings = UserSettings()
+            port = user_settings.get_integer_setting(self._BROWSER_INTEGRATION, self._PORT_SETTING)
+            low_level_debug = user_settings.get_boolean_setting(
+                self._BROWSER_INTEGRATION, self._LOW_LEVEL_DEBUG_SETTING
+            )
+            whitelist = user_settings.get_setting(self._BROWSER_INTEGRATION, self._WHITELIST_SETTING)
+            certificate_folder = user_settings.get_setting(self._BROWSER_INTEGRATION, self._CERTIFICATE_FOLDER_SETTING)
+
+        self._port = port or 9000
+        self._low_level_debug = low_level_debug or False
+        self._whitelist = whitelist or "*.shotgunstudio.com"
+        self._certificate_folder = certificate_folder or self._default_certificate_folder
 
     def _load_config(self, path):
         """
@@ -64,7 +93,7 @@ class Settings(object):
         """
         :returns: The port to listen on for incoming websocket requests.
         """
-        return self._get_value(self._BROWSER_INTEGRATION, "port", int, 9000)
+        return self._port
 
     @property
     def low_level_debug(self):
@@ -73,23 +102,21 @@ class Settings(object):
         """
         # Any non empty string is True, so convert it to int, which will accept 0 or 1 and then
         # we'll cast the return value to a boolean.
-        return bool(self._get_value(self._BROWSER_INTEGRATION, "low_level_debug", int, False))
+        return self._low_level_debug
 
     @property
     def whitelist(self):
         """
         :returns: The list of clients that can connect to the server.
         """
-        return self._get_value(self._BROWSER_INTEGRATION, "whitelist", default="*.shotgunstudio.com")
+        return self._whitelist
 
     @property
     def certificate_folder(self):
         """
         :returns: Path to the certificate location.
         """
-        return self._get_value(
-            self._BROWSER_INTEGRATION, "certificate_folder", default=self._default_certificate_folder
-        )
+        return self._certificate_folder
 
     def dump(self, logger):
         """
@@ -100,11 +127,12 @@ class Settings(object):
         logger.info("Port: %d" % self.port)
         logger.info("Whitelist: %s" % self.whitelist)
 
-    def _get_value(self, section, key, type_cast=str, default=None):
+    def _get_value(self, config, section, key, type_cast=str):
         """
         Retrieves a value from the config.ini file. If the value is not set, returns the default.
         Since all values are strings inside the file, you can optionally cast the data to another type.
 
+        :param config: Configuration parser holding the settings.
         :param section: Section (name between brackets) of the setting.
         :param key: Name of the setting within a section.
         ;param type_cast: Casts the value to the passed in type. Defaults to str.
@@ -112,17 +140,16 @@ class Settings(object):
 
         :returns: The appropriately type casted value if the value is found, default otherwise.
         """
-        if not self._config.has_section(section):
-            return default
-        elif not self._config.has_option(section, key):
-            return default
+        if config.has_section(section) and config.has_option(section, key):
+            return type_cast(self._resolve_value(config, section, key))
         else:
-            return type_cast(self._resolve_value(section, key))
+            return None
 
-    def _resolve_value(self, section, key):
+    def _resolve_value(self, config, section, key):
         """
         Resolves a value in the file and translates any environment variable or ~ present.
 
+        :param config: Configuration parser holding the settings.
         :param section: Name of the section of the value.
         :param key: Key of the value to retrieve for the selection section.
 
@@ -130,6 +157,6 @@ class Settings(object):
         """
         return os.path.expandvars(
             os.path.expanduser(
-                self._config.get(section, key)
+                config.get(section, key)
             )
         )
