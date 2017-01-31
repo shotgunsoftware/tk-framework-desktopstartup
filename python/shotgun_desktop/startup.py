@@ -490,6 +490,7 @@ def __start_engine_in_zero_config(app, app_bootstrap, splash, user):
     )
     mgr.plugin_id = "basic.desktop"
     bundle_cache_path = app_bootstrap.get_bundle_cache_location()
+    print bundle_cache_path
     if bundle_cache_path:
         mgr.bundle_cache_fallback_paths.append(bundle_cache_path)
 
@@ -842,8 +843,9 @@ class _BootstrapProxy(object):
         :returns: Path to the bundle cache or None if no bundle cache is present.
         """
         try:
-            return self._app_boostrap.get_bundle_cache_location()
-        except:
+            return self._app_bootstrap.get_bundle_cache_location()
+        except Exception as e:
+            print e
             return os.environ.get("SHOTGUN_DESKTOP_BUNDLE_CACHE_LOCATION") or None
 
 
