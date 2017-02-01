@@ -30,13 +30,22 @@ class ShotgunDesktopError(Exception):
     """
     Common base class for Shotgun Desktop errors.
     """
-    def __init__(self, message):
-        """Constructor"""
+    _SUPPORT_EMAIL = "support@shotgunsoftware.com"
+
+    def __init__(self, message, support_required=False):
+        """
+        :param message: Error message to display.
+        :param optional_support: Indicates if the epilog should mention that contacting support is optional
+             or required to resolve this issue.
+        """
+
+        if support_required:
+            support_message = "Please contact {0} to resolve this issue.".format(self._SUPPORT_EMAIL)
+        else:
+            support_message = ("If you need help with this issue, please contact {0}.").format(self._SUPPORT_EMAIL)
         Exception.__init__(
             self,
-            "%s\n\n"
-            "If you need help with this issue, please contact our support team at "
-            "support@shotgunsoftware.com." % message
+            "%s\n\n%s" % (message, support_message)
         )
 
 
@@ -108,9 +117,9 @@ class UnexpectedConfigFound(ShotgunDesktopError):
         """Constructor"""
         ShotgunDesktopError.__init__(
             self,
-            "A pipeline configuration was found at \"%s\" but no matching pipeline configuration was found in Shotgun.\n\n"
-            "This can happen if you are not assigned to the \"Template Project\". Please contact your Shotgun "
-            "Administrator to see if that is the case." % default_site_config
+            "A pipeline configuration was found at \"%s\" but no matching pipeline configuration was found in"
+            "Shotgun.\n\nThis can happen if you are not assigned to the \"Template Project\". Please contact "
+            "your Shotgun Administrator to see if that is the case." % default_site_config
         )
 
 
@@ -141,6 +150,7 @@ class BundledDescriptorEnvVarError(ShotgunDesktopError):
             "Error parsing SGTK_DESKTOP_BUNDLED_DESCRIPTOR: %s" % reason
         )
 
+
 class EnvironmentVariableFileLookupError(ShotgunDesktopError):
     """
     Raised when an environment variable specifying a location points to configuration
@@ -161,3 +171,14 @@ class EnvironmentVariableFileLookupError(ShotgunDesktopError):
         )
 
 
+class MissingAppStoreCredentialsError(ShotgunDesktopError):
+    """
+    Raised when there is not app store key set in Shotgun.
+    """
+
+    def __init__(self):
+        super(MissingAppStoreCredentialsError, self).__init__(
+            "Toolkit App Store credentials could not be retrieved from Shotgun.",
+            # Require that the client contacts support
+            support_required=True
+        )
