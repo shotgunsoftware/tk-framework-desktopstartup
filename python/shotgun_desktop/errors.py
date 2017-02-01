@@ -30,13 +30,22 @@ class ShotgunDesktopError(Exception):
     """
     Common base class for Shotgun Desktop errors.
     """
-    def __init__(self, message):
-        """Constructor"""
+    _SUPPORT_EMAIL = "support@shotgunsoftware.com"
+
+    def __init__(self, message, support_required=False):
+        """
+        :param message: Error message to display.
+        :param optional_support: Indicates if the epilog should mention that contacting support is optional
+             or required to resolve this issue.
+        """
+
+        if support_required:
+            support_message = "Please contact {0} to resolve this issue.".format(self._SUPPORT_EMAIL)
+        else:
+            support_message = ("If you need help with this issue, please contact {0}.").format(self._SUPPORT_EMAIL)
         Exception.__init__(
             self,
-            "%s\n\n"
-            "If you need help with this issue, please contact our support team at "
-            "support@shotgunsoftware.com." % message
+            "%s\n\n%s" % (message, support_message)
         )
 
 
@@ -100,17 +109,6 @@ class ToolkitDisabledError(ShotgunDesktopError):
         )
 
 
-class MissingConfigError(ShotgunDesktopError):
-    """
-    This exception notifies the catcher that a configuration was missing on disk.
-    """
-    def __init__(self, default_site_config):
-        """Constructor"""
-        ShotgunDesktopError.__init__(
-            self,
-            "The pipeline configuration at \"%s\" was not found."
-        )
-
 
 class BundledDescriptorEnvVarError(ShotgunDesktopError):
     """
@@ -122,6 +120,7 @@ class BundledDescriptorEnvVarError(ShotgunDesktopError):
             self,
             "Error parsing SGTK_DESKTOP_BUNDLED_DESCRIPTOR: %s" % reason
         )
+
 
 
 class EnvironmentVariableFileLookupError(ShotgunDesktopError):
@@ -144,3 +143,14 @@ class EnvironmentVariableFileLookupError(ShotgunDesktopError):
         )
 
 
+class InvalidAppStoreCredentialsError(ShotgunDesktopError):
+    """
+    Raised when there is not app store key set in Shotgun.
+    """
+
+    def __init__(self, message):
+        super(InvalidAppStoreCredentialsError, self).__init__(
+            message,
+            # Require that the client contacts support
+            support_required=True
+        )
