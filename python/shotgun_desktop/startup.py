@@ -489,8 +489,9 @@ def __start_engine_in_zero_config(app, app_bootstrap, splash, user):
         splash, app, progress_value, message
     )
     mgr.plugin_id = "basic.desktop"
+
+    # Add the bundle cache if there is one available
     bundle_cache_path = app_bootstrap.get_bundle_cache_location()
-    print bundle_cache_path
     if bundle_cache_path:
         mgr.bundle_cache_fallback_paths.append(bundle_cache_path)
 
@@ -840,12 +841,14 @@ class _BootstrapProxy(object):
         """
         Retrieves the bundle cache that is distributed with the Shotgun Desktop.
 
+        We're implementing this method on the proxy because Desktop versions 1.3.6 and earlier didn't
+        have a bundle cache.
+
         :returns: Path to the bundle cache or None if no bundle cache is present.
         """
-        try:
+        if hasattr(self._app_bootstrap, "get_bundle_cache_location"):
             return self._app_bootstrap.get_bundle_cache_location()
-        except Exception as e:
-            print e
+        else:
             return os.environ.get("SHOTGUN_DESKTOP_BUNDLE_CACHE_LOCATION") or None
 
 
