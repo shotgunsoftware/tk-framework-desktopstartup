@@ -40,10 +40,9 @@ class ShotgunDesktopError(Exception):
         """
 
         if support_required:
-            support_message = "Please contact support at {0} to resolve this issue.".format(self._SUPPORT_EMAIL)
+            support_message = "Please contact {0} to resolve this issue.".format(self._SUPPORT_EMAIL)
         else:
-            support_message = ("If you need help with this issue, please contact our support team at "
-                               "{0}.").format(self._SUPPORT_EMAIL)
+            support_message = ("If you need help with this issue, please contact {0}.").format(self._SUPPORT_EMAIL)
         Exception.__init__(
             self,
             "%s\n\n%s" % (message, support_message)
