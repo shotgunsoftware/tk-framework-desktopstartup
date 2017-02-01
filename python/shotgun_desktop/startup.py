@@ -570,8 +570,10 @@ def __handle_unexpected_exception(splash, shotgun_authenticator, error_message, 
         "Shotgun Desktop Error",
         "Something went wrong in the Shotgun Desktop! If you drop us an email at "
         "support@shotgunsoftware.com, we'll help you diagnose the issue.\n"
-        "For more information, see the log file at %s.\n"
-        "Error: %s" % (app_bootstrap.get_logfile_location(), str(error_message)),
+        "Error: %s\n"
+        "For more information, see the log file at %s." % (
+            str(error_message), app_bootstrap.get_logfile_location()
+        ),
         detailed_text="".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
     )
     # If we are logged in, we should log out so the user is not stuck in a loop of always
