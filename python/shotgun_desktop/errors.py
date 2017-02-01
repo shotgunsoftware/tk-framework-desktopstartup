@@ -142,14 +142,3 @@ class EnvironmentVariableFileLookupError(ShotgunDesktopError):
         )
 
 
-class MissingAppStoreCredentialsError(ShotgunDesktopError):
-    """
-    Raised when there is not app store key set in Shotgun.
-    """
-
-    def __init__(self):
-        super(MissingAppStoreCredentialsError, self).__init__(
-            "Toolkit App Store credentials could not be retrieved from Shotgun.",
-            # Require that the client contacts support
-            support_required=True
-        )
