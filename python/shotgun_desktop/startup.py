@@ -871,6 +871,7 @@ def main(**kwargs):
     # We have gui, websocket library and the authentication module, now do the rest.
     server = None
     from sgtk import authentication
+    from sgtk.descriptor import InvalidAppStoreCredentialsError
     try:
         # Reading user settings from disk.
         settings = Settings()
@@ -928,6 +929,9 @@ def main(**kwargs):
         splash.hide()
         shotgun_authenticator.clear_default_user()
         return 0
+    except InvalidAppStoreCredentialsError, e:
+        __handle_exception(splash, shotgun_authenticator, str(e))
+        return -1
     except ShotgunDesktopError, e:
         __handle_exception(splash, shotgun_authenticator, str(e))
         return -1
