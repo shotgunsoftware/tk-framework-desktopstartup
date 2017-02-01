@@ -379,7 +379,7 @@ def __launch_app(app, splash, user, app_bootstrap, server, settings):
     if toolkit_classic_required:
         engine = __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path)
     else:
-        engine = __start_engine_in_zero_config(app, splash, user)
+        engine = __start_engine_in_zero_config(app, app_bootstrap, splash, user)
 
     return __post_bootstrap_engine(splash, app_bootstrap, server, engine)
 
@@ -464,11 +464,12 @@ def __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path):
     return engine
 
 
-def __start_engine_in_zero_config(app, splash, user):
+def __start_engine_in_zero_config(app, app_bootstrap, splash, user):
     """
     Launch into the engine using the new zero config based bootstrap.
 
     :param app: Application object for event processing.
+    :param app_bootstrap: Application bootstrap.
     :param splash: Splash dialog to update user on what is currently going on
     :param user: Current ShotgunUser.
 
@@ -488,6 +489,11 @@ def __start_engine_in_zero_config(app, splash, user):
         splash, app, progress_value, message
     )
     mgr.plugin_id = "basic.desktop"
+
+    # Add the bundle cache if there is one available
+    bundle_cache_path = app_bootstrap.get_bundle_cache_location()
+    if bundle_cache_path:
+        mgr.bundle_cache_fallback_paths.append(bundle_cache_path)
 
     return mgr.bootstrap_engine("tk-desktop")
 
@@ -791,8 +797,8 @@ def __init_websockets(splash, app_bootstrap, settings):
 
 class _BootstrapProxy(object):
     """
-    Wraps the application bootstrap code to add functionality that should have been present
-    on it.
+    Wraps the application bootstrap code to add functionality that is present only in more recent builds of the
+    Desktop, which the startup code is not necessarily running off of.
     """
 
     def __init__(self, app_bootstrap):
@@ -830,6 +836,20 @@ class _BootstrapProxy(object):
         # Pick the SHOTGUN_APP_ROOT:
         # https://github.com/shotgunsoftware/tk-desktop-internal/blob/a31e9339b7e438cd111fb8f4a2b0436e77c98a17/Common/Shotgun/python/bootstrap.py#L80
         return bootstrap_module.SHOTGUN_APP_ROOT
+
+    def get_bundle_cache_location(self):
+        """
+        Retrieves the bundle cache that is distributed with the Shotgun Desktop.
+
+        We're implementing this method on the proxy because Desktop versions 1.3.6 and earlier didn't
+        have a bundle cache.
+
+        :returns: Path to the bundle cache or None if no bundle cache is present.
+        """
+        if hasattr(self._app_bootstrap, "get_bundle_cache_location"):
+            return self._app_bootstrap.get_bundle_cache_location()
+        else:
+            return os.environ.get("SHOTGUN_DESKTOP_BUNDLE_CACHE_LOCATION") or None
 
 
 def main(**kwargs):
