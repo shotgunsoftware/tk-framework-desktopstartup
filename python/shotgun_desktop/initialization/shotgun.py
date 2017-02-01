@@ -11,15 +11,13 @@
 import json
 import urllib
 import urllib2
-import httplib
 
 from shotgun_api3 import Shotgun, AuthenticationFault
-from shotgun_api3.lib import httplib2
 
 from . import constants
 from distutils.version import LooseVersion
 from ..logger import get_logger
-from ..errors import InvalidAppStoreCredentialsError, TankAppStoreConnectionError
+from ..errors import InvalidAppStoreCredentialsError
 
 logger = get_logger("initialization.shotgun")
 
