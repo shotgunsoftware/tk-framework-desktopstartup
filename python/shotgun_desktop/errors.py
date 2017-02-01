@@ -121,8 +121,6 @@ class BundledDescriptorEnvVarError(ShotgunDesktopError):
         )
 
 
-
-
 class EnvironmentVariableFileLookupError(ShotgunDesktopError):
     """
     Raised when an environment variable specifying a location points to configuration
@@ -141,5 +139,3 @@ class EnvironmentVariableFileLookupError(ShotgunDesktopError):
                 path
             )
         )
-
-
