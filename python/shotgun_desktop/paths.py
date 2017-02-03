@@ -12,6 +12,7 @@ import os
 import sys
 import urlparse
 import logging
+import pprint
 
 logger = logging.getLogger("tk-desktop.paths")
 
@@ -83,6 +84,9 @@ def get_pipeline_configuration_info(connection):
     # So if any pipeline configurations with a plugin id was returned, filter them it out.
     pcs = filter(lambda pc: not("sg_plugin_ids" in pc or "plugin_ids" in pc), pcs)
 
+    logger.debug("These non-plugin_id based pipeline configurations were found by Desktop:")
+    logger.debug(pprint.pformat(pcs))
+
     if len(pcs) == 0:
         pc = None
     else:
@@ -95,6 +99,9 @@ def get_pipeline_configuration_info(connection):
                 "More than one pipeline configuration was found (%s), using %d" %
                 (", ".join([str(p["id"]) for p in pcs]), pc["id"])
             )
+
+    logger.debug("This pipeline configuration will be used:")
+    logger.debug(pprint.pformat(pc))
 
     # see if we found a pipeline configuration
     if pc is not None and pc.get(plat_key, ""):
