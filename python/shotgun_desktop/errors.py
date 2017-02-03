@@ -109,7 +109,6 @@ class ToolkitDisabledError(ShotgunDesktopError):
         )
 
 
-
 class BundledDescriptorEnvVarError(ShotgunDesktopError):
     """
     This exception notifies the catcher that the bundled descriptor in
@@ -120,7 +119,6 @@ class BundledDescriptorEnvVarError(ShotgunDesktopError):
             self,
             "Error parsing SGTK_DESKTOP_BUNDLED_DESCRIPTOR: %s" % reason
         )
-
 
 
 class EnvironmentVariableFileLookupError(ShotgunDesktopError):
@@ -140,17 +138,4 @@ class EnvironmentVariableFileLookupError(ShotgunDesktopError):
                 var_name,
                 path
             )
-        )
-
-
-class InvalidAppStoreCredentialsError(ShotgunDesktopError):
-    """
-    Raised when there is not app store key set in Shotgun.
-    """
-
-    def __init__(self, message):
-        super(InvalidAppStoreCredentialsError, self).__init__(
-            message,
-            # Require that the client contacts support
-            support_required=True
         )
