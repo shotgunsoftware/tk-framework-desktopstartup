@@ -45,26 +45,28 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
     if not _supports_get_from_location_and_paths(sgtk):
         return False
 
+    sg = sgtk.get_authenticated_user().create_sg_connection()
+
     current_desc = sgtk.descriptor.create_descriptor(
-        sgtk.get_authenticated_user().create_sg_connection(),
+        sg,
         sgtk.descriptor.Descriptor.FRAMEWORK,
         get_location(app_bootstrap)
     )
 
-    # A Dev descriptor means there is nothing to update. Early out so that we don't show
-    # "Getting Shotgun Desktop updates...""
-    if current_desc.is_dev():
-        logger.info("Desktop startup using a dev descriptor, skipping update...")
-        return False
+    logger.debug("Testing for remote access: %s", current_desc)
 
-    logger.debug("Testing for remote access.", current_desc)
-
-    if not current_desc.has_remote_accesss():
+    if not current_desc.has_remote_access():
         logger.info("Could not update %r: remote access not available.", current_desc)
         return False
 
-    splash.set_message("Getting Shotgun Desktop updates...")
-    logger.info("Getting Shotgun Desktop updates...")
+    # A Dev descriptor means there is nothing to update. Do not print out
+    # "Getting Shotgun Desktop updates...", but keep going nonetheless, as it allows
+    # to stress the code even in dev mode. Calls to download will be noops anyway.
+    if current_desc.is_dev():
+        logger.info("Desktop startup using a dev descriptor, skipping update...")
+    else:
+        splash.set_message("Getting Shotgun Desktop updates...")
+        logger.info("Getting Shotgun Desktop updates...")
 
     try:
         latest_descriptor = current_desc.find_latest_version()
@@ -87,31 +89,18 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
 
     if not out_of_date:
         logger.debug(
-            "Desktop startup is up to date. Currenty running version %s" % current_desc.get_version()
+            "Desktop startup is up to date. Currently running version %s" % current_desc.get_version()
         )
         return False
 
-    # FIXME: Violating internal API
-    from sgtk.commands.console_utils import _check_constraints
-    can_update, reason = _check_constraints(latest_descriptor)
+    can_update, reason = latest_descriptor.check_version_constraints(
+        sg,
+        desktop_version=app_bootstrap.get_version()
+    )
 
     if not can_update:
-        logger.warning("Cannot upgrade to the latest Desktop Startup %s. %s", latest_descriptor.get_version(), reason)
+        logger.warning("Cannot upgrade to the latest Desktop Startup %s. %s", latest_descriptor.version, reason)
         return False
-
-    # Is there a way we could get that into the core API?
-    if latest_descriptor.get_version_constraints().get("min_desktop"):
-        current_desktop_version = LooseVersion(app_bootstrap.get_version())
-        minimal_desktop_version = LooseVersion(latest_descriptor.get_version_constraints()["min_desktop"])
-        if current_desktop_version < minimal_desktop_version:
-            logger.warning(
-                "Cannot upgrade to the latest Desktop Startup %s. This version requires %s of the "
-                "Shotgun Desktop, but you are currently running %s. Please consider upgrading your "
-                "Shotgun Desktop." % (
-                    latest_descriptor.get_version(), minimal_desktop_version, current_desktop_version
-                )
-            )
-            return False
 
     try:
         # Download the update

@@ -755,8 +755,8 @@ def __init_websockets(splash, app_bootstrap, settings):
 
     # Read the browser integration settings in the same file as the desktop integration settings.
     integration_settings = tk_framework_desktopserver.Settings(
-        settings.location,
-        os.path.join(
+        location=None, # Passing in None will have the desktop user use the UserSettings API instead of reading a file.
+        default_certificate_folder=os.path.join(
             app_bootstrap.get_shotgun_desktop_cache_location(),
             "config",
             "certificates"
