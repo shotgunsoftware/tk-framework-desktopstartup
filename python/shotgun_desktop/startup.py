@@ -511,9 +511,6 @@ def __post_bootstrap_engine(splash, app_bootstrap, server, engine):
     :returns: Application exit code.
     """
 
-    # engine will take over logging
-    app_bootstrap.tear_down_logging()
-
     # reset PYTHONPATH and PYTHONHOME if they were overridden by the application
     if "SGTK_DESKTOP_ORIGINAL_PYTHONPATH" in os.environ:
         os.environ["PYTHONPATH"] = os.environ["SGTK_DESKTOP_ORIGINAL_PYTHONPATH"]
@@ -749,7 +746,6 @@ def __init_websockets(splash, app_bootstrap, settings):
         splash.set_message("Initializing browser integration")
         # Import framework
         import tk_framework_desktopserver
-        app_bootstrap.add_logger_to_logfile(tk_framework_desktopserver.get_logger())
     except Exception, e:
         return None, __handle_unexpected_exception_during_websocket_init(splash, app_bootstrap, e)
 
@@ -866,8 +862,29 @@ def main(**kwargs):
 
     :returns: Error code for the process.
     """
-    logger.debug("Running main from %s" % __file__)
+
     app_bootstrap = _BootstrapProxy(kwargs["app_bootstrap"])
+
+    # Do not import sgtk globally to avoid using the wrong sgtk once we bootstrap in
+    # the right config.
+    import sgtk
+
+    global logger
+
+    if sys.platform == "win32":
+        logger.info(
+            "Logging at this location will now stop and resume at {0}\\tk-desktop.log".format(
+                sgtk.LogManager().log_folder
+            )
+        )
+
+    # Core will take over logging
+    app_bootstrap.tear_down_logging()
+
+    sgtk.LogManager().initialize_base_file_handler("tk-desktop")
+
+    logger = sgtk.LogManager.get_logger(__name__)
+    logger.debug("Running main from %s" % __file__)
 
     # Create some ui related objects
     app, splash = __init_app()
@@ -877,21 +894,15 @@ def main(**kwargs):
     # We might crash before even initializing the authenticator, so instantiate
     # it right away.
     shotgun_authenticator = None
-
-    # Do not import sgtk globally to avoid using the wrong sgtk once we bootstrap in
-    # the right config.
-    import sgtk
     # Shotgun Desktop has always been logging every debug string to console since the browser
     # integration and the startup has been difficult to work with and debug.
     sgtk.LogManager().global_debug = True
-    app_bootstrap.add_logger_to_logfile(
-        sgtk.LogManager().root_logger
-    )
 
     # We have gui, websocket library and the authentication module, now do the rest.
     server = None
     from sgtk import authentication
     from sgtk.descriptor import InvalidAppStoreCredentialsError
+
     try:
         # Reading user settings from disk.
         settings = Settings()
@@ -900,9 +911,6 @@ def main(**kwargs):
         server, keep_running = __init_websockets(splash, app_bootstrap, settings)
         if keep_running is False:
             return 0
-
-        if server:
-            app_bootstrap.add_logger_to_logfile(server.get_logger())
 
         # It is very important to decouple logging in from creating the shotgun authenticator.
         # If there is an error during auto login, for example proxy settings changed and you
