@@ -8,13 +8,12 @@
 # agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
-import logging
-from distutils.version import LooseVersion
 from shotgun_desktop.location import get_location, write_location
 from shotgun_desktop.desktop_message_box import DesktopMessageBox
 from sgtk.descriptor import CheckVersionConstraintsError
 
-logger = logging.getLogger("tk-desktop.startup")
+from sgtk import LogManager
+logger = LogManager.get_logger(__name__)
 
 
 def _supports_get_from_location_and_paths(sgtk):

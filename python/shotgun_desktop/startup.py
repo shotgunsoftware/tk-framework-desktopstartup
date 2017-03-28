@@ -64,23 +64,32 @@ from shotgun_desktop.errors import (ShotgunDesktopError, RequestRestartException
                                     InvalidPipelineConfiguration)
 
 
+global_debug_flag_at_startup = None
+
+
+def __restore_global_debug_flag():
+    """
+    Restores the global debug flag
+    """
+    global global_debug_flag_at_startup
+    import sgtk
+    sgtk.LogManager().global_debug = global_debug_flag_at_startup
+
+
+def __backup_global_debug_flag():
+    """
+    Backups the global debug flag.
+    """
+    global global_debug_flag_at_startup
+    import sgtk
+    global_debug_flag_at_startup = sgtk.LogManager().global_debug
+
+
 def __is_64bit_python():
     """
     :returns: True if 64-bit Python, False otherwise.
     """
     return struct.calcsize("P") == 8
-
-
-def __toolkit_supports_authentication_module(sgtk):
-    """
-    Tests if the given Toolkit API supports the shotgun_authentication module.
-
-    :param sgtk: The Toolkit API handle.
-
-    :returns: True if the shotgun_authentication module is supported, False otherwise.
-    """
-    # if the authentication module is not supported, this method won't be present on the core.
-    return hasattr(sgtk, "set_authenticated_user")
 
 
 def __desktop_engine_supports_authentication_module(engine):
@@ -450,6 +459,8 @@ def __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path):
 
         splash.set_message("Launching Engine...")
 
+        __restore_global_debug_flag()
+
     # We need to validate a few things before the engine starts.
     mgr.pre_engine_start_callback = pre_engine_start_callback
 
@@ -495,6 +506,8 @@ def __start_engine_in_zero_config(app, app_bootstrap, splash, user):
     if bundle_cache_path:
         mgr.bundle_cache_fallback_paths.append(bundle_cache_path)
 
+    mgr.pre_engine_start_callback = lambda ctx: __restore_global_debug_flag()
+
     return mgr.bootstrap_engine("tk-desktop")
 
 
@@ -510,9 +523,6 @@ def __post_bootstrap_engine(splash, app_bootstrap, server, engine):
 
     :returns: Application exit code.
     """
-
-    # engine will take over logging
-    app_bootstrap.tear_down_logging()
 
     # reset PYTHONPATH and PYTHONHOME if they were overridden by the application
     if "SGTK_DESKTOP_ORIGINAL_PYTHONPATH" in os.environ:
@@ -749,7 +759,6 @@ def __init_websockets(splash, app_bootstrap, settings):
         splash.set_message("Initializing browser integration")
         # Import framework
         import tk_framework_desktopserver
-        app_bootstrap.add_logger_to_logfile(tk_framework_desktopserver.get_logger())
     except Exception, e:
         return None, __handle_unexpected_exception_during_websocket_init(splash, app_bootstrap, e)
 
@@ -866,8 +875,35 @@ def main(**kwargs):
 
     :returns: Error code for the process.
     """
-    logger.debug("Running main from %s" % __file__)
+
     app_bootstrap = _BootstrapProxy(kwargs["app_bootstrap"])
+
+    # Do not import sgtk globally to avoid using the wrong sgtk once we bootstrap in
+    # the right config.
+    import sgtk
+
+    global logger
+
+    # Older versions of the desktop on Windows logged at %APPDATA%\Shotgun\tk-desktop.log. Notify the user that
+    # this logging location is deprecated and the logs are now at %APPDATA%\Shotgun\Logs\tk-desktop.log
+    if sys.platform == "win32" and LooseVersion(app_bootstrap.get_version()) <= "1.3.6":
+        logger.info(
+            "Logging at this location will now stop and resume at {0}\\tk-desktop.log".format(
+                sgtk.LogManager().log_folder
+            )
+        )
+        logger.info(
+            "If you see any more logs past this line, you need to upgrade your site configuration to "
+            "the latest core and apps using 'tank core' and 'tank updates'."
+        )
+
+    # Core will take over logging
+    app_bootstrap.tear_down_logging()
+
+    sgtk.LogManager().initialize_base_file_handler("tk-desktop")
+
+    logger = sgtk.LogManager.get_logger(__name__)
+    logger.debug("Running main from %s" % __file__)
 
     # Create some ui related objects
     app, splash = __init_app()
@@ -877,21 +913,16 @@ def main(**kwargs):
     # We might crash before even initializing the authenticator, so instantiate
     # it right away.
     shotgun_authenticator = None
-
-    # Do not import sgtk globally to avoid using the wrong sgtk once we bootstrap in
-    # the right config.
-    import sgtk
-    # Shotgun Desktop has always been logging every debug string to console since the browser
-    # integration and the startup has been difficult to work with and debug.
+    # Shotgun Desktop startup has always been logging every debug string to disk since the new authentication from 0.16
+    # was released and the startup has been difficult to work with and debug, so keep that logic in place during the
+    # startup sequence. It will be restored during the ToolkitManager's pre_engine_start_callback.
+    __backup_global_debug_flag()
     sgtk.LogManager().global_debug = True
-    app_bootstrap.add_logger_to_logfile(
-        sgtk.LogManager().root_logger
-    )
 
-    # We have gui, websocket library and the authentication module, now do the rest.
     server = None
     from sgtk import authentication
     from sgtk.descriptor import InvalidAppStoreCredentialsError
+
     try:
         # Reading user settings from disk.
         settings = Settings()
@@ -900,9 +931,6 @@ def main(**kwargs):
         server, keep_running = __init_websockets(splash, app_bootstrap, settings)
         if keep_running is False:
             return 0
-
-        if server:
-            app_bootstrap.add_logger_to_logfile(server.get_logger())
 
         # It is very important to decouple logging in from creating the shotgun authenticator.
         # If there is an error during auto login, for example proxy settings changed and you

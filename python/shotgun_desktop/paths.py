@@ -11,10 +11,10 @@
 import os
 import sys
 import urlparse
-import logging
 import pprint
 
-logger = logging.getLogger("tk-desktop.paths")
+from sgtk import LogManager
+logger = LogManager.get_logger(__name__)
 
 
 def get_pipeline_configuration_info(connection):
