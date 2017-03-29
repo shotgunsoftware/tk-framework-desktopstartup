@@ -886,7 +886,7 @@ def main(**kwargs):
 
     # Older versions of the desktop on Windows logged at %APPDATA%\Shotgun\tk-desktop.log. Notify the user that
     # this logging location is deprecated and the logs are now at %APPDATA%\Shotgun\Logs\tk-desktop.log
-    if sys.platform == "win32" and LooseVersion(app_bootstrap.get_version()) <= "1.3.6":
+    if sys.platform == "win32" and LooseVersion(app_bootstrap.get_version()) <= "v1.3.6":
         logger.info(
             "Logging at this location will now stop and resume at {0}\\tk-desktop.log".format(
                 sgtk.LogManager().log_folder
