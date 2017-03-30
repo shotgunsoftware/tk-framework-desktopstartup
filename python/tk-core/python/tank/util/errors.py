@@ -56,3 +56,61 @@ class EnvironmentVariableFileLookupError(TankError):
             )
         )
 
+
+class ShotgunPublishError(TankError):
+    """
+    Raised when Toolkit is not able to register a published file in Shotgun.
+    
+    The original message for the reported error is available in the 'error_message' property.
+
+    If a published file entity was created before the error happened, it will be
+    available in the 'entity' property.
+    """
+    def __init__(self, error_message, entity=None):
+        """
+        :param str error_message: An error message, typically coming from a caught exception.
+        :param dict entity: The Shotgun entity which was created, if any.
+        """
+        self.error_message = error_message
+        self.entity = entity
+        extra_message = "."
+        if self.entity:
+            # Mention the created entity in the message by appending something like:
+            # , although TankPublishedFile dummy_path.txt (id: 2) was created.
+            extra_message = ", although %s %s (id: %d) was created." % (
+                self.entity["type"], self.entity["code"], self.entity["id"]
+            )
+        TankError.__init__(
+            self,
+            "Unable to complete publishing because of the following error: %s%s" % (
+                self.error_message, extra_message
+            )
+        )
+
+
+class PublishResolveError(TankError):
+    """
+    Base class for all errors relating to resolution of paths from publishes.
+    """
+    pass
+
+
+class PublishPathNotDefinedError(PublishResolveError):
+    """
+    Exception raised when a publish does not have a path
+    defined for the current operating system platform. It
+    may or may not have publish paths defined on other
+    platforms.
+    """
+    pass
+
+
+class PublishPathNotSupported(PublishResolveError):
+    """
+    Exception raised when a publish has a path defined but it is using a path
+    definition that cannot be resolved into a local path. This includes for
+    example unsupported url schemes.
+    """
+    pass
+
+

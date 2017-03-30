@@ -10,14 +10,13 @@
 
 """
 Defines the base class for all Tank Hooks.
-
 """
 import os
+import re
 import sys
 import logging
-import urlparse
+import inspect
 import threading
-import urllib
 from .util.loader import load_plugin
 from . import LogManager
 from .errors import (
@@ -27,6 +26,7 @@ from .errors import (
 )
 
 log = LogManager.get_logger(__name__)
+
 
 class Hook(object):
     """
@@ -196,6 +196,45 @@ class Hook(object):
         self.__parent = parent
 
     @property
+    def sgtk(self):
+        """
+        The sgtk core API instance associated with the Hook parent.
+
+        This is a convenience method for easy core API instance access.
+        In the case of app, engine and framework hooks, this is equivalent
+        to ``parent.sgtk`` and in the case of core hooks it simply returns
+        ``parent``.
+
+        .. note:: Some low level hooks do not have a parent defined. In
+                  such cases, ``None`` is returned.
+        """
+        # local import to avoid cycles
+        from .api import Sgtk
+
+        if self.parent is None:
+            # system hook
+            return None
+        if isinstance(self.parent, Sgtk):
+            # core hook
+            return self.parent
+        else:
+            # look for sgtk instance on parent
+            try:
+                return self.parent.sgtk
+            except AttributeError:
+                return None
+
+    @property
+    def tank(self):
+        """
+        The sgtk core API instance associated with the Hook parent.
+
+        .. deprecated::
+           Use :meth:`sgtk` instead.
+        """
+        return self.sgtk
+
+    @property
     def parent(self):
         """
         The parent object to the executing hook. This varies with the type of
@@ -214,72 +253,45 @@ class Hook(object):
         """
         Returns the path on disk for a publish entity in Shotgun.
 
-        Use this method if you have a shotgun publish entity and want
-        to get a local path on disk. This method will ensure that however
-        the publish path is encoded, a local path is returned.
+        Convenience method that calls :meth:`sgtk.util.resolve_publish_path`.
 
-        :param sg_publish_data: Shotgun dictionary containing
-                                information about a publish. Needs to at least
-                                contain a type, id and a path key.
-        :returns: String representing a local path on disk.
+        :param sg_publish_data: Dictionaries containing Shotgun publish data.
+            Each dictionary needs to at least contain a code, type, id and a path key.
+
+        :returns: A path on disk to existing file or file sequence.
+
+        :raises: :class:`~sgtk.util.PublishPathNotDefinedError` if the path isn't defined.
+        :raises: :class:`~sgtk.util.PublishPathNotSupported` if the path cannot be resolved.
         """
-        return self.get_publish_paths([ sg_publish_data ])[0]
+        # avoid cyclic refs
+        from .util import resolve_publish_path
+        return resolve_publish_path(self.sgtk, sg_publish_data)
 
     def get_publish_paths(self, sg_publish_data_list):
         """
         Returns several local paths on disk given a
         list of shotgun data dictionaries representing publishes.
 
-        Use this method if you have several shotgun publish entities and want
-        to get a local path on disk. This method will ensure that however
-        the publish path is encoded, a local path is returned.
+        Convenience method that calls :meth:`sgtk.util.resolve_publish_path`.
+
+        .. deprecated:: 0.18.64
+           Use :meth:`get_publish_path` instead.
 
         :param sg_publish_data_list: List of shotgun data dictionaries
                                      containing publish data. Each dictionary
-                                     needs to at least contain a type, id and
-                                     a path key.
-        :returns: List of strings representing local paths on disk.
+                                     needs to at least contain a code, type,
+                                     id and a path key.
+
+        :returns: List of paths on disk to existing files or file sequences.
+
+        :raises: :class:`~sgtk.util.PublishPathNotDefinedError` if any of the paths aren't defined.
+        :raises: :class:`~sgtk.util.PublishPathNotSupported` if any of the paths cannot be resolved.
         """
+        # avoid cyclic refs
+        from .util import resolve_publish_path
         paths = []
-        for sg_data in sg_publish_data_list:
-            path_field = sg_data.get("path")
-
-            if path_field is None:
-                raise TankError("Cannot resolve path from publish! The shotgun dictionary %s does "
-                                "not contain a valid path definition" % sg_data)
-
-            resolved_path = None
-
-            if "local_path" in path_field:
-                # first, look for a local file link
-                resolved_path = path_field["local_path"]
-
-            elif "url" in path_field:
-                # secondly, look for a file:// style url
-
-                url = path_field["url"]
-                # url = "file:///path/to/some/file.txt"
-                results = urlparse.urlparse(url)
-                # ParseResult(
-                # scheme='file',
-                # netloc='',
-                # path='/path/to/some/file.txt',
-                # params='',
-                # query='',
-                # fragment=''
-                # )
-
-                if results.scheme == "file":
-                    resolved_path = urllib.unquote(results.path)
-
-            if resolved_path is None:
-                raise TankError(
-                    "Cannot resolve path from publish! The shotgun dictionary %s does "
-                    "not contain a valid path definition" % sg_data
-                )
-            else:
-                paths.append(resolved_path)
-
+        for sg_publish_data in sg_publish_data_list:
+            paths.append(resolve_publish_path(self.sgtk, sg_publish_data))
         return paths
 
     @property
@@ -291,12 +303,53 @@ class Hook(object):
 
             hook_icon = os.path.join(self.disk_location, "icon.png")
         """
-        # note: the reason we don't call __file__ directly is because
-        #       we don't want to return the location of the 'hook.py'
-        #       base class but rather the location of hook object that
-        #       has been derived from this class.
-        path_to_this_file = os.path.abspath(sys.modules[self.__module__].__file__)
-        return os.path.dirname(path_to_this_file)
+        # NOTE: this method contains complex logic to correctly handle
+        # the following inheritance case:
+        #
+        # A. Hook base class >
+        # B. general implementation (hook_b.py) >
+        # C. custom implementation  (hook_c.py)
+        #
+        # in (B), there is a method which returns an icon:
+        # return os.path.join(self.disk_location, "icon.png")
+        #
+        # in this case, we want the code in B to return a path
+        # relative to hook_b.py.
+        #
+        # However, although intended to be primarily used
+        # from within a hook, the disk_location is a public method.
+        # Whenever called from an external location, the
+        # disk location is computed to be relative to
+        # the leaf inheritance, e.g. hook_c.py in this case.
+
+        # in order to handle the case above, we look for the
+        # caller. If the caller is part of the inheritance
+        # chain, we simply compute the path relative to
+        # the caller method.
+        #
+        # however if the caller is external, we compute the path
+        # relative to self. Self represents the leaf in the
+        # inheritance tree.
+        #
+        path_to_file = None
+
+        current_frame = inspect.currentframe()
+        all_frames = inspect.getouterframes(current_frame)
+        parent_frame = all_frames[1]
+        if "self" in parent_frame[0].f_locals:
+            # the calling method is a class instance method
+            path_to_calling_file = parent_frame[1]
+            if parent_frame[0].f_locals["self"] is self:
+                # this call is coming from within the
+                # class hierarchy
+                path_to_file = path_to_calling_file
+
+        # first check failed. fall back on computing
+        # the location relative to self
+        if path_to_file is None:
+            path_to_file = os.path.abspath(sys.modules[self.__module__].__file__)
+
+        return os.path.dirname(path_to_file)
 
     @property
     def logger(self):
@@ -589,7 +642,9 @@ def create_hook_instance(hook_paths, parent):
     for hook_path in hook_paths:
 
         if not os.path.exists(hook_path):
-            raise TankFileDoesNotExistError("Cannot execute hook '%s' - this file does not exist on disk!" % hook_path)
+            raise TankFileDoesNotExistError(
+                "Cannot execute hook '%s' - this file does not exist on disk!" % hook_path
+            )
 
         # look to see if we've already loaded this hook into the cache
         found_hook_class = _hooks_cache.find(hook_path, _current_hook_baseclass.value)
