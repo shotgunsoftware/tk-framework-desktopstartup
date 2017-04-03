@@ -684,8 +684,6 @@ def main(**kwargs):
     # Create some ui related objects
     app, splash = __init_app()
 
-    show_login = __extract_command_line_argument("--show-login")
-
     # We might crash before even initializing the authenticator, so instantiate
     # it right away.
     shotgun_authenticator = None
