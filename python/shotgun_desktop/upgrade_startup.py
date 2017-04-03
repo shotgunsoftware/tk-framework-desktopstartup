@@ -48,9 +48,6 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
     if not _supports_get_from_location_and_paths(sgtk):
         return False
 
-    if 'SGTK_DESKTOP_DISABLE_UPDATE' in os.environ:
-        return False
-
     current_desc = sgtk.deploy.descriptor.get_from_location_and_paths(
         sgtk.deploy.descriptor.AppDescriptor.FRAMEWORK,
         app_bootstrap.get_shotgun_desktop_cache_location(),
