@@ -43,9 +43,8 @@ def add_to_python_path(bundled_path, env_var_override, module_name):
     sys.path.insert(0, path)
     logger.info("Using %s from '%s'", module_name, path)
 
-# Add Toolkit and desktop server to the path.
+# Add Toolkit to the path.
 add_to_python_path(os.path.join("..", "tk-core", ), "SGTK_CORE_LOCATION", "tk-core")
-add_to_python_path(os.path.join("..", "server"), "SGTK_DESKTOP_SERVER_LOCATION", "tk-framework-desktopserver")
 
 # now proceed with non builtin imports
 from PySide import QtCore, QtGui
@@ -83,13 +82,6 @@ def __backup_global_debug_flag():
     global global_debug_flag_at_startup
     import sgtk
     global_debug_flag_at_startup = sgtk.LogManager().global_debug
-
-
-def __is_64bit_python():
-    """
-    :returns: True if 64-bit Python, False otherwise.
-    """
-    return struct.calcsize("P") == 8
 
 
 def __desktop_engine_supports_authentication_module(engine):
@@ -343,7 +335,7 @@ def __extract_command_line_argument(arg_name):
     return is_set
 
 
-def __launch_app(app, splash, user, app_bootstrap, server, settings):
+def __launch_app(app, splash, user, app_bootstrap, settings):
     """
     Shows the splash screen, optionally downloads and configures Toolkit, imports it, optionally
     updates it and then launches the desktop engine.
@@ -352,7 +344,6 @@ def __launch_app(app, splash, user, app_bootstrap, server, settings):
     :param splash: Splash dialog to update user on what is currently going on
     :param user: Current ShotgunUser.
     :param app_bootstrap: Application bootstrap.
-    :param server: The tk_framework_desktopserver.Server instance.
     :param settings: The application's settings.
 
     :returns: The error code to return to the shell.
@@ -390,7 +381,7 @@ def __launch_app(app, splash, user, app_bootstrap, server, settings):
     else:
         engine = __start_engine_in_zero_config(app, app_bootstrap, splash, user)
 
-    return __post_bootstrap_engine(splash, app_bootstrap, server, engine)
+    return __post_bootstrap_engine(splash, app_bootstrap, engine)
 
 
 def __bootstrap_progress_callback(splash, app, progress_value, message):
@@ -511,14 +502,13 @@ def __start_engine_in_zero_config(app, app_bootstrap, splash, user):
     return mgr.bootstrap_engine("tk-desktop")
 
 
-def __post_bootstrap_engine(splash, app_bootstrap, server, engine):
+def __post_bootstrap_engine(splash, app_bootstrap, engine):
     """
     Called after bootstrapping the engine. Mainly use to transition logging to the
     engine and launch the main event loop.
 
     :param splash: Splash screen widget.
     :param app_bootstrap: Application bootstrap logic.
-    :param server: Websocket server instance.
     :param engine: Toolkit engine that was bootstrapped.
 
     :returns: Application exit code.
@@ -534,16 +524,10 @@ def __post_bootstrap_engine(splash, app_bootstrap, server, engine):
     logger.debug("Running tk-desktop")
     startup_version = get_location(app_bootstrap).get("version") or "Undefined"
 
-    # Connect to the about to quit signal so that we can shut down the server automatically when the
-    # desktop tries to quit the app.
-    if server:
-        QtGui.qApp.aboutToQuit.connect(lambda: server.tear_down())
-
     return engine.run(
         splash,
         version=app_bootstrap.get_version(),
-        startup_version=startup_version,
-        server=server
+        startup_version=startup_version
     )
 
 
@@ -596,214 +580,6 @@ def __handle_unexpected_exception(splash, shotgun_authenticator, error_message, 
     # automatically logging in each time the app is launched again
     if shotgun_authenticator:
         shotgun_authenticator.clear_default_user()
-
-
-def __get_certificate_prompt(keychain_name, action):
-    """
-    Generates the text to use when alerting the user that we need to register the certificate.
-
-    :param keychain_name: Name of the keychain-like entity for a particular OS.
-    :param action: Description of what the user will need to do when the OS prompts the user.
-
-    :returns: String containing an error message formatted
-    """
-    return ("The Shotgun Desktop needs to update the security certificate list from your %s before "
-            "it can turn on the browser integration.\n"
-            "%s" % (keychain_name, action))
-
-
-def __warn_for_prompt():
-    """
-    Warn the user he will be prompted.
-    """
-    if sys.platform == "darwin":
-        DesktopMessageBox.information(
-            "Shotgun browser integration",
-            __get_certificate_prompt(
-                "keychain",
-                "You will be prompted to enter your username and password by MacOS's keychain "
-                "manager in order to proceed with the updates."
-            )
-        )
-    elif sys.platform == "win32":
-        DesktopMessageBox.information(
-            "Shotgun browser integration",
-            __get_certificate_prompt(
-                "Windows certificate store",
-                "Windows will now prompt you to accept one or more updates to your certificate store."
-            )
-        )
-    # On Linux there's no need to prompt. It's all silent.
-
-
-def __ensure_certificate_ready(app_bootstrap, tk_framework_desktopserver, certificate_folder):
-    """
-    Ensures that the certificates are created and registered. If something is amiss, then the
-    configuration is fixed.
-
-    :params app_bootstrap: The application bootstrap.
-    :param tk_framework_desktopserver: The desktopserver framework.
-    :param certificate_folder: Folder where the certificates are stored.
-
-    :returns: True is the certificate is ready, False otherwise.
-    """
-    cert_handler = tk_framework_desktopserver.get_certificate_handler(certificate_folder)
-
-    # We only warn once.
-    warned = False
-    # Make sure the certificates exist.
-    if not cert_handler.exists():
-        logger.info("Certificate doesn't exist.")
-        # Start by unregistering certificates from the keychains, this can happen if the user
-        # wiped his shotgun/desktop/config/certificates folder.
-        if cert_handler.is_registered():
-            logger.info("Unregistering lingering certificate.")
-            # Warn once.
-            __warn_for_prompt()
-            warned = True
-            cert_handler.unregister()
-            logger.info("Unregistered.")
-        # Create the certificate files
-        cert_handler.create()
-        logger.info("Certificate created.")
-    else:
-        logger.info("Certificate already exist.")
-
-    # Check if the certificates are registered with the keychain.
-    if not cert_handler.is_registered():
-        logger.info("Certificate not registered.")
-
-        # Only if we've never been warned before.
-        if not warned:
-            __warn_for_prompt()
-        cert_handler.register()
-        logger.info("Certificate registered.")
-    else:
-        logger.info("Certificates already registered.")
-    return True
-
-
-def __query_quit_or_continue_launching(msg, app_bootstrap):
-    """
-    Asks the user if he wants to keep launching the Desktop or not.
-
-    :param msg: Message to display to the user.
-    :param app_bootstrap: The application bootstrap instance.
-
-    :returns: True if the user wants to continue, False otherwise.
-    """
-    warning_box = DesktopMessageBox(
-        DesktopMessageBox.Warning,
-        "Browser Integration error",
-        "%s\n"
-        "Do you want to continue launching the Shotgun Desktop?" % msg,
-        DesktopMessageBox.Yes,
-        DesktopMessageBox.Yes | DesktopMessageBox.No,
-        "If you drop us an email at support@shotgunsoftware.com, we'll help you diagnose "
-        "the issue.\n\n"
-        "For more information, see the log file at %s.\n\n"
-        "%s" % (app_bootstrap.get_logfile_location(), traceback.format_exc())
-    )
-    warning_box.button(DesktopMessageBox.Yes).setText("Continue")
-    warning_box.button(DesktopMessageBox.No).setText("Quit")
-
-    return warning_box.exec_() == DesktopMessageBox.Yes
-
-
-def __handle_unexpected_exception_during_websocket_init(splash, app_bootstrap, ex):
-    """
-    Handles unexpected exception during websocket initialization. If hides the splashscreen
-    and asks the user if we wants to keep launching the Desktop.
-
-    :param splash: Splashscreen widget.
-    :param app_bootstrap: The application bootstrap instance.
-    :param ex: The unexpected exception.
-
-    :returns: True if the user wants to continue, False otherwise.
-    """
-    logger.exception("Could not start the browser integration:")
-    splash.hide()
-    return __query_quit_or_continue_launching(
-        "Browser integration failed to start. It will not be available if "
-        "you continue.\n"
-        "Error: %s" % str(ex),
-        app_bootstrap
-    )
-
-
-def __init_websockets(splash, app_bootstrap, settings):
-    """
-    Initializes the local websocket server.
-
-    :pram splash: Splash widget.
-    :param app_bootstrap: The application bootstrap instance.
-    :param settings: The application's settings.
-
-    :returns: The tk_framework_desktopserver.Server instance and a boolean indicating if the
-        Desktop should keep launching.
-    """
-    if not __is_64bit_python():
-        # Do not import if Python is not 64-bits
-        logger.warning("Interpreter is not 64-bits, can't load desktop server")
-        return None, True
-
-    if not settings.integration_enabled:
-        # Do not import if server is disabled.
-        logger.info("Integration was disabled in config.ini.")
-        return None, True
-
-    # First try to import the framework. If it fails, let the user decide if the Desktop should
-    # keep launching.
-    try:
-        splash.show()
-        splash.set_message("Initializing browser integration")
-        # Import framework
-        import tk_framework_desktopserver
-    except Exception, e:
-        return None, __handle_unexpected_exception_during_websocket_init(splash, app_bootstrap, e)
-
-    # Read the browser integration settings in the same file as the desktop integration settings.
-    integration_settings = tk_framework_desktopserver.Settings(
-        location=None, # Passing in None will have the desktop user use the UserSettings API instead of reading a file.
-        default_certificate_folder=os.path.join(
-            app_bootstrap.get_shotgun_desktop_cache_location(),
-            "config",
-            "certificates"
-        )
-    )
-
-    integration_settings.dump(logger)
-
-    # We need to break these two try's because if we can't import the tk-framework-desktopserver
-    # module we won't be able to catch any exception types from that module.
-    try:
-        # Makes sure that the certificate has been created on disk and registered with the OS (or browser on Linux).
-        __ensure_certificate_ready(app_bootstrap, tk_framework_desktopserver, integration_settings.certificate_folder)
-
-        # Launch the server
-        server = tk_framework_desktopserver.Server(
-            port=integration_settings.port,
-            low_level_debug=integration_settings.low_level_debug,
-            whitelist=integration_settings.whitelist,
-            keys_path=integration_settings.certificate_folder
-        )
-
-        # This might throw a PortBusyError.
-        server.start()
-
-        splash.hide()
-        return server, True
-    except tk_framework_desktopserver.PortBusyError:
-        # Gracefully let the user know that the Desktop might already be running.
-        logger.exception("Could not start the browser integration:")
-        splash.hide()
-        return None, __query_quit_or_continue_launching(
-            "Browser integration failed to start because port %d is already in use. The Shotgun "
-            "Desktop may already be running on your machine." % integration_settings.port,
-            app_bootstrap
-        )
-    except Exception, e:
-        return None, __handle_unexpected_exception_during_websocket_init(splash, app_bootstrap, e)
 
 
 class _BootstrapProxy(object):
@@ -908,8 +684,6 @@ def main(**kwargs):
     # Create some ui related objects
     app, splash = __init_app()
 
-    show_login = __extract_command_line_argument("--show-login")
-
     # We might crash before even initializing the authenticator, so instantiate
     # it right away.
     shotgun_authenticator = None
@@ -919,7 +693,6 @@ def main(**kwargs):
     __backup_global_debug_flag()
     sgtk.LogManager().global_debug = True
 
-    server = None
     from sgtk import authentication
     from sgtk.descriptor import InvalidAppStoreCredentialsError
 
@@ -928,10 +701,6 @@ def main(**kwargs):
         settings = Settings()
         settings.dump(logger)
 
-        server, keep_running = __init_websockets(splash, app_bootstrap, settings)
-        if keep_running is False:
-            return 0
-
         # It is very important to decouple logging in from creating the shotgun authenticator.
         # If there is an error during auto login, for example proxy settings changed and you
         # can't connect anymore, we need to be able to log the user out.
@@ -939,20 +708,10 @@ def main(**kwargs):
 
         __optional_state_cleanup(splash, shotgun_authenticator, app_bootstrap)
 
-        # If the server is up and running, we want the workflow where we can either not login
-        # and keep the websocket running in the background or choose to login
-        if server:
-            user = __wait_for_login(
-                splash,
-                shotgun_authenticator,
-                show_login
-            )
-        else:
-            # The server is not running, so simply offer to login.
-            user = __do_login(
-                splash,
-                shotgun_authenticator
-            )
+        user = __do_login(
+            splash,
+            shotgun_authenticator
+        )
 
         if not user:
             logger.info("Login canceled. Quitting.")
@@ -965,7 +724,6 @@ def main(**kwargs):
             splash,
             user,
             app_bootstrap,
-            server,
             settings
         )
         return exit_code
@@ -986,9 +744,3 @@ def main(**kwargs):
     except Exception, e:
         __handle_unexpected_exception(splash, shotgun_authenticator, e, app_bootstrap)
         return -1
-    finally:
-        # We can end up in the finally either because the app closed correctly, in which case
-        # the aboutToQuit signal will have been send and the server shut down or there was an
-        # exception and we need to tear down correctly.
-        if server and server.is_running():
-            server.tear_down()
