@@ -12,12 +12,11 @@ import json
 import urllib
 import urllib2
 
-from shotgun_api3 import Shotgun, AuthenticationFault
+from shotgun_api3 import Shotgun
 
 from . import constants
 from distutils.version import LooseVersion
 from ..logger import get_logger
-from ..errors import InvalidAppStoreCredentialsError
 
 logger = get_logger("initialization.shotgun")
 
@@ -124,17 +123,16 @@ def get_app_store_credentials(connection, proxy):
 
     # connect to the app store
     try:
-        sg_app_store = Shotgun(constants.SGTK_APP_STORE, script, key, http_proxy=proxy, connect=False)
+        sg_app_store = Shotgun(constants.SGTK_APP_STORE, script, key, http_proxy=proxy)
 
         # pull down the full script information
         app_store_script = sg_app_store.find_one(
             "ApiUser",
             [["firstname", "is", script]],
             fields=["type", "firstname", "id", "salted_password"])
-    except AuthenticationFault:
-        raise InvalidAppStoreCredentialsError(
-            "The Toolkit App Store credentials found in Shotgun are invalid."
-        )
+    except:
+        logger.exception("Something went wrong while connecting to the App Store:")
+        return None
 
     return app_store_script
 
@@ -183,14 +181,7 @@ def __get_app_store_key_internal(connection, post_data):
         urllib.urlencode(post_data))
 
     html = response.read()
-    data = json.loads(html)
-
-    if not data["script_name"] or not data["script_key"]:
-        raise InvalidAppStoreCredentialsError(
-            "Toolkit App Store credentials could not be retrieved from Shotgun."
-        )
-
-    return data
+    return json.loads(html)
 
 
 def __get_app_store_key(connection):

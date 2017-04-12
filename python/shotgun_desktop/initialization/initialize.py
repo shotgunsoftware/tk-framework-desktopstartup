@@ -16,6 +16,7 @@ import tempfile
 from . import install
 from . import shotgun
 from .. import paths
+from ..errors import MissingAppStoreCredentialsError
 
 
 def initialize(splash, connection, app_store_http_proxy):
@@ -43,6 +44,8 @@ def initialize(splash, connection, app_store_http_proxy):
 
     # grab the login to the app store
     app_store_script = shotgun.get_app_store_credentials(connection, actual_app_store_proxy)
+    if app_store_script is None:
+        raise MissingAppStoreCredentialsError()
 
     # translate platform for locations and executables
     if sys.platform == "darwin":
