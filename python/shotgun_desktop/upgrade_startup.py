@@ -78,7 +78,7 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
         latest_descriptor = current_desc.find_latest_version()
     # Connection errors can occur for a variety of reasons. For example, there is no internet access
     # or there is a proxy server blocking access to the Toolkit app store
-    except (httplib2.HttpLib2Error, httplib2.socks.HTTPError, httplib.HTTPException, sgtk.descriptor.errors.TankAppStoreConnectionError), e:
+    except (httplib2.HttpLib2Error, httplib2.socks.HTTPError, httplib.HTTPException), e:
         logger.warning("Could not access the TK App Store (tank.shotgunstudio.com): (%s)." % e)
         return False
     # In cases where there is a firewall/proxy blocking access to the app store, sometimes the 
