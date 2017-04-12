@@ -154,21 +154,14 @@ def __initialize_sgtk_authentication(sgtk, app_bootstrap):
     :param sgtk: The Toolkit API handle.
     :param app_bootstrap: The application bootstrap instance.
     """
+    # import authentication
+    dm = sgtk.util.CoreDefaultsManager()
+    sg_auth = sgtk.authentication.ShotgunAuthenticator(dm)
 
-    # If the version of Toolkit supports the new authentication mechanism
-    if __toolkit_supports_authentication_module(sgtk):
-        # import authentication
-        from tank_vendor import shotgun_authentication
-        # Add the module to the log file.
-        app_bootstrap.add_logger_to_logfile(shotgun_authentication.get_logger())
-
-        dm = sgtk.util.CoreDefaultsManager()
-        sg_auth = shotgun_authentication.ShotgunAuthenticator(dm)
-
-        # get the current user
-        user = sg_auth.get_default_user()
-        logger.info("Setting current user: %r" % user)
-        sgtk.set_authenticated_user(user)
+    # get the current user
+    user = sg_auth.get_default_user()
+    logger.info("Setting current user: %r" % user)
+    sgtk.set_authenticated_user(user)
 
 
 def __get_initialized_sgtk(path, app_bootstrap):
@@ -241,7 +234,7 @@ def __import_shotgun_authentication_from_path(app_bootstrap):
 
     # finally try the import
     sg_auth = __uuid_import("shotgun_authentication", os.path.join(python_path, "tank_vendor"))
-    app_bootstrap.add_logger_to_logfile(sg_auth.get_logger())
+    #app_bootstrap.add_logger_to_logfile(sg_auth.get_logger())
     return sg_auth
 
 
@@ -396,9 +389,8 @@ def __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootst
             user = shotgun_authenticator.get_user()
     except shotgun_authentication.AuthenticationCancelled:
         return None
-    else:
-        connection = user.create_sg_connection()
-    return connection
+
+    return user
 
 
 def __do_login_or_tray(
@@ -432,10 +424,10 @@ def __do_login_or_tray(
 
     # Loop until there is a connection or the user wants to quit.
     while True:
-        connection = __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootstrap)
+        user = __do_login(splash, shotgun_authentication, shotgun_authenticator, app_bootstrap)
         # If we logged in, return the connection.
-        if connection:
-            return connection
+        if user:
+            return user
         else:
             # Now tell the user the Desktop is running in the tray.
             if __run_with_systray() == SystrayEventLoop.CLOSE_APP:
@@ -478,7 +470,7 @@ def __extract_command_line_argument(arg_name):
     return is_set
 
 
-def __launch_app(app, splash, connection, app_bootstrap, server, settings):
+def __launch_app(app, splash, connection, user, app_bootstrap, server, settings):
     """
     Shows the splash screen, optionally downloads and configures Toolkit, imports it, optionally
     updates it and then launches the desktop engine.
@@ -498,255 +490,35 @@ def __launch_app(app, splash, connection, app_bootstrap, server, settings):
 
     _assert_toolkit_enabled(splash, connection)
 
-    logger.debug("Getting the default site config")
-    default_site_config, pc = shotgun_desktop.paths.get_default_site_config_root(connection)
+    # import sgtk
+    import sys
+    # todo: sort out properly
+    sys.path.append("/Users/manne/Documents/work_dev/toolkit/tk-framework-desktopstartup/python/tk-core")
+    import sgtk
+    print sgtk
 
-    # try and import toolkit
-    toolkit_imported = False
-    config_folder_exists_at_startup = os.path.exists(default_site_config)
+    #__initialize_sgtk_authentication(sgtk, app_bootstrap)
 
-    reset_site = __extract_command_line_argument("--reset-site")
+    mgr = sgtk.bootstrap.ToolkitManager(user)
 
-    # If the config folder exists at startup but the user wants to wipe it, do it.
-    if config_folder_exists_at_startup and reset_site:
-        logger.info("Resetting site configuration at '%s'" % default_site_config)
-        splash.set_message("Resetting site configuration ...")
-        shutil.rmtree(default_site_config)
-        # It doesn't exist anymore, so we can act as if it never existed in the first place
-        config_folder_exists_at_startup = False
-        # Remove all occurances of --reset-site so that if we restart the app it doesn't reset it
-        # again.
+    def progress_callback(progress_value, message):
+        '''
+        Called whenever toolkit reports progress.
 
-    # If there is no pipeline configuration but we found something on disk nonetheless.
-    if not pc and is_toolkit_already_configured(default_site_config):
-        raise UnexpectedConfigFound(default_site_config)
-
-    try:
-        # In we found a pipeline configuration and the path for the config exists, try to import
-        # Toolkit.
-        if config_folder_exists_at_startup:
-            logger.info("Trying site config from '%s'" % default_site_config)
-            sgtk = __import_sgtk_from_path(default_site_config)
-            toolkit_imported = True
-    except Exception:
-        logger.exception("There was an error importing Toolkit:")
-        pass
-    else:
-        # Toolkit was imported, we need to initialize it now.
-        if toolkit_imported:
-            __initialize_sgtk_authentication(sgtk, app_bootstrap)
-
-    if not toolkit_imported:
-        # sgtk not available. initialize core
-        logger.info("Import sgtk from site config failed. ")
-        try:
-            app.processEvents()
-            splash.set_message("Initializing Toolkit")
-            logger.info("Initializing Toolkit")
-            core_path = initialize(splash, connection, settings.default_app_store_http_proxy)
-        except Exception, error:
-            logger.exception(error)
-            if "ApiUser can not be accessed" in error.message:
-                # Login does not have permission to see Scripts, throw an informative
-                # error how to work around this for now.
-                raise UpdatePermissionsError()
-            else:
-                raise
-
-        try:
-            # try again after the initialization is done
-            logger.debug("Importing sgtk after initialization")
-
-            sgtk = __get_initialized_sgtk(core_path, app_bootstrap)
-
-            if sgtk is None:
-                # Generate a generic error message, which will suggest to contact support.
-                raise Exception("Could not access API post initialization.")
-
-            splash.set_message("Setting up default site configuration...")
-
-            # Install the default site config
-            sg = sgtk.util.shotgun.create_sg_connection()
-
-            # Site config has a none project id.
-            project_id = None
-            # If no pipeline configuration had been found.
-            if not pc:
-                # This site config has never been set by anyone, so we're the first.
-                # If pipeline configurations are still project entities, we'll have to use the
-                # TemplateProject as the project which will host the pipeline configuration.
-                if does_pipeline_configuration_require_project(connection):
-                    template_project = sg.find_one(
-                        "Project",
-                        [["name", "is", "Template Project"], ["layout_project", "is", None]])
-                    # Can't find template project, so we're effectively done here, we need a project
-                    # to create a pipeline configuration.
-                    if template_project is None:
-                        # Generate a generic error message, which will suggest to contact support.
-                        raise Exception("Error finding the Template project on your site.")
-
-                    logger.info("Creating the site config using the template project.")
-
-                    # We'll need to use the template project's id to setup the site config in this case.
-                    project_id = template_project["id"]
-                else:
-                    logger.info("Creating the site config without using a project.")
-            else:
-                # If a project is set in the pipeline configuration, it's an old style site config tied
-                # to the template project, so we have to use it.
-                if pc.get("project") is not None:
-                    logger.info("Reusing the site config with a project.")
-                    project_id = pc["project"]["id"]
-                else:
-                    logger.info("Reusing the site config without a project.")
-
-            # Create the directory
-            if not os.path.exists(default_site_config):
-                os.makedirs(default_site_config)
-
-            # Setup the command to create the config
-            if sys.platform == "darwin":
-                path_param = "config_path_mac"
-            elif sys.platform == "win32":
-                path_param = "config_path_win"
-            elif sys.platform.startswith("linux"):
-                path_param = "config_path_linux"
-
-            # allow the config uri to be overridden for testing
-            config_uri = os.environ.get("SGTK_SITE_CONFIG_DEBUG_LOCATION", "tk-config-site")
-
-            params = {
-                "auto_path": True,
-                "config_uri": config_uri,
-                "project_folder_name": "site",
-                "project_id": project_id,
-                path_param: default_site_config,
-            }
-            setup_project = sgtk.get_command("setup_project")
-            setup_project.set_logger(logger)
-
-            try:
-                setup_project.execute(params)
-            except Exception, error:
-                logger.exception(error)
-                if "CRUD ERROR" in error.message:
-                    raise UpdatePermissionsError()
-                else:
-                    raise
-
-            # and now try to load up sgtk through the config again
-            sgtk = __get_initialized_sgtk(default_site_config, app_bootstrap)
-            tk = sgtk.sgtk_from_path(default_site_config)
-
-            # now localize the core to the config
-            splash.set_message("Localizing core...")
-            localize = tk.get_command("localize")
-            localize.set_logger(logger)
-            localize.execute({})
-
-            # Get back the pipeline configuration, this is expected to be initialized further down.
-            _, pc = shotgun_desktop.paths.get_default_site_config_root(connection)
-        except Exception:
-            # Something went wrong. Wipe the default site config if we can and
-            # rethrow
-            if not config_folder_exists_at_startup:
-                logger.error(
-                    "Something went wrong during Toolkit's activation, wiping configuration."
-                )
-                if os.path.exists(default_site_config):
-                    shutil.rmtree(default_site_config)
-            raise
-    else:
-        tk = sgtk.sgtk_from_path(default_site_config)
-
-    # If the pipeline configuration found in Shotgun doesn't match what we have locally, we have a
-    # problem.
-    if pc["id"] != tk.pipeline_configuration.get_shotgun_id():
-        raise InvalidPipelineConfiguration(pc, tk.pipeline_configuration)
-
-    is_auto_path = tk.pipeline_configuration.is_auto_path()
-
-    # Downloads an upgrade for the startup if available. The startup upgrade is independent from the
-    # auto_path state and has its own logic for auto-updating or not, so move this outside the
-    # if auto_path test.
-    startup_updated = upgrade_startup(
-        splash,
-        sgtk,
-        app_bootstrap
-    )
-
-    core_updated = False
-    if is_auto_path:
-        splash.set_message("Getting core and engine updates...")
-        logger.info("Getting updates...")
+        :param progress_value: The current progress value as float number.
+                               values will be reported in incremental order
+                               and always in the range 0.0 to 1.0
+        :param message:        Progress message string
+        '''
+        splash.set_message("%s: %s" % (progress_value, message))
         app.processEvents()
 
-        core_update = tk.get_command("core")
-        core_update.set_logger(logger)
-        result = core_update.execute({})
+    mgr.base_configuration = "sgtk:descriptor:app_store?name=tk-config-basic"
+    mgr.progress_callback = progress_callback
+    mgr.plugin_id = "basic.desktop"
 
-        # If core was updated.
-        if result["status"] == "updated":
-            core_updated = True
-        else:
-            if result["status"] == "update_blocked":
-                # Core update should not be blocked. Warn, because it is not a fatal error.
-                logger.warning("Core update was blocked. Reason: %s" % result["reason"])
-            elif result["status"] != "up_to_date":
-                # Core update should not fail. Warn, because it is not a fatal error.
-                logger.warning("Unexpected Core upgrade result: %s" % str(result))
-    else:
-        logger.info("Pipeline configuration not in auto path mode, skipping core and engine "
-                    "updates...")
+    engine = mgr.bootstrap_engine("tk-desktop")
 
-    # Detect which kind of updates happened and restart the app if necessary
-    if core_updated and startup_updated:
-        return __restart_app_with_countdown(splash, "Shotgun Desktop and core updated.")
-    elif core_updated:
-        return __restart_app_with_countdown(splash, "Core updated.")
-    elif startup_updated:
-        return __restart_app_with_countdown(splash, "Shotgun Desktop updated.")
-
-    # This is important that this happens AFTER the core upgrade so that if there is a bug in the
-    # migration code we can release a new core that fixes it.
-    # If the pipeline configuration we got from Shotgun is not assigned to a project, we might have
-    # some patching to be done to local site configuration.
-    if pc["project"] is None:
-
-        # make sure that the version of core we are using supports the new-style site configuration
-        if not __supports_pipeline_configuration_upgrade(tk.pipeline_configuration):
-            raise UpgradeCoreError(
-                "Running a site configuration without the Template Project requires core v0.16.8 "
-                "or higher.",
-                default_site_config
-            )
-
-        # If the configuration on disk is not the site configuration, update it to the site config.
-        if not tk.pipeline_configuration.is_site_configuration():
-            tk.pipeline_configuration.convert_to_site_config()
-
-    if is_auto_path:
-        updates = tk.get_command("updates")
-        updates.set_logger(logger)
-        updates.execute({})
-
-    if not __toolkit_supports_authentication_module(sgtk):
-        raise UpgradeCoreError(
-            "This version of the Shotgun Desktop only supports core 0.16.4 and higher.",
-            default_site_config
-        )
-    # initialize the tk-desktop engine for an empty context
-    splash.set_message("Starting desktop engine.")
-    app.processEvents()
-
-    ctx = tk.context_empty()
-    engine = sgtk.platform.start_engine("tk-desktop", tk, ctx)
-
-    if not __desktop_engine_supports_authentication_module(engine):
-        raise UpgradeEngineError(
-            "This version of the Shotgun Desktop only supports tk-desktop engine 2.0.0 and higher.",
-            default_site_config
-        )
 
     # engine will take over logging
     app_bootstrap.tear_down_logging()
@@ -1135,7 +907,7 @@ def main(**kwargs):
         # If the server is up and running, we want the workflow where we can either not login
         # and keep the websocket running in the background or choose to login
         if server:
-            connection = __do_login_or_tray(
+            user = __do_login_or_tray(
                 splash,
                 shotgun_authentication,
                 shotgun_authenticator,
@@ -1144,12 +916,17 @@ def main(**kwargs):
             )
         else:
             # The server is not running, so simply offer to login.
-            connection = __do_login(
+            user = __do_login(
                 splash,
                 shotgun_authentication,
                 shotgun_authenticator,
                 app_bootstrap
             )
+
+        if user:
+            connection = user.create_sg_connection()
+        else:
+            connection = None
 
         # If we didn't authenticate a user
         if not connection:
@@ -1163,6 +940,7 @@ def main(**kwargs):
                 app,
                 splash,
                 connection,
+                user,
                 app_bootstrap,
                 server,
                 settings
