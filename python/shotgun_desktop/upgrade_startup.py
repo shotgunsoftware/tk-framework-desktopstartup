@@ -74,11 +74,21 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
     # Local import because sgtk can't be imported globally in the desktop startup.
     from tank_vendor.shotgun_api3.lib import httplib2
 
+    # Backwards compatibility for pre-v0.18 versions of the core api that
+    # don't contain the descriptor sub-package or associated errors.
+    app_store_connection_errors = (httplib2.HttpLib2Error,
+                                   httplib2.socks.HTTPError,
+                                   httplib.HTTPException)
+    try:
+        app_store_connection_errors += (sgtk.descriptor.errors.TankAppStoreConnectionError,)
+    except AttributeError:
+        pass
+
     try:
         latest_descriptor = current_desc.find_latest_version()
     # Connection errors can occur for a variety of reasons. For example, there is no internet access
     # or there is a proxy server blocking access to the Toolkit app store
-    except (httplib2.HttpLib2Error, httplib2.socks.HTTPError, httplib.HTTPException, sgtk.descriptor.errors.TankAppStoreConnectionError), e:
+    except app_store_connection_errors, e:
         logger.warning("Could not access the TK App Store (tank.shotgunstudio.com): (%s)." % e)
         return False
     # In cases where there is a firewall/proxy blocking access to the app store, sometimes the 
