@@ -393,7 +393,7 @@ def __bootstrap_progress_callback(splash, app, progress_value, message):
                            and always in the range 0.0 to 1.0
     :param message:        Progress message string
     """
-    splash.set_message("[%02d%%]: %s" % (int(progress_value * 100), message))
+    splash.set_message(message)
     logger.debug(message)
 
 
