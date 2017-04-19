@@ -280,6 +280,14 @@ def __init_app():
     :returns: The tupple (QApplication instance, shogun_desktop.splash.Slash instance).
     """
     logger.debug("Creating QApp and splash screen")
+    # Before starting QApplication, disable system default QT plugins.
+    # The installed QT version on the system might be different then the one we ship with.
+    # Incompatible plugins prevent the application from starting.
+    # This problem was reproducible on Centos 7 with KDE.
+    # We need to remove this env var to make sure every other process starting a
+    # QApplication in this same environment will not have problems.
+    if os.environ.get("QT_PLUGIN_PATH"):
+        del os.environ["QT_PLUGIN_PATH"]
     # start up our QApp now
     return QtGui.QApplication(sys.argv), shotgun_desktop.splash.Splash()
 
