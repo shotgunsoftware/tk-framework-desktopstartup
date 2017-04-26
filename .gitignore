@@ -6,3 +6,6 @@ __pycache__/
 *.orig
 
 .DS_STORE
+
+# IDE files
+.idea/
