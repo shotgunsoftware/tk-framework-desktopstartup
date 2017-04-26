@@ -20,6 +20,7 @@ from twisted.python import log
 from autobahn.twisted.websocket import WebSocketServerFactory, listenWS
 
 from .errors import MissingCertificateError, PortBusyError
+from . import certificates
 
 import logger
 
@@ -94,9 +95,7 @@ class Server(object):
 
         :param debug: Boolean Show debug output. Will also Start local web server to test client pages.
         """
-
-        cert_key_path = os.path.join(self._keys_path, "server.key")
-        cert_crt_path = os.path.join(self._keys_path, "server.crt")
+        cert_crt_path, cert_key_path = certificates.get_certificate_file_names(self._keys_path)
 
         self._raise_if_missing_certificate(cert_key_path)
         self._raise_if_missing_certificate(cert_crt_path)

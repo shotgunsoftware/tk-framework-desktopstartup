@@ -18,6 +18,15 @@ from .errors import CertificateRegistrationError
 from OpenSSL import crypto
 
 
+def get_certificate_file_names(root_folder):
+    """
+    Returns a tuple of certificate file paths.
+
+    :returns: The tuple (public key path, private key path)
+    """
+    return os.path.join(root_folder, "server.crt"), os.path.join(root_folder, "server.key")
+
+
 class _CertificateHandler(object):
     """
     Handles creation and registration of the websocket certificate.
@@ -28,8 +37,7 @@ class _CertificateHandler(object):
         :param str certificate_folder: Path where the certificates will be written.
         """
         self._logger = get_logger("certificates")
-        self._cert_path = os.path.join(certificate_folder, "server.crt")
-        self._key_path = os.path.join(certificate_folder, "server.key")
+        self._cert_path, self._key_path = get_certificate_file_names(certificate_folder)
 
     def exists(self):
         """
@@ -62,6 +70,16 @@ class _CertificateHandler(object):
 
         # create a self-signed cert
         cert = crypto.X509()
+
+        # Chrome deprecated CN matching
+        # https://textslashplain.com/2017/03/10/chrome-deprecates-subject-cn-matching/
+        # This fixes the issue: http://stackoverflow.com/a/37440167/1074536
+        san_list = ["DNS:localhost"]
+        cert.add_extensions([
+            crypto.X509Extension(
+                "subjectAltName", False, ", ".join(san_list)
+            )
+        ])
         cert.get_subject().C = "US"
         cert.get_subject().ST = "California"
         cert.get_subject().L = "San Rafael"
