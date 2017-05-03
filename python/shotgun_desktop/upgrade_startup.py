@@ -75,7 +75,7 @@ def upgrade_startup(splash, sgtk, sg, app_bootstrap):
     # Connection errors can occur for a variety of reasons. For example, there is no internet access
     # or there is a proxy server blocking access to the Toolkit app store
     except Exception as e:
-        logger.warning("Could not access the TK App Store (tank.shotgunstudio.com): (%s)." % e)
+        logger.exception("Could not access the TK App Store (tank.shotgunstudio.com):")
         return False
 
     # check deprecation
