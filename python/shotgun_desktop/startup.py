@@ -680,6 +680,7 @@ def __launch_app(app, splash, connection, app_bootstrap, server, settings):
     startup_updated = upgrade_startup(
         splash,
         sgtk,
+        tk.shotgun,
         app_bootstrap
     )
 

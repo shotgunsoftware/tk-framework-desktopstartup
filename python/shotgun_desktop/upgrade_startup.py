@@ -13,8 +13,7 @@ import logging
 from distutils.version import LooseVersion
 from shotgun_desktop.location import get_location, write_location
 from shotgun_desktop.desktop_message_box import DesktopMessageBox
-
-import httplib
+from shotgun_desktop.initialization.shotgun import get_server_version
 
 logger = logging.getLogger("tk-desktop.startup")
 
@@ -32,7 +31,7 @@ def _supports_get_from_location_and_paths(sgtk):
     return hasattr(sgtk.deploy.descriptor, "get_from_location_and_paths")
 
 
-def upgrade_startup(splash, sgtk, app_bootstrap):
+def upgrade_startup(splash, sgtk, sg, app_bootstrap):
     """
     Tries to upgrade the startup logic. If an update is available, it will be donwloaded to the
     local cache directory and the startup descriptor will be updated.
@@ -71,26 +70,13 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
     # to tank.shotgunstudio.com. The Desktop startup update code however always phones home.
     # Beacuse of this, we'll try to find the latest version but accept that it may fail.
 
-    # Local import because sgtk can't be imported globally in the desktop startup.
-    from tank_vendor.shotgun_api3.lib import httplib2
-
     try:
         latest_descriptor = current_desc.find_latest_version()
     # Connection errors can occur for a variety of reasons. For example, there is no internet access
     # or there is a proxy server blocking access to the Toolkit app store
-    except (httplib2.HttpLib2Error, httplib2.socks.HTTPError, httplib.HTTPException), e:
-        logger.warning("Could not access the TK App Store (tank.shotgunstudio.com): (%s)." % e)
+    except Exception as e:
+        logger.exception("Could not access the TK App Store (tank.shotgunstudio.com):")
         return False
-    # In cases where there is a firewall/proxy blocking access to the app store, sometimes the 
-    # firewall will drop the connection instead of rejecting it. The API request will timeout which
-    # unfortunately results in a generic SSLError with only the message text to give us a clue why
-    # the request failed. Issue a warning in this case and continue on. 
-    except httplib2.ssl.SSLError, e:
-        if "timed" in e.message:
-            logger.warning("Could not access the TK App Store (tank.shotgunstudio.com): %s" % e)
-            return False
-        else:
-            raise
 
     # check deprecation
     (is_dep, dep_msg) = latest_descriptor.get_deprecation_status()
@@ -106,7 +92,10 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
     out_of_date = (latest_descriptor.get_version() != current_desc.get_version())
 
     if not out_of_date:
-        logger.debug("Desktop startup does not need upgrading. Currenty running version %s" % current_desc.get_version())
+        logger.debug(
+            "Desktop startup does not need upgrading. Currenty running version %s",
+            current_desc.get_version()
+        )
         return False
 
     if latest_descriptor.get_version_constraints().get("min_desktop"):
@@ -119,6 +108,15 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
                 "Shotgun Desktop." % (
                     latest_descriptor.get_version(), minimal_desktop_version, current_desktop_version
                 )
+            )
+            return False
+
+    min_sg = latest_descriptor.get_version_constraints().get("min_sg")
+    if min_sg:
+        if get_server_version(sg) < LooseVersion(min_sg):
+            logger.warning(
+                "Cannot upgrade to the latest Desktop Startup %s. This new version is not compatible with "
+                "Shotgun versions prior to %s.", latest_descriptor.get_version(), min_sg
             )
             return False
 
