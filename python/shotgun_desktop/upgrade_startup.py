@@ -8,7 +8,7 @@
 # agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
-from shotgun_desktop.location import get_location, write_location
+from shotgun_desktop.location import write_location, get_startup_descriptor
 from shotgun_desktop.desktop_message_box import DesktopMessageBox
 from sgtk.descriptor import CheckVersionConstraintsError
 
@@ -47,11 +47,7 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
 
     sg = sgtk.get_authenticated_user().create_sg_connection()
 
-    current_desc = sgtk.descriptor.create_descriptor(
-        sg,
-        sgtk.descriptor.Descriptor.FRAMEWORK,
-        get_location(app_bootstrap)
-    )
+    current_desc = get_startup_descriptor(sgtk, sg, app_bootstrap)
 
     logger.debug("Testing for remote access: %s", current_desc)
 
