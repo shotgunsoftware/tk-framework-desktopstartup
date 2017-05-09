@@ -15,6 +15,23 @@ from sgtk.descriptor import CheckVersionConstraintsError
 from sgtk import LogManager
 logger = LogManager.get_logger(__name__)
 
+from distutils.version import LooseVersion
+
+
+def _get_server_version(connection):
+    """
+    Retrieves the server version from the connection.
+
+    :param connection: Connection we want the server version from.
+
+    :returns: Tuple of (major, minor) versions.
+    """
+    sg_major_ver = connection.server_info["version"][0]
+    sg_minor_ver = connection.server_info["version"][1]
+    sg_patch_ver = connection.server_info["version"][2]
+
+    return LooseVersion("%d.%d.%d" % (sg_major_ver, sg_minor_ver, sg_patch_ver))
+
 
 def _supports_get_from_location_and_paths(sgtk):
     """
@@ -60,14 +77,15 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
     # to stress the code even in dev mode. Calls to download will be noops anyway.
     if current_desc.is_dev():
         logger.info("Desktop startup using a dev descriptor, skipping update...")
+        return False
     else:
         splash.set_message("Getting Shotgun Desktop updates...")
         logger.info("Getting Shotgun Desktop updates...")
 
     try:
         latest_descriptor = current_desc.find_latest_version()
-    except:
-        logger.exception("Unexpected error while downloading Shotgun Desktop update.")
+    except Exception as e:
+        logger.exception("Could not access the TK App Store (tank.shotgunstudio.com):")
         return False
 
     # check deprecation
@@ -89,9 +107,9 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
         )
         return False
 
+    # Check constraints.
     try:
         latest_descriptor.check_version_constraints(
-            sg,
             desktop_version=app_bootstrap.get_version()
         )
     except CheckVersionConstraintsError as e:
