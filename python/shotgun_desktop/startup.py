@@ -53,7 +53,7 @@ import shotgun_desktop.paths
 from shotgun_desktop.turn_on_toolkit import TurnOnToolkit
 from shotgun_desktop.desktop_message_box import DesktopMessageBox
 from shotgun_desktop.upgrade_startup import upgrade_startup
-from shotgun_desktop.location import get_startup_descriptor
+from shotgun_desktop.location import get_location
 from shotgun_desktop.settings import Settings
 from shotgun_desktop.systray_icon import ShotgunSystemTrayIcon
 from distutils.version import LooseVersion
@@ -521,7 +521,6 @@ def __post_bootstrap_engine(splash, app_bootstrap, engine):
 
     :returns: Application exit code.
     """
-    import sgtk
 
     # reset PYTHONPATH and PYTHONHOME if they were overridden by the application
     if "SGTK_DESKTOP_ORIGINAL_PYTHONPATH" in os.environ:
@@ -531,15 +530,12 @@ def __post_bootstrap_engine(splash, app_bootstrap, engine):
 
     # and run the engine
     logger.debug("Running tk-desktop")
-    startup_desc = get_startup_descriptor(sgtk, engine.shotgun, app_bootstrap)
-
-    startup_version = startup_desc.version
+    startup_version = get_location(app_bootstrap).get("version") or "Undefined"
 
     return engine.run(
         splash,
         version=app_bootstrap.get_version(),
-        startup_version=startup_version,
-        startup_descriptor=startup_desc
+        startup_version=startup_version
     )
 
 

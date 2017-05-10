@@ -84,19 +84,6 @@ def get_location(app_bootstrap):
         return yaml.load(location_file) or dev_descriptor
 
 
-def get_startup_descriptor(sgtk, sg, app_bootstrap):
-    """
-    Creates a startup descriptor based on the currently running desktop startup code.
-
-    :returns: :class:`sgtk.descriptor.FrameworkDescriptor` instance.
-    """
-    return sgtk.descriptor.create_descriptor(
-        sg,
-        sgtk.descriptor.Descriptor.FRAMEWORK,
-        get_location(app_bootstrap)
-    )
-
-
 def write_location(descriptor):
     """
     Writes the descriptor dictionary to disk in the BUNDLE_ROOT/resources/location.yml file.
