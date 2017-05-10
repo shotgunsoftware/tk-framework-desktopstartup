@@ -171,7 +171,7 @@ class TankQDialog(TankDialogBase):
         Constructor
         """
         TankDialogBase.__init__(self, parent)
-        
+
         # indicates that we are showing the info pane
         self._info_mode = False
         self._bundle = bundle
@@ -186,7 +186,7 @@ class TankQDialog(TankDialogBase):
         
         # when rendering the main UI title text, if the app is in dev mode, add 
         # a little DEV text.
-        if self._bundle.descriptor.get_location().get("type") == "dev":        
+        if self._bundle.descriptor.get_dict().get("type") == "dev":
             self.ui.label.setText("%s<span style='font-size:9px; color: #30A7E3'>  DEV</span>" % title)
         else:
             self.ui.label.setText(title)
@@ -206,7 +206,7 @@ class TankQDialog(TankDialogBase):
             self.ui.label.setToolTip("This is part of the Shotgun App %s" % self._bundle.name)
             
             # Add our context to the header
-            # two lines - top line covers PC and Project
+            # two lines - top line covers pipeline config and Project
             # second line covers context (entity, step etc)
             
             pc = self._bundle.context.tank.pipeline_configuration
@@ -215,7 +215,9 @@ class TankQDialog(TankDialogBase):
                 # this is a project only context
                 
                 # top line can contain the Pipeline Config
-                if pc.get_name() and pc.get_name() != constants.PRIMARY_PIPELINE_CONFIG_NAME:
+                if pc.get_name() and pc.get_name() not in \
+                        (constants.PRIMARY_PIPELINE_CONFIG_NAME,
+                         constants.UNMANAGED_PIPELINE_CONFIG_NAME):
                     # we are using a non-default pipeline config
                     first_line = "<b style='color: #30A7E3'>Config %s</b>" % pc.get_name()
                 else:
@@ -238,7 +240,9 @@ class TankQDialog(TankDialogBase):
                 
                 # ...unless we are running a non-Primary PC
                 pc = self._bundle.context.tank.pipeline_configuration 
-                if pc.get_name() and pc.get_name() != constants.PRIMARY_PIPELINE_CONFIG_NAME:
+                if pc.get_name() and pc.get_name() not in \
+                        (constants.PRIMARY_PIPELINE_CONFIG_NAME,
+                         constants.UNMANAGED_PIPELINE_CONFIG_NAME):
                     # we are using a non-default pipeline config
                     first_line = "<b style='color: #30A7E3'>Config %s</b>" % pc.get_name() 
                 
@@ -286,7 +290,7 @@ class TankQDialog(TankDialogBase):
             self.ui.app_name.setText(self._bundle.display_name)
             self.ui.app_description.setText(self._bundle.description)
             # get the descriptor type (eg. git/app store/dev etc)
-            descriptor_type = self._bundle.descriptor.get_location().get("type", "Undefined")
+            descriptor_type = self._bundle.descriptor.get_dict().get("type", "Undefined")
             self.ui.app_tech_details.setText("Location: %s %s (Source: %s)" % (self._bundle.name, 
                                                                      self._bundle.version,
                                                                      descriptor_type))
@@ -308,8 +312,12 @@ class TankQDialog(TankDialogBase):
             self.ui.btn_file_system.clicked.connect( self._on_filesystem )
             self.ui.btn_shotgun.clicked.connect( self._on_shotgun )
             self.ui.btn_reload.clicked.connect( self._on_reload )
-            
-            if len(self._bundle.descriptor.get_configuration_schema()) == 0:
+
+            # When there is no file system locations, hide the "Jump to File System" button.
+            if not self._bundle.context.filesystem_locations:
+                self.ui.btn_file_system.setVisible(False)
+
+            if len(self._bundle.descriptor.configuration_schema) == 0:
                 # no configuration for this app!
                 self.ui.config_header.setVisible(False)
                 self.ui.config_line.setVisible(False)
@@ -317,8 +325,8 @@ class TankQDialog(TankDialogBase):
                 
             else:
                 # enumerate configuration items            
-                for setting, params in self._bundle.descriptor.get_configuration_schema().items():        
-                    value = self._bundle.settings.get(setting)
+                for setting, params in self._bundle.descriptor.configuration_schema.items():
+                    value = self._bundle.get_setting(setting, None)
                     self._add_settings_item(setting, params, value)
 
         ########################################################################################
@@ -640,23 +648,12 @@ class TankQDialog(TankDialogBase):
         # launch one window for each location on disk        
         paths = self._bundle.context.filesystem_locations
         for disk_location in paths:
-                
-            # get the setting        
-            system = sys.platform
-            
-            # run the app
-            if system == "linux2":
-                cmd = 'xdg-open "%s"' % disk_location
-            elif system == "darwin":
-                cmd = 'open "%s"' % disk_location
-            elif system == "win32":
-                cmd = 'cmd.exe /C start "Folder" "%s"' % disk_location
-            else:
-                raise Exception("Platform '%s' is not supported." % system)
-            
-            exit_code = os.system(cmd)
-            if exit_code != 0:
-                self._engine.log_error("Failed to launch '%s'!" % cmd)
+
+            url = QtCore.QUrl.fromLocalFile(disk_location)
+            status = QtGui.QDesktopServices.openUrl(url)
+
+            if not status:
+                self._engine.log_error("Failed to open '%s'!" % disk_location)
         
 
     def _on_shotgun(self):

@@ -17,43 +17,61 @@ from __future__ import with_statement
 import os
 import re
 import sys
+import logging
+import pprint
 import traceback
 import inspect
 import weakref
 import threading
-        
-from .. import loader
+
+from ..util.qt_importer import QtImporter
+from ..util.loader import load_plugin
 from .. import hook
 
-from ..errors import TankError, TankEngineInitError, TankContextChangeNotSupportedError
-from ..deploy import descriptor
-from ..deploy.dev_descriptor import TankDevDescriptor
-from ..util import log_user_activity_metric, log_user_attribute_metric
+from ..errors import TankError
+from .errors import (
+    TankEngineInitError,
+    TankContextChangeNotSupportedError,
+    TankEngineEventError,
+)
+
+from ..util import log_user_activity_metric as util_log_user_activity_metric
+from ..util import log_user_attribute_metric as util_log_user_attribute_metric
 from ..util.metrics import MetricsDispatcher
+from ..log import LogManager
 
 from . import application
 from . import constants
 from . import validation
+from . import events
 from . import qt
-from . import black_list
+from . import qt5
 from .bundle import TankBundle
 from .framework import setup_frameworks
+from .engine_logging import ToolkitEngineHandler, ToolkitEngineLegacyHandler
+
+# std core level logger
+core_logger = LogManager.get_logger(__name__)
 
 class Engine(TankBundle):
     """
-    Base class for an engine in Tank.
+    Base class for an engine. When a new DCC integration is created, it should
+    derive from this class.
     """
 
     _ASYNC_INVOKER, _SYNC_INVOKER = range(2)
 
     def __init__(self, tk, context, engine_instance_name, env):
         """
-        Constructor. Takes the following parameters:
-        
-        :param tk: Sgtk API handle
+        Engine instances are constructed by the toolkit launch process
+        and various factory methods such as :meth:`start_engine`.
+
+        :param tk: :class:`~sgtk.Sgtk` instance
         :param context: A context object to define the context on disk where the engine is operating
+        :type context: :class:`~sgtk.Context`
         :param engine_instance_name: The name of the engine as it has been defined in the environment.
-        :param env: An Environment object to associate with this engine
+        :param env: An Environment object to associate with this engine.
+
         """
         
         self.__env = env
@@ -69,10 +87,13 @@ class Engine(TankBundle):
         self.__qt_widget_trash = []
         self.__created_qt_dialogs = []
         self.__qt_debug_info = {}
+        self.__has_qt5 = False
         
         self.__commands_that_need_prefixing = []
         
         self.__global_progress_widget = None
+
+        self.__fonts_loaded = False
 
         self._metrics_dispatcher = None
 
@@ -80,15 +101,32 @@ class Engine(TankBundle):
         # to access the invoker don't trip on undefined variables.
         self._invoker = None
         self._async_invoker = None
-        
+
         # get the engine settings
         settings = self.__env.get_engine_settings(self.__engine_instance_name)
         
         # get the descriptor representing the engine        
         descriptor = self.__env.get_engine_descriptor(self.__engine_instance_name)        
-        
+
+        # create logger for this engine.
+        # log will be parented in a sgtk.env.environment_name.engine_instance_name hierarchy
+        logger = LogManager.get_logger("env.%s.%s" % (env.name, engine_instance_name))
+
         # init base class
-        TankBundle.__init__(self, tk, context, settings, descriptor, env)
+        TankBundle.__init__(self, tk, context, settings, descriptor, env, logger)
+
+        # create a log handler to handle log dispatch from self.log
+        # (and the rest of the sgtk logging ) to the user
+        self.__log_handler = self.__initialize_logging()
+
+        # check general debug log setting and if this flag is turned on,
+        # adjust the global setting
+        if self.get_setting("debug_logging", False):
+            LogManager().global_debug = True
+            self.log_debug(
+                "Detected setting 'config/env/%s.yml:%s.debug_logging: true' "
+                "in your environment configuration. Turning on debug output." % (env.name, engine_instance_name)
+            )
 
         # check that the context contains all the info that the app needs
         validation.validate_context(descriptor, context)
@@ -97,8 +135,14 @@ class Engine(TankBundle):
         validation.validate_platform(descriptor)
 
         # Get the settings for the engine and then validate them
-        engine_schema = descriptor.get_configuration_schema()
-        validation.validate_settings(self.__engine_instance_name, tk, context, engine_schema, settings)
+        engine_schema = descriptor.configuration_schema
+        validation.validate_settings(
+            self.__engine_instance_name,
+            tk,
+            context,
+            engine_schema,
+            settings
+        )
         
         # set up any frameworks defined
         setup_frameworks(self, self, self.__env, descriptor)
@@ -118,7 +162,6 @@ class Engine(TankBundle):
                 self.log_debug("Appending to PYTHONPATH: %s" % python_path)
                 sys.path.append(python_path)
 
-
         # Note, 'init_engine()' is now deprecated and all derived initialisation should be
         # done in either 'pre_app_init()' or 'post_app_init()'.  'init_engine()' is left
         # in here to provide backwards compatibility with any legacy code. 
@@ -130,11 +173,21 @@ class Engine(TankBundle):
         qt.QtGui = base_def.get("qt_gui")
         qt.TankDialogBase = base_def.get("dialog_base")
 
+        qt5_base = self.__define_qt5_base()
+        self.__has_qt5 = len(qt5_base) > 0
+        for name, value in qt5_base.iteritems():
+            setattr(qt5, name, value)
+
         # Update the authentication module to use the engine's Qt.
-        from tank_vendor.shotgun_authentication.ui import qt_abstraction
+        # @todo: can this import be untangled? Code references internal part of the auth module
+        from ..authentication.ui import qt_abstraction
         qt_abstraction.QtCore = qt.QtCore
         qt_abstraction.QtGui = qt.QtGui
-        
+
+        # load the fonts. this will work if there is a QApplication instance
+        # available.
+        self._ensure_core_fonts_loaded()
+
         # create invoker to allow execution of functions on the
         # main thread:
         self._invoker, self._async_invoker = self.__create_invokers()
@@ -152,8 +205,50 @@ class Engine(TankBundle):
         # state of the apps - for example creates a menu, so at that 
         # point we want to try and have all app initialization complete.
         self.__run_post_engine_inits()
-        
-        # Useful dev helpers: If there is one or more dev descriptors in the 
+
+        if self.name not in [constants.SHELL_ENGINE_NAME, constants.SHOTGUN_ENGINE_NAME] \
+                and self.__has_018_logging_support():
+
+            # if engine supports new logging implementation,
+            #
+            # we cannot add the 'toggle debug logging' for
+            # an engine that has the old logging implementation
+            # because that typically contains overrides in log_debug
+            # which effectively renders the command below useless
+
+            # note that we omit this action in the special built-in
+            # engines tk-shell and tk-shotgun
+
+            self.register_command(
+                "Toggle Debug Logging",
+                self.__toggle_debug_logging,
+                {
+                    "short_name": "toggle_debug",
+                    "icon": self.__get_platform_resource_path("book_256.png"),
+                    "description": ("Toggles toolkit debug logging on and off. "
+                                    "This affects all debug logging, including log "
+                                    "files that are being written to disk."),
+                    "type": "context_menu"
+                }
+            )
+
+        # add a 'open log folder' command to the engine's context menu
+        # note: we make an exception for the shotgun engine which is a
+        # special case.
+        if self.name != constants.SHOTGUN_ENGINE_NAME:
+
+            self.register_command(
+                "Open Log Folder",
+                self.__open_log_folder,
+                {
+                    "short_name": "open_log_folder",
+                    "icon": self.__get_platform_resource_path("folder_256.png"),
+                    "description": "Opens the folder where log files are being stored.",
+                    "type": "context_menu"
+                }
+            )
+
+        # Useful dev helpers: If there is one or more dev descriptors in the
         # loaded environment, add a reload button to the menu!
         self.__register_reload_command()
         
@@ -167,17 +262,8 @@ class Engine(TankBundle):
         self.log_metric("Init")
 
         # log the core and engine versions being used by the current user
-        log_user_attribute_metric("tk-core version", tk.version)
-        log_user_attribute_metric("%s version" % (self.name,), self.version)
-
-        # check if there are any compatibility warnings:
-        # do this now in case the engine fails to load!
-        messages = black_list.compare_against_black_list(descriptor)
-        if len(messages) > 0:
-            self.log_warning("Compatibility warnings were issued for %s:" % descriptor)
-            for msg in messages:
-                self.log_warning("")
-                self.log_warning(msg)
+        util_log_user_attribute_metric("tk-core version", tk.version)
+        util_log_user_attribute_metric("%s version" % (self.name,), self.version)
 
         # if the engine supports logging metrics, begin dispatching logged metrics
         if self.metrics_dispatch_allowed:
@@ -185,11 +271,14 @@ class Engine(TankBundle):
             self.log_debug("Starting metrics dispatcher...")
             self._metrics_dispatcher.start()
             self.log_debug("Metrics dispatcher started.")
-        
+
     def __repr__(self):
         return "<Sgtk Engine 0x%08x: %s, env: %s>" % (id(self),  
                                                       self.name, 
                                                       self.__env.name)
+
+    ##########################################################################################
+    # properties used by internal classes, not part of the public interface
 
     def get_env(self):
         """
@@ -200,17 +289,123 @@ class Engine(TankBundle):
         """
         return self.__env
 
-    ##########################################################################################
-    # properties used by internal classes, not part of the public interface
-    
+    def __toggle_debug_logging(self):
+        """
+        Toggles global debug logging on and off in the log manager.
+        This will affect all logging across all of toolkit.
+        """
+        # flip debug logging
+        LogManager().global_debug = not LogManager().global_debug
+
+    def __open_log_folder(self):
+        """
+        Opens the file system folder where log files are being stored.
+        """
+        self.log_info("Log folder is located in '%s'" % LogManager().log_folder)
+
+        if self.has_ui:
+            # only import QT if we have a UI
+            from .qt import QtGui, QtCore
+            url = QtCore.QUrl.fromLocalFile(
+                LogManager().log_folder
+            )
+            status = QtGui.QDesktopServices.openUrl(url)
+            if not status:
+                self._engine.log_error("Failed to open folder!")
+
+    def __is_method_subclassed(self, method_name):
+        """
+        Helper that determines if the given method name
+        has been subclassed in the currently running
+        instance of the class or not.
+
+        :param method_name: Name of engine method to check, e.g. 'log_debug'.
+        :return: True if subclassed, false if not
+        """
+        # grab active method and baseclass method
+        running_method = getattr(self, method_name)
+        base_method = getattr(Engine, method_name)
+
+        # now determine if the runtime implementation
+        # is the base class implementation or not
+        subclassed = False
+
+        if sys.version_info < (2,6):
+            # older pythons use im_func rather than __func__
+            if running_method.im_func is not base_method.im_func:
+                subclassed = True
+        else:
+            # pyton 2.6 and above use __func__
+            if running_method.__func__ is not base_method.__func__:
+                subclassed = True
+
+        return subclassed
+
+    def __has_018_logging_support(self):
+        """
+        Determine if the engine supports the new logging implementation.
+
+        This is done by introspecting the _emit_log_message method.
+        If this method is implemented for this engine, it is assumed
+        that we are using the new logging system.
+
+        :return: True if new logging is used, False otherwise
+        """
+        return self.__is_method_subclassed("_emit_log_message")
+
+    def __initialize_logging(self):
+        """
+        Creates a std python logging LogHandler
+        that dispatches all log messages to the
+        :meth:`Engine._emit_log_message()` method
+        in a thread safe manner.
+
+        For engines that do not yet implement :meth:`_emit_log_message`,
+        a legacy log handler is used that dispatches messages
+        to the legacy output methods log_xxx.
+
+        :return: :class:`python.logging.LogHandler`
+        """
+        if self.__has_018_logging_support():
+            handler = LogManager().initialize_custom_handler(
+                ToolkitEngineHandler(self)
+            )
+            # make it easy for engines to implement a consistent log format
+            # by equipping the handler with a standard formatter:
+            # [DEBUG tk-maya] message message
+            #
+            # engines subclassing log output can call
+            # handler.format to access this formatter for
+            # a consistent output implementation
+            # (see _emit_log_message for details)
+            #
+            formatter = logging.Formatter(
+                "[%(levelname)s %(basename)s] %(message)s"
+            )
+            handler.setFormatter(formatter)
+
+        else:
+            # legacy engine that doesn't have _emit_log_message implemented
+            handler = LogManager().initialize_custom_handler(
+                ToolkitEngineLegacyHandler(self)
+            )
+
+            # create a minimalistic format suitable for
+            # existing output implementations of log_xxx
+            #
+            formatter = logging.Formatter("%(basename)s: %(message)s")
+            handler.setFormatter(formatter)
+
+        return handler
+
     def __show_busy(self, title, details):
         """
         Payload for the show_busy method.
 
         For details, see the main show_busy documentation.
         
-        :params title: Short descriptive title of what is happening
-        :params details: Detailed message describing what is going on.
+        :param title: Short descriptive title of what is happening
+        :param details: Detailed message describing what is going on.
         """
         if self.has_ui:
             # we cannot import QT until here as non-ui engines don't have QT defined.
@@ -241,6 +436,11 @@ class Engine(TankBundle):
                     # set the message before the window is raised to avoid briefly
                     # showing default values
                     self.__global_progress_widget.set_contents(title, details)
+
+                    # if the user closes manually by clicking on the dialog,
+                    # make sure we remove the reference to it via the
+                    # clear_busy method.
+                    window.dialog_closed.connect(self.clear_busy)
                     
                     # kick it off        
                     window.show()
@@ -265,56 +465,17 @@ class Engine(TankBundle):
         if self.__global_progress_widget:
             self.__global_progress_widget.close()
             self.__global_progress_widget = None
-    
-    def show_busy(self, title, details):
-        """
-        Displays or updates a global "busy window" tied to this engine. The window
-        is a splash screen type window, floats on top and contains details of what
-        is currently being processed.
-        
-        This is currently an internal method and not meant to be be used by anything
-        outside the core API. Later on, as things settle, we may consider exposing this.
-        
-        This method pops up a splash screen with a message and the idea is that 
-        long running core processes can use this as a way to communicate their intent
-        to the user and keep the user informed as slow processes are executed. If the engine
-        has a UI present, this will be used to display the progress message. If the engine
-        does not have UI support, a message will be logged. The UI always appears in the 
-        main thread for safety.
 
-        Only one global progress window can exist per engine at a time, so if you want to 
-        push several updates one after the other, just keep calling this method.
-        
-        When you want to remove the window, call clear_busy().
-
-        Note! If you are calling this from the Core API you typically don't have 
-        access to the current engine object. In this case you can use the 
-        convenience method tank.platform.engine.show_global_busy() which will
-        attempt to broadcast the request to the currently active engine.
-        
-        :params title: Short descriptive title of what is happening
-        :params details: Detailed message describing what is going on.
-        """
-        # make sure that the UI is always shown in the main thread
-        self.execute_in_main_thread(self.__show_busy, title, details)
-    
-    def clear_busy(self):
-        """
-        Closes any active busy window.
-        
-        For more details, see the show_busy() documentation.
-        """
-        if self.__global_progress_widget:
-            self.execute_in_main_thread(self.__clear_busy)
-
-    def log_metric(self, action):
+    def log_metric(self, action, log_once=False):
         """Log an engine metric.
 
         :param action: Action string to log, e.g. 'Init'
+        :param bool log_once: ``True`` if this metric should be ignored if it
+            has already been logged. Defaults to ``False``.
 
         Logs a user activity metric as performed within an engine. This is
         a convenience method that auto-populates the module portion of
-        `tank.util.log_user_activity_metric()`
+        ``tank.util.log_user_activity_metric()``
 
         Internal Use Only - We provide no guarantees that this method
         will be backwards compatible.
@@ -325,13 +486,15 @@ class Engine(TankBundle):
         # module: tk-maya
         # action: tk-maya - Init
         full_action = "%s %s" % (self.name, action)
-        log_user_activity_metric(self.name, full_action)
+        util_log_user_activity_metric(self.name, full_action, log_once=log_once)
 
-    def log_user_attribute_metric(self, attr_name, attr_value):
+    def log_user_attribute_metric(self, attr_name, attr_value, log_once=False):
         """Convenience class. Logs a user attribute metric.
 
         :param attr_name: The name of the attribute to set for the user.
         :param attr_value: The value of the attribute to set for the user.
+        :param bool log_once: ``True`` if this metric should be ignored if it
+            has already been logged. Defaults to ``False``.
 
         This is a convenience wrapper around
         `tank.util.log_user_activity_metric()` that prevents engine subclasses
@@ -341,8 +504,17 @@ class Engine(TankBundle):
         will be backwards compatible.
 
         """
-        log_user_attribute_metric(attr_name, attr_value)
+        util_log_user_attribute_metric(attr_name, attr_value, log_once=log_once)
 
+    def get_child_logger(self, name):
+        """
+        Create a child logger for this engine.
+
+        :param name: Name of child logger, can contain periods for nesting
+        :return: :class:`logging.Logger` instance
+        """
+        full_log_path = "%s.%s" % (self.logger.name, name)
+        return logging.getLogger(full_log_path)
 
     ##########################################################################################
     # properties
@@ -350,9 +522,10 @@ class Engine(TankBundle):
     @property
     def shotgun(self):
         """
-        Delegates to the Sgtk API instance's shotgun connection, which is lazily
-        created the first time it is requested.
-        
+        Returns a Shotgun API handle associated with the currently running
+        environment. This method is a convenience method that calls out
+        to :meth:`~sgtk.Tank.shotgun`.
+
         :returns: Shotgun API handle
         """
         # pass on information to the user agent manager which bundle is returning
@@ -372,9 +545,9 @@ class Engine(TankBundle):
     def environment(self):
         """
         A dictionary with information about the environment.
-        Returns keys name, description and disk_location.
          
-        :returns: dictionary
+        :returns: dictionary with keys ``name``,
+                  ``description`` and ``disk_location``.
         """
         data = {}
         data["name"] = self.__env.name
@@ -389,7 +562,7 @@ class Engine(TankBundle):
         The instance name for this engine. The instance name
         is the entry that is defined in the environment file.
         
-        :returns: instance name as string
+        :returns: instance name as string, e.g. ``tk-maya``
         """
         return self.__engine_instance_name
 
@@ -405,11 +578,12 @@ class Engine(TankBundle):
     @property
     def commands(self):
         """
-        Returns a dictionary representing all the commands that have been registered
-        by apps in this engine. Each dictionary item contains the following keys:
+        A dictionary representing all the commands that have been registered
+        by apps in this engine via :meth:`register_command`.
+        Each dictionary item contains the following keys:
         
-        * callback - function pointer to function to execute for this command
-        * properties - dictionary with free form options - these are typically
+        - ``callback`` - function pointer to function to execute for this command
+        - ``properties`` - dictionary with free form options - these are typically
           engine specific and driven by convention.
         
         :returns: commands dictionary, keyed by command name
@@ -419,9 +593,13 @@ class Engine(TankBundle):
     @property
     def panels(self):
         """
+        Panels which have been registered with the engine via the :meth:`register_panel()`
+        method. Returns a dictionary keyed by panel unique ids. Each value is a dictionary with keys
+        ``callback`` and ``properties``.
+
         Returns all the panels which have been registered with the engine.
         
-        :returns: A dictionary keyed by panel unqiue ids. Each value is a dictionary
+        :returns: A dictionary keyed by panel unique ids. Each value is a dictionary
                   with keys 'callback' and 'properties'
         """
         return self.__panels
@@ -441,9 +619,30 @@ class Engine(TankBundle):
         return True
 
     @property
+    def has_qt5(self):
+        """
+        Indicates that the host application has access to Qt 5 and that the ``sgtk.platform.qt5``  module
+        has been populated with the Qt 5 modules and information.
+
+        :returns bool: boolean value indicating if Qt 5 is available.
+        """
+        return self.__has_qt5
+
+    @property
+    def has_qt4(self):
+        """
+        Indicates that the host application has access to Qt 4 and that the ``sgtk.platform.qt``  module
+        has been populated with the Qt 4 modules and information.
+
+        :returns bool: boolean value indicating if Qt 4 is available.
+        """
+        # Check if Qt was imported. Then checks if a Qt4 compatible api is available.
+        return hasattr(qt, "QtGui") and hasattr(qt.QtGui, "QApplication")
+
+    @property
     def metrics_dispatch_allowed(self):
         """
-        Inidicates this engine will allow the metrics worker threads to forward
+        Indicates this engine will allow the metrics worker threads to forward
         the user metrics logged via core, this engine, or registered apps to
         SG.
 
@@ -451,6 +650,15 @@ class Engine(TankBundle):
             to be forwarded to SG.
         """
         return True
+
+    @property
+    def created_qt_dialogs(self):
+        """
+        A list of dialog objects that have been created by the engine.
+
+        :returns:   A list of TankQDialog objects.
+        """
+        return self.__created_qt_dialogs
 
     ##########################################################################################
     # init and destroy
@@ -463,17 +671,15 @@ class Engine(TankBundle):
     
     def pre_app_init(self):
         """
-        Runs after the engine is set up but before any apps have been initialized.
-        
-        Implemented by deriving classes.
+        Sets up the engine into an operational state. Executed by the system and typically
+        implemented by deriving classes. This method called before any apps are loaded.
         """
         pass
     
     def post_app_init(self):
         """
-        Runs after all apps have been initialized.
-        
-        Implemented by deriving classes.
+        Executed by the system and typically implemented by deriving classes.
+        This method called after all apps have been loaded.
         """
         pass
     
@@ -481,7 +687,8 @@ class Engine(TankBundle):
         """
         Destroy all apps, then call destroy_engine so subclasses can add their own tear down code.
 
-        This method should not be subclassed.
+        .. note:: This method should not be subclassed. Instead, implement :meth:`destroy_engine()`.
+
         """
         with _CoreContextChangeHookGuard(self.sgtk, self.context, None):
             self.__destroy_frameworks()
@@ -508,6 +715,10 @@ class Engine(TankBundle):
                 self._metrics_dispatcher.stop()
                 self.log_debug("Metrics dispatcher stopped.")
 
+        # kill log handler
+        LogManager().root_logger.removeHandler(self.__log_handler)
+        self.__log_handler = None
+
     def destroy_engine(self):
         """
         Called when the engine should tear down itself and all its apps.
@@ -525,6 +736,7 @@ class Engine(TankBundle):
         one or both of pre_context_change and post_context_change methods.
 
         :param new_context:     The context to change to.
+        :type new_context: :class:`~sgtk.Context`
         """
         # Make sure we're allowed to change context at the engine level.
         if not self.context_change_allowed:
@@ -538,7 +750,7 @@ class Engine(TankBundle):
         # context change, it's that the target context isn't configured properly.
         # As such, we'll let any exceptions (mostly TankEngineInitError) bubble
         # up since it's a critical error case.
-        (new_env, engine_descriptor) = _get_env_and_descriptor_for_engine(
+        (new_env, engine_descriptor) = get_env_and_descriptor_for_engine(
             engine_name=self.instance_name,
             tk=self.tank,
             context=new_context,
@@ -596,8 +808,10 @@ class Engine(TankBundle):
             # apps for the new context, and will pull apps that have already
             # been loaded from the __application_pool, which is persistent.
             old_context = self.context
+            new_engine_settings = new_env.get_engine_settings(self.__engine_instance_name)
             self.__env = new_env
             self._set_context(new_context)
+            self._set_settings(new_engine_settings)
             self.__load_apps(reuse_existing_apps=True, old_context=old_context)
 
             # Call the post_context_change method to allow for any engine
@@ -612,20 +826,140 @@ class Engine(TankBundle):
 
             # Emit the core level event.
             self.post_context_change(old_context, new_context)
+
         self.log_debug("Execution of post_context_change for engine %r is complete." % self)
 
         # Last, now that we're otherwise done, we can run the
         # apps' post_engine_init methods.
         self.__run_post_engine_inits()
-    
+
     ##########################################################################################
     # public methods
 
+    def show_busy(self, title, details):
+        """
+        Displays or updates a global "busy window" tied to this engine. The window
+        is a splash screen type window, floats on top and contains details of what
+        is currently being processed.
+
+        This method pops up a splash screen with a message and the idea is that
+        long running core processes can use this as a way to communicate their intent
+        to the user and keep the user informed as slow processes are executed. If the engine
+        has a UI present, this will be used to display the progress message. If the engine
+        does not have UI support, a message will be logged. The UI always appears in the
+        main thread for safety.
+
+        Only one global progress window can exist per engine at a time, so if you want to
+        push several updates one after the other, just keep calling this method.
+
+        When you want to remove the window, call :meth:`clear_busy()`.
+
+        Note! If you are calling this from the Core API you typically don't have
+        access to the current engine object. In this case you can use the
+        convenience method ``tank.platform.engine.show_global_busy()`` which will
+        attempt to broadcast the request to the currently active engine.
+
+        :params title: Short descriptive title of what is happening
+        :params details: Detailed message describing what is going on.
+        """
+        # make sure that the UI is always shown in the main thread
+        self.execute_in_main_thread(self.__show_busy, title, details)
+
+    def clear_busy(self):
+        """
+        Closes any active busy window.
+
+        For more details, see the :meth:`show_busy()` documentation.
+        """
+        if self.__global_progress_widget:
+            self.execute_in_main_thread(self.__clear_busy)
+
     def register_command(self, name, callback, properties=None):
         """
-        Register a command with a name and a callback function. Properties can store
-        implementation specific configuration, like if a tooltip is supported.
-        Typically called from the init_app() method of an app.
+        Register a command with a name and a callback function.
+
+        A *command* refers to an access point for some functionality.
+        In most cases, commands will appear as items on a Shotgun dropdown
+        menu, but it ultimately depends on the engine - in the Shell engine,
+        commands are instead represented as a text base listing and in the
+        Shotgun Desktop it is a scrollable list of larger icons.
+
+        An arbitrary list of properties can be passed into the engine
+        in the form of a properties dictionary. The interpretation of
+        the properties dictionary is engine specific, but in general
+        the following properties are supported:
+
+        - ``short_name`` - A shorter name, typically intended for console use (e.g. 'import_cut')
+
+        - ``icon`` - A path to a 256x256 png app icon. If not specified, the icon for the app will be used.
+
+        - ``description`` - a one line description of the command, suitable for a tooltip.
+          If no description is passed, the one provided in the app manifest will be used.
+
+        - ``title`` - Title to appear on shotgun action menu (e.g. "Create Folders")
+
+        - ``type`` - The type of command - hinting where it should appear. Options vary between
+          engines and the following three are supported:
+
+            - ``context_menu`` - Supported on all engines. Place item on
+              the context menu (first item on the shotgun menu).
+            - ``panel`` - This command is associated with a panel app if the target
+              environment supports a special notion of panel related actions, place
+              the command there. (supported by for example Nuke)
+            - ``node`` - For applications that have a specific node menu (like Nuke),
+              place the command there.
+
+        **Grouping commands into collections**
+
+        It is possible to group several commands into a collection. Such a collection is called
+        a *group*.  For example, you may have three separate commands to launch Maya 2017,
+        Maya 2016 and Maya 2015, all under a 'Launch Maya' group. It is up to each engine to
+        implement this specification in a suitable way but typically, it would be displayed as a
+        "Launch Maya" menu with three sub menu items to represent each version of Maya.
+
+        Each group has a concept of a group default - this is what would get executed if you click
+        on the 'Launch Maya' group.
+
+        To register commands with groups, pass the following two parameters in the properties
+        dictionary:
+
+        - ``group`` - The name for a group this command should be considered a member of.
+
+        - ``group_default`` - Boolean value indicating whether this command should represent the
+          group as a whole.
+
+        .. note:: It is up to each engine to implement grouping and group defaults in an appropriate way. Some engines may not support grouping.
+
+
+        The following properties are supported for the Shotgun engine specifically:
+
+        - ``deny_permissions`` - List of permission groups to exclude this
+          menu item for (e.g. ``["Artist"]``)
+
+        - ``deny_platforms`` - List of platforms for which not to show the menu
+          (e.g. ``["windows", "mac", "linux"]``). Please note that there are
+          other ways to achieve this same result.
+
+        - ``supports_multiple_selection`` - a special flag that allows multiple objects
+          in Shotgun to be selected and operated on. An example showing how to write a
+          multi select shotgun app is provided in a special branch in the sample starter
+          app: https://github.com/shotgunsoftware/tk-multi-starterapp/tree/shotgun_multi_select
+
+        - Please note that custom icons are not supported by the Shotgun engine.
+
+        Typical usage normally looks something like this -
+        register_command is called from the :meth:`Application.init_app()` method of an app::
+
+            self.engine.register_command(
+                "Work Area Info...",
+                callback,
+                {"type": "context_menu", "short_name": "work_area_info"}
+            )
+
+        :param name: Name of the command. This will be the key when accessed via the
+                     :meth:`commands` dictionary.
+        :param callback: Callback to call upon command execution
+        :param properties: Dictionary with command properties.
         """
         if properties is None:
             properties = {}
@@ -643,30 +977,31 @@ class Engine(TankBundle):
             properties["description"] = self.__currently_initializing_app.description
         
         if "icon" not in properties and self.__currently_initializing_app:
-            properties["icon"] = self.__currently_initializing_app.descriptor.get_icon_256()
+            properties["icon"] = self.__currently_initializing_app.descriptor.icon_256
 
-        # check for duplicates!
         if name in self.__commands:
-            # already something in the dict with this name
+            # Duplicate command name detected! Attempt to make commands unique by prepending the
+            # a prefix derived from information in the properties.
             existing_item = self.__commands[name]
-            if existing_item["properties"].get("app"):
-                # we know the app for the existing item.
-                # so prefix with app name
-                prefix = existing_item["properties"].get("app").instance_name
-                new_name_for_existing = "%s:%s" % (prefix, name)
+            command_prefix = _get_command_prefix(existing_item["properties"])
+            if command_prefix:
+                new_name_for_existing = "%s:%s" % (command_prefix, name)
                 self.__commands[new_name_for_existing] = existing_item
-                self.__commands[new_name_for_existing]["properties"]["prefix"] = prefix 
+                # Record the command prefix in the properties dictionary for future reference.
+                self.__commands[new_name_for_existing]["properties"]["prefix"] = command_prefix
                 del(self.__commands[name])
-                # add it to our list
+                # Record the original command name to make sure any additional commands
+                # registered with this name are treated as duplicates and fully prefixed.
                 self.__commands_that_need_prefixing.append(name)
                       
         if name in self.__commands_that_need_prefixing:
-            # try to append a prefix if possible
-            if properties.get("app"):
-                prefix = properties.get("app").instance_name
-                name = "%s:%s" % (prefix, name)
-                # also add a prefix key in the properties dict
-                properties["prefix"] = prefix
+            # At least one instance of this command name has already been detected.
+            # Resolve the duplicate command by application name and/or group name.
+            command_prefix = _get_command_prefix(properties)
+            if command_prefix:
+                name = "%s:%s" % (command_prefix, name)
+                # Record the command prefix in the properties dictionary for future reference.
+                properties["prefix"] = command_prefix
 
         # now define command wrappers to capture metrics logging
         # on command execution. The toolkit callback system supports
@@ -702,6 +1037,10 @@ class Engine(TankBundle):
             # run the actual payload callback
             return callback(*args, **kwargs)
 
+        self.log_debug(
+            "Registering command '%s' with options:\n%s" % (name, pprint.pformat(properties))
+        )
+
         self.__commands[name] = {
             "callback": callback_wrapper,
             "properties": properties,
@@ -710,14 +1049,14 @@ class Engine(TankBundle):
 
     def register_panel(self, callback, panel_name="main", properties=None):
         """
-        Similar to register_command, but instead of registering a menu item in the form of a
+        Similar to :meth:`register_command()`, but instead of registering a menu item in the form of a
         command, this method registers a UI panel. A register_panel call should
         be used in conjunction with a register_command call.
         
         Panels need to be registered if they should persist between DCC sessions (e.g. 
         for example 'saved layouts').
         
-        Just like with the register_command() method, panel registration should be executed 
+        Just like with the :meth:`register_command` method, panel registration should be executed
         from within the init phase of the app. Once a panel has been registered, it is possible
         for the engine to correctly restore panel UIs at startup and profile switches. 
         
@@ -725,7 +1064,7 @@ class Engine(TankBundle):
         a saved layout. Apps wanting to be able to take advantage of the persistence given by
         these saved layouts will need to call register_panel as part of their init_app phase.
         
-        In order to show or focus on a panel, use the show_panel() method instead.
+        In order to show or focus on a panel, use the :meth:`show_panel` method instead.
         
         :param callback: Callback to a factory method that creates the panel and returns a panel widget.
         :param panel_name: A string to distinguish this panel from other panels created by 
@@ -733,7 +1072,7 @@ class Engine(TankBundle):
         :param properties: Properties dictionary. Reserved for future use.
         :returns: A unique identifier that can be used to consistently identify the 
                   panel across sessions. This identifier should be used to identify the panel
-                  in all subsequent calls, e.g. for example show_panel().
+                  in all subsequent calls, e.g. for example :meth:`show_panel()`.
         """
         properties = properties or {}
         
@@ -771,10 +1110,13 @@ class Engine(TankBundle):
         method can introduce a deadlock if the main thread is waiting for a background thread
         and the background thread is invoking this method. Since the main thread is waiting
         for the background thread to finish, Qt's event loop won't be able to process the request
-        to execute in the main thread.
+        to execute in the main thread::
 
-        Note, this currently only works if Qt is available, otherwise it just
-        executes immediately on the current thread.
+            >>> from sgtk.platform.qt import QtGui
+            >>> engine.execute_in_main_thread(QtGui.QMessageBox.information, None, "Hello", "Hello from the main thread!")
+
+        .. note:: This currently only works if Qt is available, otherwise it just
+                  executes immediately on the current thread.
 
         :param func: function to call
         :param args: arguments to pass to the function
@@ -790,8 +1132,8 @@ class Engine(TankBundle):
         thread.  This call will return immediately and will not wait for the code to be
         executed in the main thread.
 
-        Note, this currently only works if Qt is available, otherwise it just
-        executes immediately on the current thread.
+        .. note:: This currently only works if Qt is available, otherwise it just
+                  executes immediately on the current thread.
 
         :param func: function to call
         :param args: arguments to pass to the function
@@ -834,28 +1176,31 @@ class Engine(TankBundle):
         Finds all the commands that match the given selectors.
 
         Command selector structures are typically found in engine configurations
-        and are typically defined on the following form in yaml:
+        and are typically defined on the following form in yaml::
 
-        menu_favourites:
-        - {app_instance: tk-multi-workfiles, name: Shotgun File Manager...}
-        - {app_instance: tk-multi-snapshot,  name: Snapshot...}
-        - {app_instance: tk-multi-workfiles, name: Shotgun Save As...}
-        - {app_instance: tk-multi-publish,   name: Publish...}
+            menu_favourites:
+            - {app_instance: tk-multi-workfiles, name: Shotgun File Manager...}
+            - {app_instance: tk-multi-snapshot,  name: Snapshot...}
+            - {app_instance: tk-multi-workfiles, name: Shotgun Save As...}
+            - {app_instance: tk-multi-publish,   name: Publish...}
 
         Note that selectors that do not match a command will output a warning.
 
         :param command_selectors: A list of command selectors, with each
-                                  selector having the following structure:
-                                    {
-                                      name: command-name,
-                                      app_instance: instance-name
-                                    }
-                                  An empty name ('') will select all the
+                                  selector having the following structure::
+
+                                      {
+                                        name: command-name,
+                                        app_instance: instance-name
+                                      }
+
+                                  An empty name ("") will select all the
                                   commands of the given instance-name.
 
         :returns:                 A list of tuples for all commands that match
-                                  the selectors. Each tuple has the format:
-                                    (instance-name, command-name, callback)
+                                  the selectors. Each tuple has the format::
+
+                                      (instance-name, command-name, callback)
         """
         # return a dictionary grouping all the commands by instance name
         commands_by_instance = {}
@@ -896,64 +1241,130 @@ class Engine(TankBundle):
 
     def log_debug(self, msg):
         """
-        Debug logging.
-        Implemented in deriving class.
+        Logs a debug message.
+
+        .. deprecated:: 0.18
+            Use :meth:`Engine.logger` instead.
+
+        .. note:: Toolkit will probe for this method and use it to determine if
+                  the current engine supports the new :meth:`Engine.logger` based logging
+                  or not. If you are developing an engine and want to upgrade it to
+                  use the new logging capabilities, you should remove the
+                  implementation of ``log_debug|error|info|...()`` methods and
+                  instead sublcass :meth:`Engine._emit_log_message`.
+
+        :param msg: Message to log.
         """
-        pass
+        if not self.__has_018_logging_support() and self.__log_handler.inside_dispatch:
+            # special case: We are in legacy mode and all log messages are
+            # dispatched to the log_xxx methods because this engine does not have an
+            # _emit_log_message implementation. This is fine because typically old
+            # engine implementations subclass the log_xxx class, meaning that this call
+            # is never run, but instead the subclassed code in run. If however, this
+            # could *would* run in that case for whatever reason (either it wasn't
+            # subclassed or the subclassed code calls the baseclass), we need to be
+            # careful not to end up in an infinite loop. Therefore, the log handler
+            # sets a flag to indicate that this code is being called from the logger
+            # and not from somewhere else. In that case we just exit early to avoid
+            # the infinite recursion
+            return
+        self.logger.debug(msg)
     
     def log_info(self, msg):
         """
-        Info logging.
-        Implemented in deriving class.
+        Logs an info message.
+
+        .. deprecated:: 0.18
+            Use :meth:`Engine.logger` instead.
+
+        :param msg: Message to log.
         """
-        pass
+        if not self.__has_018_logging_support() and self.__log_handler.inside_dispatch:
+            # special case: We are in legacy mode and all log messages are
+            # dispatched to the log_xxx methods because this engine does not have an
+            # _emit_log_message implementation. This is fine because typically old
+            # engine implementations subclass the log_xxx class, meaning that this call
+            # is never run, but instead the subclassed code in run. If however, this
+            # could *would* run in that case for whatever reason (either it wasn't
+            # subclassed or the subclassed code calls the baseclass), we need to be
+            # careful not to end up in an infinite loop. Therefore, the log handler
+            # sets a flag to indicate that this code is being called from the logger
+            # and not from somewhere else. In that case we just exit early to avoid
+            # the infinite recursion
+            return
+        self.logger.info(msg)
         
     def log_warning(self, msg):
         """
-        Warning logging.
-        Implemented in deriving class.
+        Logs an warning message.
+
+        .. deprecated:: 0.18
+            Use :meth:`Engine.logger` instead.
+
+        :param msg: Message to log.
         """
-        pass
+        if not self.__has_018_logging_support() and self.__log_handler.inside_dispatch:
+            # special case: We are in legacy mode and all log messages are
+            # dispatched to the log_xxx methods because this engine does not have an
+            # _emit_log_message implementation. This is fine because typically old
+            # engine implementations subclass the log_xxx class, meaning that this call
+            # is never run, but instead the subclassed code in run. If however, this
+            # could *would* run in that case for whatever reason (either it wasn't
+            # subclassed or the subclassed code calls the baseclass), we need to be
+            # careful not to end up in an infinite loop. Therefore, the log handler
+            # sets a flag to indicate that this code is being called from the logger
+            # and not from somewhere else. In that case we just exit early to avoid
+            # the infinite recursion
+            return
+        self.logger.warning(msg)
     
     def log_error(self, msg):
         """
-        Debug logging.
-        Implemented in deriving class - however we provide a basic implementation here.
-        """        
-        # fall back to std out error reporting if deriving class does not implement this.
-        sys.stderr.write("Shotgun Error: %s\n" % msg)
-    
+        Logs an error message.
+
+        .. deprecated:: 0.18
+            Use :meth:`Engine.logger` instead.
+
+        :param msg: Message to log.
+        """
+        if not self.__has_018_logging_support() and self.__log_handler.inside_dispatch:
+            # special case: We are in legacy mode and all log messages are
+            # dispatched to the log_xxx methods because this engine does not have an
+            # _emit_log_message implementation. This is fine because typically old
+            # engine implementations subclass the log_xxx class, meaning that this call
+            # is never run, but instead the subclassed code in run. If however, this
+            # could *would* run in that case for whatever reason (either it wasn't
+            # subclassed or the subclassed code calls the baseclass), we need to be
+            # careful not to end up in an infinite loop. Therefore, the log handler
+            # sets a flag to indicate that this code is being called from the logger
+            # and not from somewhere else. In that case we just exit early to avoid
+            # the infinite recursion
+            return
+        self.logger.error(msg)
+
     def log_exception(self, msg):
         """
-        Helper method. Typically not overridden by deriving classes.
-        This method is called inside an except clause and it creates an formatted error message
-        which is logged as an error.
+        Logs an exception message.
+
+        .. deprecated:: 0.18
+            Use :meth:`Engine.logger` instead.
+
+        :param msg: Message to log.
         """
-        (exc_type, exc_value, exc_traceback) = sys.exc_info()
-        
-        if exc_traceback is None:
-            # we are not inside an exception handler right now.
-            # someone is calling log_exception from the running code.
-            # in this case, present the current stack frame
-            # and a sensible message
-            stack_frame = traceback.extract_stack()
-            traceback_str = "".join(traceback.format_list(stack_frame))
-            exc_value = "No error details available."
-        
-        else:    
-            traceback_str = "".join( traceback.format_tb(exc_traceback))
-        
-        
-        message = []
-        message.append(msg)
-        message.append("")
-        message.append("%s" % exc_value)
-        message.append("The current environment is %s." % self.__env.name)
-        message.append("")
-        message.append("Code Traceback:")
-        message.extend(traceback_str.split("\n"))
-        
-        self.log_error("\n".join(message))
+        if not self.__has_018_logging_support() and self.__log_handler.inside_dispatch:
+            # special case: We are in legacy mode and all log messages are
+            # dispatched to the log_xxx methods because this engine does not have an
+            # _emit_log_message implementation. This is fine because typically old
+            # engine implementations subclass the log_xxx class, meaning that this call
+            # is never run, but instead the subclassed code in run. If however, this
+            # could *would* run in that case for whatever reason (either it wasn't
+            # subclassed or the subclassed code calls the baseclass), we need to be
+            # careful not to end up in an infinite loop. Therefore, the log handler
+            # sets a flag to indicate that this code is being called from the logger
+            # and not from somewhere else. In that case we just exit early to avoid
+            # the infinite recursion
+            return
+        self.logger.exception(msg)
 
 
     ##########################################################################################
@@ -961,7 +1372,10 @@ class Engine(TankBundle):
 
     def get_debug_tracked_qt_widgets(self):
         """
-        Print debug info about created Qt dialogs and widgets
+        Returns a dictionary of debug info about created Qt dialogs and widgets.
+        
+        The keys of the dictionary are the string representation of a widget and the 
+        corresponding value is a reference to that widget.
         """
         return self.__qt_debug_info                
 
@@ -975,12 +1389,160 @@ class Engine(TankBundle):
     ##########################################################################################
     # private and protected methods
 
+    def _emit_event(self, event):
+        """
+        Called by the engine whenever an event is to be emitted to child
+        apps of this engine.
+
+        .. note:: Events will be emitted and child apps notified immediately.
+
+        .. warning:: Some event types might be triggered quite frequently. Apps
+                     that react to events should do so in a way that is aware of
+                     the potential performance impact of their actions.
+
+        :param event: The event object that will be emitted.
+        :type event:  :class:`~sgtk.platform.events.EngineEvent`
+        """
+        if not isinstance(event, events.EngineEvent):
+            raise TankEngineEventError(
+                "Given object does not derive from EngineEvent: %r" % event
+            )
+
+        self.log_debug("Emitting event: %r" % event)
+
+        for app_instance_name, app in self.__applications.iteritems():
+            self.log_debug("Sending event to %r..." % app)
+
+            # We send the event to the generic engine event handler
+            # as well as to the type-specific handler when we have
+            # one. This mirror's Qt's event system's structure.
+            app.event_engine(event)
+
+            if isinstance(event, events.FileOpenEvent):
+                app.event_file_open(event)
+            elif isinstance(event, events.FileCloseEvent):
+                app.event_file_close(event)
+
+    def _emit_log_message(self, handler, record):
+        """
+        Called by the engine whenever a new log message is available.
+        All log messages from the toolkit logging namespace will be passed to this method.
+
+        .. note:: To implement logging in your engine implementation, subclass
+                  this method and display the record in a suitable way - typically
+                  this means sending it to a built-in DCC console. In addition to this,
+                  ensure that your engine implementation *does not* subclass
+                  the (old) :meth:`Engine.log_debug`, :meth:`Engine.log_info` family
+                  of logging methods.
+
+                  For a consistent output, use the formatter that is associated with
+                  the log handler that is passed in. A basic implementation of
+                  this method could look like this::
+
+                      # call out to handler to format message in a standard way
+                      msg_str = handler.format(record)
+
+                      # display message
+                      print msg_str
+
+        .. warning:: This method may be executing called from worker threads. In DCC
+                     environments, where it is important that the console/logging output
+                     always happens in the main thread, it is recommended that you
+                     use the :meth:`async_execute_in_main_thread` to ensure that your
+                     logging code is writing to the DCC console in the main thread.
+
+        :param handler: Log handler that this message was dispatched from
+        :type handler: :class:`~python.logging.LogHandler`
+        :param record: Std python logging record
+        :type record: :class:`~python.logging.LogRecord`
+        """
+        # default implementation doesn't do anything.
+
+    def _ensure_core_fonts_loaded(self):
+        """
+        Loads the Shotgun approved fonts that are bundled with tk-core.
+
+        This method ensures that the Shotgun approved fonts bundled with core
+        are loaded into Qt's font database. This allows them to be used by apps
+        for a consistent look and feel.
+
+        If a QApplication exists during engine initialization, it is not
+        necessary to call this method. Similarly, subclasses that make use of
+        core's bundled dark look and feel will have the bundled fonts loaded
+        automatically.
+
+        This method can/should be called by subclasses that meet the following
+        criteria:
+
+         * Create their own ``QApplication`` instance after engine init
+         * Do not use the bundled dark look and feel.
+         * Have overridden ``Engine._create_dialog()``.
+
+        """
+
+        # Note, the fonts are packed within core's resource directory with a
+        # parent directory that is the name of the font. The directory contains
+        # all the bundled font files. Example:
+        #
+        #       ``tank/platform/qt/fonts/OpenSans/OpenSans-*.ttf``
+
+        if not self.has_ui:
+            return
+
+        from sgtk.platform.qt import QtGui
+
+        # if the fonts have been loaded, no need to do anything else
+        if self.__fonts_loaded:
+            return
+
+        if not QtGui:
+            # it is possible that QtGui is not available (test suite).
+            return
+
+        if not QtGui.QApplication.instance():
+            # there is a QApplication, so we can load fonts.
+            return
+
+        # fonts dir in the core resources dir
+        fonts_parent_dir = self.__get_platform_resource_path("fonts")
+
+        # in the parent directly, get all the font-specific directories
+        for font_dir_name in os.listdir(fonts_parent_dir):
+
+            # the specific font directory
+            font_dir = os.path.join(fonts_parent_dir, font_dir_name)
+
+            if os.path.isdir(font_dir):
+
+                # iterate over the font files and attempt to load them
+                for font_file_name in os.listdir(font_dir):
+
+                    # only process actual font files. It appears as though .ttf
+                    # is the most common extension for use on win/mac/linux so
+                    # for now limit to those files.
+                    if not font_file_name.endswith(".ttf"):
+                        continue
+
+                    # the actual font file
+                    font_file = os.path.join(font_dir, font_file_name)
+
+                    # load the font into the font db
+                    if QtGui.QFontDatabase.addApplicationFont(font_file) == -1:
+                        self.log_warning(
+                            "Unable to load font file: %s" % (font_file,))
+                    else:
+                        self.log_debug("Loaded font file: %s" % (font_file,))
+
+        self.__fonts_loaded = True
+
     def _get_dialog_parent(self):
         """
-        Get the QWidget parent for all dialogs created through show_dialog & show_modal.
+        Get the QWidget parent for all dialogs created through :meth:`show_dialog` :meth:`show_modal`.
         
         Can be overriden in derived classes to return the QWidget to be used as the parent 
-        for all TankQDialog's 
+        for all TankQDialog's.
+
+        :return: QT Parent window (:class:`PySide.QtGui.QWidget`)
         """
         # By default, this will return the QApplication's active window:
         from .qt import QtGui
@@ -990,14 +1552,20 @@ class Engine(TankBundle):
         """
         Create a TankQDialog with the specified widget embedded. This also connects to the 
         dialogs dialog_closed event so that it can clean up when the dialog is closed.
-        
+
+        .. note:: For more information, see the documentation for :meth:`show_dialog()`.
+
         :param title: The title of the window
         :param bundle: The app, engine or framework object that is associated with this window
         :param widget: A QWidget instance to be embedded in the newly created dialog.
-        
+        :type widget: :class:`PySide.QtGui.QWidget`
         """
         from .qt import tankqdialog
-        
+
+        # TankQDialog uses the bundled core font. Make sure they are loaded
+        # since know we have a QApplication at this point.
+        self._ensure_core_fonts_loaded()
+
         # create a dialog to put it inside
         dialog = tankqdialog.TankQDialog(title, bundle, widget, parent)
 
@@ -1009,21 +1577,28 @@ class Engine(TankBundle):
         
         # keep track of some info for debugging object lifetime
         self.__debug_track_qt_widget(dialog)
-        
+
         return dialog
 
     def _create_widget(self, widget_class, *args, **kwargs):
         """
         Create an instance of the specified widget_class.  This wraps the widget_class so that 
         the TankQDialog it is embedded in can connect to it more easily in order to handle the 
-        close event
-        
-        :param widget_class: The class of the UI to be constructed. This must derive from QWidget.    
+        close event.
+
+        When overriding in a derived engine, be sure to call the base implementations of
+        :meth:`_create_widget()` and :meth:`_create_dialog()` to ensure that all
+        dialogs and widgets are tracked efficiently and safely.
+
+        .. note:: For more information, see the documentation for :meth:`show_dialog()`.
+
+        :param widget_class: The class of the UI to be constructed. This must derive from QWidget.
+        :type widget_class: :class:`PySide.QtGui.QWidget`
             
         Additional parameters specified will be passed through to the widget_class constructor.
         """
         from .qt import tankqdialog
-                
+
         # construct the widget object
         derived_widget_class = tankqdialog.TankQDialog.wrap_widget_class(widget_class)
         widget = derived_widget_class(*args, **kwargs)
@@ -1037,21 +1612,25 @@ class Engine(TankBundle):
         """
         Convenience method to create an sgtk TankQDialog with a widget instantiated from 
         widget_class embedded in the main section.
-        
+
+        .. note:: For more information, see the documentation for :meth:`show_dialog()`.
+
         :param title: The title of the window
         :param bundle: The app, engine or framework object that is associated with this window
-        :param widget_class: The class of the UI to be constructed. This must derive from QWidget.    
+        :param widget_class: The class of the UI to be constructed. This must derive from QWidget.
+        :type widget_class: :class:`PySide.QtGui.QWidget`
             
         Additional parameters specified will be passed through to the widget_class constructor.
         """
+
         # get the parent for the dialog:
         parent = self._get_dialog_parent()
         
         # create the widget:
         widget = self._create_widget(widget_class, *args, **kwargs)
-        
+
         # apply style sheet
-        self._apply_external_styleshet(bundle, widget)        
+        self._apply_external_stylesheet(bundle, widget)
         
         # create the dialog:
         dialog = self._create_dialog(title, bundle, widget, parent)
@@ -1062,7 +1641,8 @@ class Engine(TankBundle):
         Called when a dialog created by this engine is closed.
         
         :param dlg: The dialog being closed
-        
+        :type dlg: :class:`PySide.QtGui.QWidget`
+
         Derived implementations of this method should be sure to call
         the base implementation
         """
@@ -1132,11 +1712,48 @@ class Engine(TankBundle):
         """
         Shows a non-modal dialog window in a way suitable for this engine. 
         The engine will attempt to parent the dialog nicely to the host application.
-        
-        :param title: The title of the window
+        The dialog will be created with a standard Toolkit window title bar where
+        the title will be displayed.
+
+        .. note:: In some cases, it is necessary to hide the standard Toolkit title
+                  bar. You can do this by adding a property to the widget class you are
+                  displaying::
+
+                        @property
+                        def hide_tk_title_bar(self):
+                            "Tell the system to not show the standard toolkit toolbar"
+                            return True
+
+        **Notes for engine developers**
+
+        Qt dialog & widget management can be quite tricky in different engines/applications.
+        Because of this, Sgtk provides a few overridable methods with the idea being that when
+        developing a new engine, you only need to override the minimum amount necessary.
+
+        Making use of these methods in the correct way allows the base Engine class to manage the
+        lifetime of the dialogs and widgets efficiently and safely without you having to worry about it.
+
+        The methods available are listed here in the hierarchy in which they are called::
+
+            show_dialog()/show_modal()
+                _create_dialog_with_widget()
+                    _get_dialog_parent()
+                    _create_widget()
+                    _create_dialog()
+
+        For example, if you just need to make sure that all dialogs use a specific parent widget
+        then you only need to override _get_dialog_parent() (e.g. the tk-maya engine).
+        However, if you need to implement a two-stage creation then you may need to re-implement
+        show_dialog() and show_modal() to call _create_widget() and _create_dialog() directly rather
+        than using the helper method _create_dialog_with_widget() (e.g. the tk-3dsmax engine).
+        Finally, if the application you are writing an engine for is Qt based then you may not need
+        to override any of these methods (e.g. the tk-nuke engine).
+
+        :param title: The title of the window. This will appear in the Toolkit title bar.
         :param bundle: The app, engine or framework object that is associated with this window
         :param widget_class: The class of the UI to be constructed. This must derive from QWidget.
-        
+        :type widget_class: :class:`PySide.QtGui.QWidget`
+
         Additional parameters specified will be passed through to the widget_class constructor.
         
         :returns: the created widget_class instance
@@ -1160,11 +1777,23 @@ class Engine(TankBundle):
         Shows a modal dialog window in a way suitable for this engine. The engine will attempt to
         integrate it as seamlessly as possible into the host application. This call is blocking 
         until the user closes the dialog.
+        The dialog will be created with a standard Toolkit window title bar where
+        the title will be displayed.
+
+        .. note:: In some cases, it is necessary to hide the standard Toolkit title
+                  bar. You can do this by adding a property to the widget class you are
+                  displaying::
+
+                        @property
+                        def hide_tk_title_bar(self):
+                            "Tell the system to not show the standard toolkit toolbar"
+                            return True
         
         :param title: The title of the window
         :param bundle: The app, engine or framework object that is associated with this window
         :param widget_class: The class of the UI to be constructed. This must derive from QWidget.
-        
+        :type widget_class: :class:`PySide.QtGui.QWidget`
+
         Additional parameters specified will be passed through to the widget_class constructor.
 
         :returns: (a standard QT dialog status return code, the created widget_class instance)
@@ -1192,13 +1821,26 @@ class Engine(TankBundle):
         
         If the engine does not specifically implement panel support, the window will 
         be shown as a modeless dialog instead and the call is equivalent to 
-        calling show_dialog().
-        
+        calling :meth:`show_dialog()`.
+
+        The dialog will be created with a standard Toolkit window title bar where
+        the title will be displayed.
+
+        .. note:: In some cases, it is necessary to hide the standard Toolkit title
+                  bar. You can do this by adding a property to the widget class you are
+                  displaying::
+
+                        @property
+                        def hide_tk_title_bar(self):
+                            "Tell the system to not show the standard toolkit toolbar"
+                            return True
+
         :param panel_id: Unique identifier for the panel, as obtained by register_panel().
         :param title: The title of the panel
         :param bundle: The app, engine or framework object that is associated with this window
         :param widget_class: The class of the UI to be constructed. This must derive from QWidget.
-        
+        :type widget_class: :class:`PySide.QtGui.QWidget`
+
         Additional parameters specified will be passed through to the widget_class constructor.
         
         :returns: the created widget_class instance
@@ -1225,7 +1867,7 @@ class Engine(TankBundle):
             processed_style_sheet = processed_style_sheet.replace("{{%s}}" % token, value)
         return processed_style_sheet
     
-    def _apply_external_styleshet(self, bundle, widget):
+    def _apply_external_stylesheet(self, bundle, widget):
         """
         Apply an std external stylesheet, associated with a bundle, to a widget.
         
@@ -1259,32 +1901,55 @@ class Engine(TankBundle):
             # The file didn't exist, so nothing to do.
             pass
 
+    # Here we add backward compatibility for a typo that existed in core for a
+    # while. The method was found to be used in some existing Engine subclasses
+    # so we need this.
+    _apply_external_styleshet = _apply_external_stylesheet
+
     def _define_qt_base(self):
         """
-        This will be called at initialisation time and will allow 
+        This will be called at initialisation time and will allow
         a user to control various aspects of how QT is being used
         by Tank. The method should return a dictionary with a number
-        of specific keys, outlined below. 
-        
+        of specific keys, outlined below.
+
         * qt_core - the QtCore module to use
         * qt_gui - the QtGui module to use
+        * wrapper - the Qt wrapper root module, e.g. PySide
         * dialog_base - base class for to use for Tank's dialog factory
-        
+
         :returns: dict
         """
-        # default to None
         base = {"qt_core": None, "qt_gui": None, "dialog_base": None}
         try:
-            from PySide import QtCore, QtGui
-            base["qt_core"] = QtCore
-            base["qt_gui"] = QtGui
-            base["dialog_base"] = QtGui.QDialog
+            importer = QtImporter()
+            base["qt_core"] = importer.QtCore
+            base["qt_gui"] = importer.QtGui
+            if importer.QtGui:
+                base["dialog_base"] = importer.QtGui.QDialog
+            else:
+                base["dialog_base"] = None
+            base["wrapper"] = importer.binding
         except:
-            self.log_debug("Default engine QT definition failed to find QT. "
-                           "This may need to be subclassed.")
-        
+
+            self.log_exception("Default engine QT definition failed to find QT. "
+                               "This may need to be subclassed.")
+
         return base
-        
+
+    def __define_qt5_base(self):
+        """
+        This will be called at initialization to discover every PySide 2 modules. It should provide
+        every Qt modules available as well as two extra attributes, ``__name__`` and
+        ``__version__``, which refer to the name of the binding and it's version, e.g.
+        PySide2 and 2.0.1.
+
+        .. note:: PyQt5 not supported since it runs only on Python 3.
+
+        :returns: A dictionary with all the modules, __version__ and __name__.
+        """
+        return QtImporter(interface_version_requested=QtImporter.QT5).base
+
     def _initialize_dark_look_and_feel(self):
         """
         Initializes a standard toolkit look and feel using a combination of
@@ -1307,9 +1972,11 @@ class Engine(TankBundle):
         has been instantiated.
         """
         from .qt import QtGui, QtCore
-        
-        this_folder = os.path.abspath(os.path.dirname(__file__))
-        
+
+        # Since know we have a QApplication at this point, go ahead and make
+        # sure the bundled fonts are loaded
+        self._ensure_core_fonts_loaded()
+
         # initialize our style
         QtGui.QApplication.setStyle("plastique")
         
@@ -1331,9 +1998,9 @@ class Engine(TankBundle):
 
         try:
             # open palette file
-            palette_file = os.path.join(this_folder, "qt", "dark_palette.qpalette")
+            palette_file = self.__get_platform_resource_path("dark_palette.qpalette")
             fh = QtCore.QFile(palette_file)
-            fh.open(QtCore.QIODevice.ReadOnly);
+            fh.open(QtCore.QIODevice.ReadOnly)
             file_in = QtCore.QDataStream(fh)
     
             # deserialize the palette
@@ -1362,7 +2029,7 @@ class Engine(TankBundle):
             
         try:
             # read css
-            css_file = os.path.join(this_folder, "qt", "dark_palette.css")
+            css_file = self.__get_platform_resource_path("dark_palette.css")
             f = open(css_file)
             css_data = f.read()
             f.close()
@@ -1373,8 +2040,7 @@ class Engine(TankBundle):
         except Exception, e:
             self.log_error("The standard toolkit dark stylesheet could not be set up! The look and feel of your "
                            "toolkit apps may be sub standard. Please contact support. Details: %s" % e)
-        
-    
+
     def _get_standard_qt_stylesheet(self):
         """
         **********************************************************************
@@ -1395,8 +2061,7 @@ class Engine(TankBundle):
         
         :returns: The style sheet data, as a string.
         """
-        this_folder = os.path.abspath(os.path.dirname(__file__))
-        css_file = os.path.join(this_folder, "qt", "toolkit_std_dark.css")
+        css_file = self.__get_platform_resource_path("toolkit_std_dark.css")
         f = open(css_file)
         css_data = f.read()
         f.close()
@@ -1562,7 +2227,7 @@ class Engine(TankBundle):
             # Load settings for app - skip over the ones that don't validate
             try:
                 # get the app settings data and validate it.
-                app_schema = descriptor.get_configuration_schema()
+                app_schema = descriptor.configuration_schema
                 app_settings = self.__env.get_app_settings(
                     self.__engine_instance_name,
                     app_instance_name,
@@ -1578,7 +2243,7 @@ class Engine(TankBundle):
                 validation.validate_platform(descriptor)
                                 
                 # for multi engine apps, make sure our engine is supported
-                supported_engines = descriptor.get_supported_engines()
+                supported_engines = descriptor.supported_engines
                 if supported_engines and self.name not in supported_engines:
                     raise TankError("The app could not be loaded since it only supports "
                                     "the following engines: %s. Your current engine has been "
@@ -1663,7 +2328,7 @@ class Engine(TankBundle):
                         ))
                         self.__applications[app_instance_name] = app
                         continue
-            
+
             # load the app
             try:
                 # now get the app location and resolve it into a version object
@@ -1696,14 +2361,6 @@ class Engine(TankBundle):
                 # note! Apps are keyed by their instance name, meaning that we 
                 # could theoretically have multiple instances of the same app.
                 self.__applications[app_instance_name] = app
-                
-            # lastly check if there are any compatibility warnings
-            messages = black_list.compare_against_black_list(descriptor)
-            if len(messages) > 0:
-                self.log_warning("Compatibility warnings were issued for %s:" % descriptor)
-                for msg in messages:
-                    self.log_warning("")
-                    self.log_warning(msg)
 
             # For the sake of potetial context changes, apps and commands are cached
             # into a persistent pool such that they can be reused at some later time.
@@ -1770,13 +2427,29 @@ class Engine(TankBundle):
         running apps are registered via a dev descriptor.
         """
         for app in self.__applications.values():
-            if isinstance(app.descriptor, TankDevDescriptor):
+            if app.descriptor.is_dev():
                 self.log_debug("App %s is registered via a dev descriptor. Will add a reload "
-                               "button to the actions listings."  % app)
-                from . import restart 
-                self.register_command("Reload and Restart", restart, {"short_name": "restart", "type": "context_menu"})                
+                               "button to the actions listings." % app)
+                from . import restart
+                self.register_command(
+                    "Reload and Restart",
+                    restart,
+                    {"short_name": "restart",
+                     "icon": self.__get_platform_resource_path("reload_256.png"),
+                     "type": "context_menu"}
+                )
                 # only need one reload button, so don't keep iterating :)
                 break
+
+    def __get_platform_resource_path(self, filename):
+        """
+        Returns the full path to the given platform resource file or folder.
+        Resources reside in the core/platform/qt folder.
+
+        :return: full path
+        """
+        this_folder = os.path.abspath(os.path.dirname(__file__))
+        return os.path.join(this_folder, "qt", filename)
 
     def __run_post_engine_inits(self):
         """
@@ -1801,13 +2474,17 @@ g_current_engine = None
 def set_current_engine(eng):
     """
     Sets the current engine
+
+    :param eng: :class:`Engine` instance to set as current.
     """
     global g_current_engine
     g_current_engine = eng
 
 def current_engine():
     """
-    Returns the current engine
+    Returns the currently active engine.
+
+    :returns: :class:`Engine` instance or None if no engine is running.
     """
     global g_current_engine
     return g_current_engine
@@ -1817,10 +2494,28 @@ def get_engine_path(engine_name, tk, context):
     """
     Returns the path to the engine corresponding to the given engine name or
     None if the engine could not be found.
+
+    Similar to :meth:`start_engine`, but instead of starting an engine, this method
+    returns the path to a suitable engine. This helper method is sometimes useful
+    when initializing engines for applications that do not have a built in python interpreter.
+
+    Example::
+
+        >>> import sgtk
+        >>> tk = sgtk.sgtk_from_path("/studio/project_root")
+        >>> ctx = tk.context_empty()
+        >>> sgtk.platform.get_engine_path('tk-maya', tk, ctx)
+        /studio/sgtk/install/engines/app_store/tk-maya/v0.1.0
+
+
+    :param engine_name: Name of the engine to launch, e.g. tk-maya
+    :param tk: :class:`~sgtk.Sgtk` instance to associate the engine with
+    :param context: :class:`~sgtk.Context` object of the context to launch the engine for.
+    :returns: Path to where the engine code is located on disk.
     """
     # get environment and engine location
     try:
-        (env, engine_descriptor) = _get_env_and_descriptor_for_engine(engine_name, tk, context)
+        (env, engine_descriptor) = get_env_and_descriptor_for_engine(engine_name, tk, context)
     except TankEngineInitError:
         return None
 
@@ -1832,10 +2527,21 @@ def get_engine_path(engine_name, tk, context):
 def start_engine(engine_name, tk, context):
     """
     Creates an engine and makes it the current engine.
-    Returns the newly created engine object.
+    Returns the newly created engine object. Example::
 
-    Raises TankEngineInitError if an engine could not be started
-    for the passed context.
+        >>> import sgtk
+        >>> tk = sgtk.sgtk_from_path("/studio/project_root")
+        >>> ctx = tk.context_empty()
+        >>> engine = sgtk.platform.start_engine('tk-maya', tk, ctx)
+        >>> engine
+        <Sgtk Engine 0x10451b690: tk-maya, env: shotgun>
+
+    :param engine_name: Name of the engine to launch, e.g. tk-maya
+    :param tk: :class:`~sgtk.Sgtk` instance to associate the engine with
+    :param context: :class:`~sgtk.Context` object of the context to launch the engine for.
+    :returns: :class:`Engine` instance
+    :raises: :class:`TankEngineInitError` if an engine could not be started
+             for the passed context.
     """
     return _start_engine(engine_name, tk, None, context)
 
@@ -1846,6 +2552,7 @@ def _restart_engine(new_context):
 
     :param new_context: Context for the new engine. If None, previous context will
         be reused.
+    :type new_context: :class:`~sgtk.Context`
     """
     engine = current_engine()
     try:
@@ -1949,35 +2656,76 @@ def _start_engine(engine_name, tk, old_context, new_context):
 
     :param engine_name: Name of the engine to start.
     :param tk: Toolkit instance.
-    :param old_context: Context before the engine starts. Can be None.
-    :param new_context: Context of the new engine.
+    :type tk: :class:`~sgtk.Sgtk`
+    :param old_context: Context before the context change.
+    :type old_context: :class:`~sgtk.Context`
+    :param new_context: Context after the context change.
+    :type new_context: :class:`~sgtk.Context`
 
     :returns: A new sgtk.platform.Engine object.
     """
-    # first ensure that an engine is not currently running
-    if current_engine():
-        raise TankError("An engine (%s) is already running! Before you can start a new engine, "
-                        "please shut down the previous one using the command "
-                        "tank.platform.current_engine().destroy()." % current_engine())
+    try:
+        # first ensure that an engine is not currently running
+        if current_engine():
+            raise TankError("An engine (%s) is already running! Before you can start a new engine, "
+                            "please shut down the previous one using the command "
+                            "tank.platform.current_engine().destroy()." % current_engine())
 
-    # get environment and engine location
-    (env, engine_descriptor) = _get_env_and_descriptor_for_engine(engine_name, tk, new_context)
+        # begin writing log to disk, associated with the engine
+        # only do this if a logger hasn't been previously set up.
+        if LogManager().base_file_handler is None:
+            LogManager().initialize_base_file_handler(engine_name)
 
-    # make sure it exists locally
-    if not engine_descriptor.exists_local():
-        raise TankEngineInitError("Cannot start engine! %s does not exist on disk" % engine_descriptor)
+        # get environment and engine location
+        try:
+            (env, engine_descriptor) = get_env_and_descriptor_for_engine(engine_name, tk, new_context)
+        except TankEngineInitError:
+            # If we failed using the typical pick_environment approach, then we
+            # need to check and see if this is the Shotgun engine. If it is, then
+            # we can also try the legacy engine start method, which will make use
+            # of shotgun_xxx.yml environment files if they exist in the config.
+            if engine_name == constants.SHOTGUN_ENGINE_NAME:
+                # If the new context has an associated entity, we get the type from
+                # that. If it doesn't, then we can check to see if it's a project
+                # context. If neither is the case, meaning we have an empty context,
+                # then we re-raise.
+                if new_context.entity is not None:
+                    entity_type = new_context.entity["type"]
+                elif new_context.project is not None:
+                    entity_type = "Project"
+                else:
+                    # Empty context, in which case we know the start_shotgun_engine
+                    # won't do what we need.
+                    raise
 
-    # get path to engine code
-    engine_path = engine_descriptor.get_path()
-    plugin_file = os.path.join(engine_path, constants.ENGINE_FILE)
-    class_obj = loader.load_plugin(plugin_file, Engine)
+                core_logger.debug("Starting Shotgun engine in legacy mode...")
+                return start_shotgun_engine(tk, entity_type, new_context)
+            # If this isn't the Shotgun engine or we haven't yet returned, then
+            # we just re-raise.
+            raise
 
-    # Notify the context change and start the engine.
-    with _CoreContextChangeHookGuard(tk, old_context, new_context):
-        # Instantiate the engine
-        engine = class_obj(tk, new_context, engine_name, env)
-        # register this engine as the current engine
-        set_current_engine(engine)
+        # make sure it exists locally
+        if not engine_descriptor.exists_local():
+            raise TankEngineInitError("Cannot start engine! %s does not exist on disk" % engine_descriptor)
+
+        # get path to engine code
+        engine_path = engine_descriptor.get_path()
+        plugin_file = os.path.join(engine_path, constants.ENGINE_FILE)
+        class_obj = load_plugin(plugin_file, Engine)
+
+        # Notify the context change and start the engine.
+        with _CoreContextChangeHookGuard(tk, old_context, new_context):
+            # Instantiate the engine
+            engine = class_obj(tk, new_context, engine_name, env)
+            # register this engine as the current engine
+            set_current_engine(engine)
+
+    except:
+        # trap and log the exception and let it bubble in
+        # unchanged form
+        core_logger.exception("Exception raised in start_engine.")
+        raise
+
     return engine
 
 
@@ -1986,10 +2734,10 @@ def find_app_settings(engine_name, app_name, tk, context, engine_instance_name=N
     Utility method to find the settings for an app in an engine in the
     environment determined for the context by pick environment hook.
     
-    :param engine_name: system name of the engine to look for
-    :param app_name: system name of the app to look for
-    :param tk: tank instance
-    :param context: context to use when picking environment
+    :param engine_name: system name of the engine to look for, e.g tk-maya
+    :param app_name: system name of the app to look for, e.g. tk-multi-publish
+    :param tk: :class:`~sgtk.Sgtk` instance
+    :param context: :class:`~sgtk.Context` object to use when picking environment
     :param engine_instance_name: The instance name of the engine to look for.
     
     :returns: list of dictionaries containing the engine name, 
@@ -2006,7 +2754,7 @@ def find_app_settings(engine_name, app_name, tk, context, engine_instance_name=N
     # now find all engines whose names match the engine_name:
     for eng in env.get_engines():
         eng_desc = env.get_engine_descriptor(eng)
-        eng_sys_name = eng_desc.get_system_name()
+        eng_sys_name = eng_desc.system_name
 
         # Make sure that we get the right engine by comparing engine
         # name and instance name, if provided.
@@ -2018,13 +2766,13 @@ def find_app_settings(engine_name, app_name, tk, context, engine_instance_name=N
         # ok, found engine so look for app:
         for app in env.get_apps(eng):
             app_desc = env.get_app_descriptor(eng, app)
-            if app_desc.get_system_name() != app_name:
+            if app_desc.system_name != app_name:
                 continue
             
             # ok, found an app - lets validate the settings as
             # we want to ignore them if they're not valid
             try:
-                schema = app_desc.get_configuration_schema()
+                schema = app_desc.configuration_schema
                 settings = env.get_app_settings(eng, app)
                 
                 # check that the context contains all the info that the app needs
@@ -2034,7 +2782,7 @@ def find_app_settings(engine_name, app_name, tk, context, engine_instance_name=N
                 validation.validate_platform(app_desc)
                                 
                 # for multi engine apps, make sure our engine is supported
-                supported_engines = app_desc.get_supported_engines()
+                supported_engines = app_desc.supported_engines
                 if supported_engines and engine_name not in supported_engines:
                     raise TankError("The app could not be loaded since it only supports "
                                     "the following engines: %s" % supported_engines)
@@ -2049,7 +2797,7 @@ def find_app_settings(engine_name, app_name, tk, context, engine_instance_name=N
                 continue
 
             # settings are valid so add them to return list:
-            app_settings.append({"engine_instance":eng, "app_instance":app, "settings":settings})
+            app_settings.append({"engine_instance": eng, "app_instance": app, "settings": settings})
                     
     return app_settings
     
@@ -2070,6 +2818,10 @@ def start_shotgun_engine(tk, entity_type, context):
                         context.
     """
 
+    # begin writing log to disk, associated with the engine
+    if LogManager().base_file_handler is None:
+        LogManager().initialize_base_file_handler(constants.SHOTGUN_ENGINE_NAME)
+
     # bypass the get_environment hook and use a fixed set of environments
     # for this shotgun engine. This is required because of the action caching.
     env = tk.pipeline_configuration.get_environment("shotgun_%s" % entity_type.lower(), context)
@@ -2089,7 +2841,7 @@ def start_shotgun_engine(tk, entity_type, context):
     plugin_file = os.path.join(engine_path, constants.ENGINE_FILE)
 
     # Instantiate the engine
-    class_obj = loader.load_plugin(plugin_file, Engine)
+    class_obj = load_plugin(plugin_file, Engine)
     obj = class_obj(tk, context, constants.SHOTGUN_ENGINE_NAME, env)
 
     # register this engine as the current engine
@@ -2141,18 +2893,22 @@ def clear_global_busy():
 ##########################################################################################
 # utilities
 
-def _get_env_and_descriptor_for_engine(engine_name, tk, context):
+def get_env_and_descriptor_for_engine(engine_name, tk, context):
     """
     Utility method to return commonly needed objects when instantiating engines.
 
-    Raises TankEngineInitError if the engine name cannot be found.
+    :param engine_name: system name of the engine to look for, e.g tk-maya
+    :param tk: :class:`~sgtk.Sgtk` instance
+    :param context: :class:`~sgtk.Context` object to use when picking environment
+    :returns: tuple with associated environment and engine descriptor)
+    :raises: :class:`TankEngineInitError` if the engine name cannot be found.
     """
     # get the environment via the pick_environment hook
     env_name = __pick_environment(engine_name, tk, context)
 
     # get the env object based on the name in the pick env hook
     env = tk.pipeline_configuration.get_environment(env_name, context)
-    
+
     # make sure that the environment has an engine instance with that name
     if not engine_name in env.get_engines():
         raise TankEngineInitError("Cannot find an engine instance %s in %s." % (engine_name, env))
@@ -2167,6 +2923,11 @@ def __pick_environment(engine_name, tk, context):
     """
     Call out to the pick_environment core hook to determine which environment we should load
     based on the current context. The Shotgun engine provides its own implementation.
+
+    :param engine_name: system name of the engine to look for, e.g tk-maya
+    :param tk: :class:`~sgtk.Sgtk` instance
+    :param context: :class:`~sgtk.Context` object to use when picking environment
+    :returns: name of environment.
     """
 
     try:
@@ -2187,3 +2948,21 @@ def __pick_environment(engine_name, tk, context):
 
     return env_name
 
+def _get_command_prefix(properties):
+    """
+    If multiple commands are registered with the same name, attempt to construct a unique
+    prefix from other information in the command's properties dictionary to distinguish one
+    command from another. Uses the properties' ``app`` and/or ``group`` keys to create the
+    prefix.
+
+    :param dict properties: Arbitrary key/value information related to a registered command.
+    :returns: A unique identifier for the command as a str.
+    """
+    prefix_parts = []
+    if properties.get("app"):
+        # First, distinguish commands by app name.
+        prefix_parts.append(properties["app"].instance_name)
+    if properties.get("group"):
+        # Second, distinguish commands by group name.
+        prefix_parts.append(properties["group"])
+    return ":".join(prefix_parts)

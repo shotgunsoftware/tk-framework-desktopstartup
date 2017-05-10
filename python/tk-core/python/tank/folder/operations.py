@@ -13,15 +13,10 @@ Main entry points for folder creation.
 
 """
 
-import os
-import sys
-
 from .configuration import FolderConfiguration
 from .folder_io import FolderIOReceiver
 from .folder_types import EntityLinkTypeMismatch
-
 from ..errors import TankError
-from ..platform import constants
 
 
 def create_single_folder_item(tk, config_obj, io_receiver, entity_type, entity_id, sg_task_data, engine):
@@ -95,17 +90,16 @@ def create_single_folder_item(tk, config_obj, io_receiver, entity_type, entity_i
         
 
 
-def synchronize_folders(tk, full_sync, log=None):
+def synchronize_folders(tk, full_sync):
     """
     Synchronizes any remote folders to ensure they are present both 
     in the file system and in any local folder caches
     
     :param tk: A tk API instance
     :param full_sync: Do a full sync
-    :param log: A python logger
     :returns: list of items processed
-    """ 
-    return FolderIOReceiver.sync_path_cache(tk, full_sync, log)
+    """
+    return FolderIOReceiver.sync_path_cache(tk, full_sync)
 
     
 def process_filesystem_structure(tk, entity_type, entity_ids, preview, engine):    
@@ -138,7 +132,7 @@ def process_filesystem_structure(tk, entity_type, entity_ids, preview, engine):
         elif isinstance(entity_ids, str) and entity_ids.isdigit():
             entity_ids = (int(entity_ids),)
         else:
-            raise ValueError("Parameter entity_ids was passed %s, accepted types are list, tuple and int.")
+            raise ValueError("Parameter entity_ids' type is '%s', accepted types are list, tuple and int." % type(entity_ids).__name__)
     
     if len(entity_ids) == 0:
         return

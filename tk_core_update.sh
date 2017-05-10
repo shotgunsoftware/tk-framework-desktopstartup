@@ -34,29 +34,28 @@ trap 'abort' 0
 SRC_REPO=git@github.com:shotgunsoftware/tk-core.git
 # Where we'll clone the repo
 DEST_REPO=$ROOT/repo
-# Zip file that will be generated from that repo
-ZIP=$ROOT/tk-core.zip
 # Destination relative to this script for the files
 DEST=`pwd`/python/tk-core
 
 # Recreate the folder structure
 mkdir $ROOT
 mkdir $DEST_REPO
-# Strip files from the destination
+# Strip files from the destination and recreate it.
 rm -rf $DEST
+mkdir -p $DEST
 # Clone the repo
 git clone $SRC_REPO $DEST_REPO
-# Generate the zip
-git archive --format zip --output $ZIP --remote $DEST_REPO $1
-# Unzip the files except for the tests.
-unzip $ZIP -d $DEST
-rm -rf $DEST/tests
+
 # Move to the git repo to generate the sha and write it to the $DEST
 pushd $DEST_REPO
 git rev-parse HEAD > $DEST/commit_id
+git checkout $1
 popd
-# Add the version in the info.yml
-sed -i "" -e "s/version: \"HEAD\"/version: \"$1\"/" $DEST/info.yml
+
+# Copy the files to the destination, but not the tests
+cp -R $DEST_REPO/* $DEST
+rm -rf $DEST/tests
+
 # Put files in the staging area.
 git add -A $DEST
 # Cleanup!

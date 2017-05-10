@@ -14,10 +14,10 @@ will provide a default host and an optional http proxy. If a script user has
 been configured with the core, its credentials will also be provided.
 """
 
-from tank_vendor import shotgun_authentication as sg_auth
+from ..authentication import DefaultsManager
 
 
-class CoreDefaultsManager(sg_auth.DefaultsManager):
+class CoreDefaultsManager(DefaultsManager):
     """
     This defaults manager implementation taps into the core's configuration
     (shotgun.yml) to provide a default host, proxy and user.
@@ -60,7 +60,7 @@ class CoreDefaultsManager(sg_auth.DefaultsManager):
                   None if not necessary.
         """
         from . import shotgun
-        return shotgun.get_associated_sg_config_data().get("http_proxy")
+        return shotgun.get_associated_sg_config_data().get("http_proxy") or super(CoreDefaultsManager, self).get_http_proxy()
 
     def get_user_credentials(self):
         """

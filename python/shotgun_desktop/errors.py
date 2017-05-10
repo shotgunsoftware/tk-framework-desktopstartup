@@ -109,36 +109,6 @@ class ToolkitDisabledError(ShotgunDesktopError):
         )
 
 
-class UnexpectedConfigFound(ShotgunDesktopError):
-    """
-    This exception notifies the catcher that a configuration was found on disk when none was expected.
-    """
-    def __init__(self, default_site_config):
-        """Constructor"""
-        ShotgunDesktopError.__init__(
-            self,
-            "A pipeline configuration was found at \"%s\" but no matching pipeline configuration was found in"
-            "Shotgun.\n\nThis can happen if you are not assigned to the \"Template Project\". Please contact "
-            "your Shotgun Administrator to see if that is the case." % default_site_config
-        )
-
-
-class UpdatePermissionsError(ShotgunDesktopError):
-    """
-    This exception notifies the catcher that the site's human user permissions doesn't allow
-    using the Shotgun Desktop.
-    """
-    def __init__(self):
-        """Constructor"""
-        ShotgunDesktopError.__init__(
-            self,
-            "Sorry, you do not have enough Shotgun permissions to set up the Shotgun Desktop.\n\n"
-            "Please relaunch Desktop and instead log in as an Admin user.\n\n"
-            "Once the setup is complete, you can log out the Admin user and then log in as yourself.\n\n"
-            "Please note that this error can also occur when you are not assigned to the \"Template Project\"."
-        )
-
-
 class BundledDescriptorEnvVarError(ShotgunDesktopError):
     """
     This exception notifies the catcher that the bundled descriptor in
@@ -168,17 +138,4 @@ class EnvironmentVariableFileLookupError(ShotgunDesktopError):
                 var_name,
                 path
             )
-        )
-
-
-class InvalidAppStoreCredentialsError(ShotgunDesktopError):
-    """
-    Raised when there is not app store key set in Shotgun.
-    """
-
-    def __init__(self, message):
-        super(InvalidAppStoreCredentialsError, self).__init__(
-            message,
-            # Require that the client contacts support
-            support_required=True
         )
