@@ -44,12 +44,11 @@ mkdir $DEST_REPO
 rm -rf $DEST
 mkdir -p $DEST
 # Clone the repo
-git clone $SRC_REPO $DEST_REPO
+git clone $SRC_REPO $DEST_REPO --depth=1 -b $1
 
 # Move to the git repo to generate the sha and write it to the $DEST
 pushd $DEST_REPO
 git rev-parse HEAD > $DEST/commit_id
-git checkout $1
 popd
 
 # Copy the files to the destination, but not the tests
