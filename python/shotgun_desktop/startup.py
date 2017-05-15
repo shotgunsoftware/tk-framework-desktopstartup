@@ -14,7 +14,6 @@ import os
 import sys
 import time
 import subprocess
-import struct
 import traceback
 
 # initialize logging
@@ -389,7 +388,7 @@ def __launch_app(app, splash, user, app_bootstrap, settings):
     else:
         engine = __start_engine_in_zero_config(app, app_bootstrap, splash, user)
 
-    return __post_bootstrap_engine(splash, app_bootstrap, engine)
+    return __post_bootstrap_engine(splash, app_bootstrap, engine, settings)
 
 
 def __bootstrap_progress_callback(splash, app, progress_value, message):
@@ -510,7 +509,7 @@ def __start_engine_in_zero_config(app, app_bootstrap, splash, user):
     return mgr.bootstrap_engine("tk-desktop")
 
 
-def __post_bootstrap_engine(splash, app_bootstrap, engine):
+def __post_bootstrap_engine(splash, app_bootstrap, engine, settings):
     """
     Called after bootstrapping the engine. Mainly use to transition logging to the
     engine and launch the main event loop.
@@ -518,6 +517,7 @@ def __post_bootstrap_engine(splash, app_bootstrap, engine):
     :param splash: Splash screen widget.
     :param app_bootstrap: Application bootstrap logic.
     :param engine: Toolkit engine that was bootstrapped.
+    :param settings: The application's settings.
 
     :returns: Application exit code.
     """
@@ -535,9 +535,21 @@ def __post_bootstrap_engine(splash, app_bootstrap, engine):
 
     startup_version = startup_desc.version
 
+    # If the site config is running an older version of the desktop engine, it
+    # doesn't include browser integration, so we'll launch it ourselves.
+    server = None
+    if LooseVersion(engine.version) < "v2.1.0":
+        # Lazy init this module as it can't be included if Toolkit is not available.
+        from . import wss_back_compat
+        server, should_run = wss_back_compat.init_websockets(splash, app_bootstrap, settings)
+        if not should_run:
+            return False
+
+    # Good thing we used a kwargs in that method's signature. :)
     return engine.run(
         splash,
         version=app_bootstrap.get_version(),
+        server=server,
         startup_version=startup_version,
         startup_descriptor=startup_desc
     )
@@ -710,8 +722,7 @@ def main(**kwargs):
 
     try:
         # Reading user settings from disk.
-        settings = Settings()
-        settings.dump(logger)
+        settings = sgtk.util.UserSettings()
 
         # It is very important to decouple logging in from creating the shotgun authenticator.
         # If there is an error during auto login, for example proxy settings changed and you
