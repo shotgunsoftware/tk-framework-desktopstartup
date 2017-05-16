@@ -92,9 +92,30 @@ def __desktop_engine_supports_authentication_module(engine):
     :returns: True if the engine supports the authentication module, False otherwise.
     """
     if engine.version.lower() == 'undefined':
-        logger.warning("The version of the tk-desktop engine is undefined.")
+        logger.warning(
+            "The version of the tk-desktop engine is undefined. "
+            "Assuming engine it supports sgtk.authentication module."
+        )
         return True
     return LooseVersion(engine.version) >= "v2.0.0"
+
+
+def __desktop_engine_supports_websocket(engine):
+    """
+    Tests if the engine supports the login based authentication. All versions above 2.0.0 supports
+    login based authentication.
+
+    :param engine: The desktop engine to test.
+
+    :returns: True if the engine supports the authentication module, False otherwise.
+    """
+    if engine.version.lower() == 'undefined':
+        logger.warning(
+            "The version of the tk-desktop engine is undefined. "
+            "Assuming it has built-in browser integration support."
+        )
+        return True
+    return LooseVersion(engine.version) >= "v2.1.0"
 
 
 def __supports_pipeline_configuration_upgrade(pipeline_configuration):
@@ -537,8 +558,18 @@ def __post_bootstrap_engine(splash, app_bootstrap, engine, settings):
     # If the site config is running an older version of the desktop engine, it
     # doesn't include browser integration, so we'll launch it ourselves.
     server = None
-    if LooseVersion(engine.version) < "v2.1.0":
-        logger.debug("Old Desktop engine detected, launching legacy websocket server.")
+    if __desktop_engine_supports_websocket(engine):
+        return engine.run(
+            splash,
+            version=app_bootstrap.get_version(),
+            startup_version=startup_version,
+            startup_descriptor=startup_desc
+        )
+    else:
+        logger.info(
+            "tk-desktop version %s does not have built-in browser integration "
+            "launching legacy browser integration.", engine.version
+        )
         from . import wss_back_compat
         server, should_run = wss_back_compat.init_websockets(splash, app_bootstrap, settings, logger)
         if not should_run:
@@ -554,13 +585,7 @@ def __post_bootstrap_engine(splash, app_bootstrap, engine, settings):
             server=server,
             startup_version=startup_version
         )
-    else:
-        return engine.run(
-            splash,
-            version=app_bootstrap.get_version(),
-            startup_version=startup_version,
-            startup_descriptor=startup_desc
-        )
+
 
 def __handle_exception(splash, shotgun_authenticator, error_message):
     """
