@@ -1,0 +1,37 @@
+# This is the browser integration settings section
+#
+
+[BrowserIntegration]
+
+# Location where the certificate will be stored. If not specified, defaults to
+# ../resources/keys.
+#
+certificate_folder=/path/to/your/certificate/folder
+# For reference, here are the paths that the Shotgun Desktop uses. If you want
+# to reuse the same certificate as the Shotgun Desktop, those are the settings
+# you need to use.
+# MacOS
+# certificate_folder=~/Library/Caches/Shotgun/desktop/config/certificates
+# Windows
+# certificate_folder=$APPDATA\Shotgun\desktop\config\certificates
+# Linux
+# certificate_folder=~/.shotgun/desktop/config/certificates
+
+# WARNING: This option will write sensitive information to the logs. We
+# recommend turning this on ONLY for debugging. We recommend you clear or delete
+# your logs after debugging.
+# If set to 1, low level debugging messages from the server will be logged.
+#
+low_level_debug=0
+
+# Port to listen for requests coming from the browser. If not specified,
+# defaults to 9000. Note that you will need to contact support at
+# support@shotgunsoftware.com in order to have your site communicate on a custom
+# port.
+#
+port=9000
+
+# List of clients whitelisted to access this server. Use this when you have a
+# local server. If not specified, defaults to *.shotgunstudio.com.
+#
+whitelist=*.shotgunstudio.com
