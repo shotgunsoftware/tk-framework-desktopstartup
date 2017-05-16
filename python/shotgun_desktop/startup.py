@@ -538,9 +538,8 @@ def __post_bootstrap_engine(splash, app_bootstrap, engine, settings):
     # doesn't include browser integration, so we'll launch it ourselves.
     server = None
     if LooseVersion(engine.version) < "v2.1.0":
-        # Lazy init this module as it can't be included if Toolkit is not available.
         from . import wss_back_compat
-        server, should_run = wss_back_compat.init_websockets(splash, app_bootstrap, settings)
+        server, should_run = wss_back_compat.init_websockets(splash, app_bootstrap, settings, logger)
         if not should_run:
             return False
 
