@@ -538,6 +538,7 @@ def __post_bootstrap_engine(splash, app_bootstrap, engine, settings):
     # doesn't include browser integration, so we'll launch it ourselves.
     server = None
     if LooseVersion(engine.version) < "v2.1.0":
+        logger.debug("Old Desktop engine detected, launching legacy websocket server.")
         from . import wss_back_compat
         server, should_run = wss_back_compat.init_websockets(splash, app_bootstrap, settings, logger)
         if not should_run:
@@ -546,15 +547,20 @@ def __post_bootstrap_engine(splash, app_bootstrap, engine, settings):
         if server:
             QtGui.QApplication.instance().aboutToQuit.connect(lambda: server.tear_down())
 
-    # Good thing we used a kwargs in that method's signature. :)
-    return engine.run(
-        splash,
-        version=app_bootstrap.get_version(),
-        server=server,
-        startup_version=startup_version,
-        startup_descriptor=startup_desc
-    )
-
+        # This is how the old desktop engine used to be invoked.
+        return engine.run(
+            splash,
+            version=app_bootstrap.get_version(),
+            server=server,
+            startup_version=startup_version
+        )
+    else:
+        return engine.run(
+            splash,
+            version=app_bootstrap.get_version(),
+            startup_version=startup_version,
+            startup_descriptor=startup_desc
+        )
 
 def __handle_exception(splash, shotgun_authenticator, error_message):
     """
