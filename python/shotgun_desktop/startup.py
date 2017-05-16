@@ -14,7 +14,6 @@ import os
 import sys
 import time
 import subprocess
-import struct
 import traceback
 
 # initialize logging
@@ -54,7 +53,6 @@ from shotgun_desktop.turn_on_toolkit import TurnOnToolkit
 from shotgun_desktop.desktop_message_box import DesktopMessageBox
 from shotgun_desktop.upgrade_startup import upgrade_startup
 from shotgun_desktop.location import get_startup_descriptor
-from shotgun_desktop.settings import Settings
 from shotgun_desktop.systray_icon import ShotgunSystemTrayIcon
 from distutils.version import LooseVersion
 
@@ -94,9 +92,30 @@ def __desktop_engine_supports_authentication_module(engine):
     :returns: True if the engine supports the authentication module, False otherwise.
     """
     if engine.version.lower() == 'undefined':
-        logger.warning("The version of the tk-desktop engine is undefined.")
+        logger.warning(
+            "The version of the tk-desktop engine is undefined. "
+            "Assuming engine it supports sgtk.authentication module."
+        )
         return True
     return LooseVersion(engine.version) >= "v2.0.0"
+
+
+def __desktop_engine_supports_websocket(engine):
+    """
+    Tests if the engine supports the login based authentication. All versions above 2.0.0 supports
+    login based authentication.
+
+    :param engine: The desktop engine to test.
+
+    :returns: True if the engine supports the authentication module, False otherwise.
+    """
+    if engine.version.lower() == 'undefined':
+        logger.warning(
+            "The version of the tk-desktop engine is undefined. "
+            "Assuming it has built-in browser integration support."
+        )
+        return True
+    return LooseVersion(engine.version) >= "v2.1.0"
 
 
 def __supports_pipeline_configuration_upgrade(pipeline_configuration):
@@ -389,7 +408,7 @@ def __launch_app(app, splash, user, app_bootstrap, settings):
     else:
         engine = __start_engine_in_zero_config(app, app_bootstrap, splash, user)
 
-    return __post_bootstrap_engine(splash, app_bootstrap, engine)
+    return __post_bootstrap_engine(splash, app_bootstrap, engine, settings)
 
 
 def __bootstrap_progress_callback(splash, app, progress_value, message):
@@ -510,7 +529,7 @@ def __start_engine_in_zero_config(app, app_bootstrap, splash, user):
     return mgr.bootstrap_engine("tk-desktop")
 
 
-def __post_bootstrap_engine(splash, app_bootstrap, engine):
+def __post_bootstrap_engine(splash, app_bootstrap, engine, settings):
     """
     Called after bootstrapping the engine. Mainly use to transition logging to the
     engine and launch the main event loop.
@@ -518,6 +537,7 @@ def __post_bootstrap_engine(splash, app_bootstrap, engine):
     :param splash: Splash screen widget.
     :param app_bootstrap: Application bootstrap logic.
     :param engine: Toolkit engine that was bootstrapped.
+    :param settings: The application's settings.
 
     :returns: Application exit code.
     """
@@ -535,12 +555,36 @@ def __post_bootstrap_engine(splash, app_bootstrap, engine):
 
     startup_version = startup_desc.version
 
-    return engine.run(
-        splash,
-        version=app_bootstrap.get_version(),
-        startup_version=startup_version,
-        startup_descriptor=startup_desc
-    )
+    # If the site config is running an older version of the desktop engine, it
+    # doesn't include browser integration, so we'll launch it ourselves.
+    server = None
+    if __desktop_engine_supports_websocket(engine):
+        return engine.run(
+            splash,
+            version=app_bootstrap.get_version(),
+            startup_version=startup_version,
+            startup_descriptor=startup_desc
+        )
+    else:
+        logger.info(
+            "tk-desktop version %s does not have built-in browser integration "
+            "launching legacy browser integration.", engine.version
+        )
+        from . import wss_back_compat
+        server, should_run = wss_back_compat.init_websockets(splash, app_bootstrap, settings, logger)
+        if not should_run:
+            return False
+
+        if server:
+            QtGui.QApplication.instance().aboutToQuit.connect(lambda: server.tear_down())
+
+        # This is how the old desktop engine used to be invoked.
+        return engine.run(
+            splash,
+            version=app_bootstrap.get_version(),
+            server=server,
+            startup_version=startup_version
+        )
 
 
 def __handle_exception(splash, shotgun_authenticator, error_message):
@@ -710,8 +754,7 @@ def main(**kwargs):
 
     try:
         # Reading user settings from disk.
-        settings = Settings()
-        settings.dump(logger)
+        settings = sgtk.util.UserSettings()
 
         # It is very important to decouple logging in from creating the shotgun authenticator.
         # If there is an error during auto login, for example proxy settings changed and you
