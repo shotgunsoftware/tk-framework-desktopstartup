@@ -53,7 +53,6 @@ from shotgun_desktop.turn_on_toolkit import TurnOnToolkit
 from shotgun_desktop.desktop_message_box import DesktopMessageBox
 from shotgun_desktop.upgrade_startup import upgrade_startup
 from shotgun_desktop.location import get_startup_descriptor
-from shotgun_desktop.settings import Settings
 from shotgun_desktop.systray_icon import ShotgunSystemTrayIcon
 from distutils.version import LooseVersion
 
@@ -544,6 +543,9 @@ def __post_bootstrap_engine(splash, app_bootstrap, engine, settings):
         server, should_run = wss_back_compat.init_websockets(splash, app_bootstrap, settings)
         if not should_run:
             return False
+
+        if server:
+            QtGui.QApplication.instance().aboutToQuit.connect(lambda: server.tear_down())
 
     # Good thing we used a kwargs in that method's signature. :)
     return engine.run(
