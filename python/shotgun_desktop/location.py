@@ -8,7 +8,7 @@
 # agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
-copyright = """# Copyright (c) 2015 Shotgun Software Inc.
+copyright = """# Copyright (c) 2017 Shotgun Software Inc.
 #
 # CONFIDENTIAL AND PROPRIETARY
 #
@@ -21,7 +21,6 @@ copyright = """# Copyright (c) 2015 Shotgun Software Inc.
 """
 
 import os
-from .errors import BundledDescriptorEnvVarError
 
 
 def _get_location_yaml_location(root):
@@ -64,11 +63,6 @@ def get_location(app_bootstrap):
 
     # Local import since sgtk is lazily loaded.
     from tank_vendor import yaml
-    if app_bootstrap.runs_bundled_startup() and "SGTK_DESKTOP_BUNDLED_DESCRIPTOR" in os.environ:
-        try:
-            return yaml.load(os.environ["SGTK_DESKTOP_BUNDLED_DESCRIPTOR"])
-        except yaml.YAMLError, e:
-            raise BundledDescriptorEnvVarError(e)
 
     location = _get_location_yaml_location(app_bootstrap.get_startup_path())
     # If the file is missing, we're in dev mode.
@@ -90,9 +84,13 @@ def get_startup_descriptor(sgtk, sg, app_bootstrap):
 
     :returns: :class:`sgtk.descriptor.FrameworkDescriptor` instance.
     """
-    return sgtk.descriptor.create_descriptor(
-        sg,
-        sgtk.descriptor.Descriptor.FRAMEWORK,
+    # Use the old API to create the descriptor, as we might be using a 0.16-based core.
+    return sgtk.deploy.descriptor.get_from_location_and_paths(
+        sgtk.deploy.descriptor.AppDescriptor.FRAMEWORK,
+        app_bootstrap.get_shotgun_desktop_cache_location(),
+        os.path.join(
+            app_bootstrap.get_shotgun_desktop_cache_location(), "install"
+        ),
         get_location(app_bootstrap)
     )
 
