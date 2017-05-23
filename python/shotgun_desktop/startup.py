@@ -70,6 +70,7 @@ def __restore_global_debug_flag():
     """
     global global_debug_flag_at_startup
     import sgtk
+    # If there is no LogManager for the new core, there's no need to restore any flag.
     if hasattr(sgtk, "LogManager"):
         sgtk.LogManager().global_debug = global_debug_flag_at_startup
 
