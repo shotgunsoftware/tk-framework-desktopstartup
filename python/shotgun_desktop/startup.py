@@ -70,7 +70,9 @@ def __restore_global_debug_flag():
     """
     global global_debug_flag_at_startup
     import sgtk
-    sgtk.LogManager().global_debug = global_debug_flag_at_startup
+    # If there is no LogManager for the new core, there's no need to restore any flag.
+    if hasattr(sgtk, "LogManager"):
+        sgtk.LogManager().global_debug = global_debug_flag_at_startup
 
 
 def __backup_global_debug_flag():
@@ -553,7 +555,8 @@ def __post_bootstrap_engine(splash, app_bootstrap, engine, settings):
     logger.debug("Running tk-desktop")
     startup_desc = get_startup_descriptor(sgtk, engine.shotgun, app_bootstrap)
 
-    startup_version = startup_desc.version
+    # Uses the old API as we may have bootstrap into an old core.
+    startup_version = startup_desc.get_version()
 
     # If the site config is running an older version of the desktop engine, it
     # doesn't include browser integration, so we'll launch it ourselves.
