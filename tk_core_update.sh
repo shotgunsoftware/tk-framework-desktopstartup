@@ -60,4 +60,6 @@ git add -A $DEST
 # Cleanup!
 rm -rf $ROOT
 
+sed -i "" -e "s/version: \"HEAD\"/version: \"$1\"/" $DEST/info.yml
+
 trap : 0
