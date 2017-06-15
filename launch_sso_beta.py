@@ -65,7 +65,7 @@ def _launch_shotgun_desktop(shotgun_home, desktop_startup_location):
     os.environ["SHOTGUN_HOME"] = shotgun_home
     os.environ["SHOTGUN_DESKTOP_CONFIG_FALLBACK_DESCRIPTOR"] = descriptor
 
-    subprocess.Popen([_get_sg_desktop_executable()], env=os.environ)
+    subprocess.Popen([_get_sg_desktop_executable()], env=os.environ).communicate()
 
 
 def main():
