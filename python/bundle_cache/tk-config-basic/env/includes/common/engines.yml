@@ -49,5 +49,6 @@ common.engines.tk-flame.location:
 
 # Desktop
 common.engines.tk-desktop.location:
-    type: path
-    path: $SGTK_DESKTOP_STARTUP_LOCATION/python/bundle_cache/tk-desktop
+    type: app_store
+    name: tk-desktop
+    version: v2.2.4
