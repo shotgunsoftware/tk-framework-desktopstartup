@@ -1,9 +1,4 @@
-0<0# : ^
-"""
-@echo off
-python "%~f0" %*
-goto :EOF
-"""
+/Applications/Shotgun.moved.app/Contents/Resources/Python/bin/python - <<EOF
 
 import os
 import sys

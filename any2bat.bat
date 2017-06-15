@@ -221,7 +221,7 @@ goto :EOF
 echo:0^<0# : ^^
 echo:"""
 echo:@echo off
-echo:python "%%~f0" %%*
+echo:"C:\Program Files\Shotgun\Python"\python.exe "%%~f0" %%*
 echo:goto :EOF
 echo:"""
 type "%~f1"
