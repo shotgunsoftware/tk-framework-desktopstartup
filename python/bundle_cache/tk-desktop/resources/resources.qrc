@@ -1,0 +1,32 @@
+<RCC>
+  <qresource prefix="tk-desktop">
+    <file>wait_screen_icon.png</file>
+    <file>fonts/OpenSans-Bold.ttf</file>
+    <file>fonts/OpenSans-Light.ttf</file>
+    <file>fonts/OpenSans-CondLight.ttf</file>
+    <file>fonts/OpenSans-Regular.ttf</file>
+    <file>search_transparent.png</file>
+    <file>search_blue.png</file>
+    <file>back_arrow.png</file>
+    <file>icon_inbox_clear.png</file>
+    <file>anchor_arrow.png</file>
+    <file>right_arrow.png</file>
+    <file>ellipses.png</file>
+    <file>squares.png</file>
+    <file>search_dark.png</file>
+    <file>search_light.png</file>
+    <file>up_right_arrow.png</file>
+    <file>x.png</file>
+    <file>missing_thumbnail_project.png</file>
+    <file>down_arrow.png</file>
+    <file>default_user_thumb.png</file>
+    <file>up_carat.png</file>
+    <file>down_carat.png</file>
+    <file>shotgun_logo_light_medium.png</file>
+    <file>loading_512x400.png</file>
+    <file>shotgun_logo.png</file>
+    <file>gear.png</file>
+    <file>default_systray_icon.png</file>
+    <file>cross.png</file>
+  </qresource>
+</RCC>
