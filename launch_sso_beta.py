@@ -50,7 +50,7 @@ def _download_desktop_startup(shotgun_home):
 def _get_sg_desktop_executable():
 
     if sys.platform == "darwin":
-        return "/Applications/Shotgun.moved.app/Contents/MacOS/Shotgun"
+        return "/Applications/Shotgun.app/Contents/MacOS/Shotgun"
     elif sys.platform == "win32":
         return r"C:\PRogram Files\Shotgun\Shotgun.exe"
     else:
