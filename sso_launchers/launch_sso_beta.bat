@@ -1,3 +1,9 @@
+0<0# : ^
+"""
+@echo off
+python "%~f0" %*
+goto :EOF
+"""
 
 import os
 import sys
