@@ -13,7 +13,7 @@ rm sso.zip
 wget https://github.com/shotgunsoftware/tk-config-basic/archive/master.zip
 unzip master.zip -d python/bundle_cache
 mv python/bundle_cache/tk-config-basic-master python/bundle_cache/tk-config-basic
-echo 'location: {type: path, path:$SGTK_DESKTOP_STARTUP_LOCATION/python/tk-core}' > python/bundle_cache/tk-config-basic/core/core_api.yml
+echo 'location: {type: path, path: $SGTK_DESKTOP_STARTUP_LOCATION/python/tk-core}' > python/bundle_cache/tk-config-basic/core/core_api.yml
 rm master.zip
 
 git add python/bundle_cache

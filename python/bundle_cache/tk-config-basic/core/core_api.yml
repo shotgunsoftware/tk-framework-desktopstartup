@@ -1,1 +1,1 @@
-location: {type: path, path:$SGTK_DESKTOP_STARTUP_LOCATION/python/tk-core}
+location: {type: path, path: $SGTK_DESKTOP_STARTUP_LOCATION/python/tk-core}

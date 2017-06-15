@@ -55,11 +55,13 @@ popd
 cp -R $DEST_REPO/* $DEST
 rm -rf $DEST/tests
 
+# sed -i "" -e "s/version: \"HEAD\"/version: \"$1\"/" $DEST/info.yml
+
 # Put files in the staging area.
 git add -A $DEST
 # Cleanup!
 rm -rf $ROOT
 
-sed -i "" -e "s/version: \"HEAD\"/version: \"$1\"/" $DEST/info.yml
+
 
 trap : 0
