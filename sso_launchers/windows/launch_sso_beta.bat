@@ -16,7 +16,7 @@ import subprocess
 branch_name = "feature/sso"
 branch_file_name = branch_name.replace("/", "-")
 
-DESKTOP_STARTUP_URL = "https://github.com/shotgunsoftware/tk-framework-desktopstartup/archive/%s.zip"
+DESKTOP_STARTUP_URL = "https://github.com/shotgunsoftware/tk-framework-desktopstartup/archive/%s.zip" % branch_name
 
 
 def _get_shotgun_home():
@@ -43,7 +43,7 @@ def _download_desktop_startup(shotgun_home):
         os.makedirs(parent_folder)
 
     temp_folder = tempfile.mkdtemp(dir=parent_folder)
-    print "Downloading tk-framework-desktopstartup at %s" % temp_folder
+    print "Downloading tk-framework-desktopstartup at %s from %s" % (temp_folder, DESKTOP_STARTUP_URL)
 
     downloaded_zip = os.path.join(temp_folder, "%s.zip" % branch_file_name)
     with open(downloaded_zip, "wb") as fh:

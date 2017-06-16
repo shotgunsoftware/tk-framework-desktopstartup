@@ -41,7 +41,10 @@ echo '"""' >> sso_launchers/windows/launch_sso_beta.bat
 cat sso_launchers/launch_sso_beta.py >> sso_launchers/windows/launch_sso_beta.bat
 
 # Udpates the Shotgun App for MacOS.
-# Todo
+echo "/Applications/Shotgun.app/Resources/Python/bin/python - <<EOF" > sso_launchers/macOS/Shotgun\ SSO\ Beta.app/Contents/Resources/script.sh
+cat sso_launchers/launch_sso_beta.py >> sso_launchers/macOS/Shotgun\ SSO\ Beta.app/Contents/Resources/script.sh
+chmod u+x sso_launchers/macOS/Shotgun\ SSO\ Beta.app/Contents/Resources/script.sh
+cp sso_launchers/macOS/Shotgun\ SSO\ Beta.app/Contents/Resources/script.sh sso_launchers/macOS/Shotgun\ SSO\ Beta.app/Contents/Resources/script
 
 # get everything ready to be merged.
 git add python/bundle_cache

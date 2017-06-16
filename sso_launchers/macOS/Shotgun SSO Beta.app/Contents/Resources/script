@@ -1,4 +1,4 @@
-/opt/Shotgun/Python/bin/python - <<EOF
+/Applications/Shotgun.app/Resources/Python/bin/python - <<EOF
 
 import os
 import sys
