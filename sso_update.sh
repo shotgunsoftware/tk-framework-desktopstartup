@@ -35,7 +35,8 @@ chmod u+x sso_launchers/linux/launch_sso_beta.sh
 echo '0<0# : ^' > sso_launchers/windows/launch_sso_beta.bat
 echo '"""' >> sso_launchers/windows/launch_sso_beta.bat
 echo '@echo off' >> sso_launchers/windows/launch_sso_beta.bat
-echo 'C:\Program Files\Shotgun\Python"\python.exe "%~f0" %*' >> sso_launchers/windows/launch_sso_beta.bat
+echo '"C:\Program Files\Shotgun\Python"\python.exe "%~f0" %*' >> sso_launchers/windows/launch_sso_beta.bat
+echo 'pause' >> sso_launchers/windows/launch_sso_beta.bat
 echo 'goto :EOF' >> sso_launchers/windows/launch_sso_beta.bat
 echo '"""' >> sso_launchers/windows/launch_sso_beta.bat
 cat sso_launchers/launch_sso_beta.py >> sso_launchers/windows/launch_sso_beta.bat

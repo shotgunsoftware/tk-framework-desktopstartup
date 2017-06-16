@@ -1,7 +1,8 @@
 0<0# : ^
 """
 @echo off
-C:\Program Files\Shotgun\Python"\python.exe "%~f0" %*
+"C:\Program Files\Shotgun\Python"\python.exe "%~f0" %*
+pause
 goto :EOF
 """
 
