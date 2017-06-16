@@ -7,7 +7,10 @@ import tempfile
 import shutil
 import subprocess
 
-DESKTOP_STARTUP_URL = "https://github.com/shotgunsoftware/tk-framework-desktopstartup/archive/sso.zip"
+branch_name = "feature/sso"
+branch_file_name = branch_name.replace("/", "-")
+
+DESKTOP_STARTUP_URL = "https://github.com/shotgunsoftware/tk-framework-desktopstartup/archive/%s.zip"
 
 
 def _get_shotgun_home():
@@ -36,7 +39,7 @@ def _download_desktop_startup(shotgun_home):
     temp_folder = tempfile.mkdtemp(dir=parent_folder)
     print "Downloading tk-framework-desktopstartup at %s" % temp_folder
 
-    downloaded_zip = os.path.join(temp_folder, "sso.zip")
+    downloaded_zip = os.path.join(temp_folder, "%s.zip" % branch_file_name)
     with open(downloaded_zip, "wb") as fh:
         fh.write(urllib2.urlopen(DESKTOP_STARTUP_URL).read())
 
@@ -44,7 +47,7 @@ def _download_desktop_startup(shotgun_home):
         archive = zipfile.ZipFile(downloaded_zip)
         archive.extractall(temp_folder)
 
-    return os.path.join(temp_folder, "tk-framework-desktopstartup-sso"), True
+    return os.path.join(temp_folder, "tk-framework-desktopstartup-%s" % branch_file_name), True
 
 
 def _get_sg_desktop_executable():

@@ -9,10 +9,10 @@
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
 """
-Authentication and session renewal handling.
+Authentication and session renewal handling. 
 
 This module handles asking the user for their password, login etc.
-It will try to use a QT UI to prompt the user if possible, but may
+It will try to use a QT UI to prompt the user if possible, but may 
 fall back on a console (stdin/stdout) based workflow if QT isn't available.
 
 --------------------------------------------------------------------------------
@@ -39,7 +39,6 @@ import os
 
 logger = LogManager.get_logger(__name__)
 
-
 ###############################################################################################
 # internal classes and methods
 
@@ -64,32 +63,27 @@ def _get_current_os_user():
 def _get_qt_state():
     """
     Returns the state of Qt: the libraries available and if we have a ui or not.
-    :returns: If Qt is available, a tuple of (QtCore, QtGui, QtNetwork, QtWebkit, has_ui_boolean_flag).
-              Otherwise, (None, None, None, None, False)
+    :returns: If Qt is available, a tuple of (QtCore, QtGui, has_ui_boolean_flag).
+              Otherwise, (None, None, False)
     """
     qt_core = None
     qt_gui = None
-    qt_network = None
-    qt_webkit = None
     qapp_instance_active = False
     try:
-        from .ui.qt_abstraction import QtCore, QtGui, QtNetwork, QtWebKit
+        from .ui.qt_abstraction import QtGui, QtCore
         qt_core = QtCore
         qt_gui = QtGui
-        qt_network = QtNetwork
-        qt_webkit = QtWebKit
         qapp_instance_active = (QtGui.QApplication.instance() is not None)
     except:
         pass
-
-    return (qt_core, qt_gui, qt_network, qt_webkit, qapp_instance_active)
+    return (qt_core, qt_gui, qapp_instance_active)
 
 
 class SessionRenewal(object):
     """
     Handles multi-threaded session renewal. This class handles the use case when
-    multiple threads simultaneously try to ask the user for a password.
-
+    multiple threads simultaneously try to ask the user for a password. 
+    
     Use this class by calling the static method renew_session(). Please see this method
     for more details.
     """
@@ -116,10 +110,6 @@ class SessionRenewal(object):
         Prompts the user for the password. This method should never be called directly
         and _renew_session should be called instead.
 
-        In the case of an SSO session, the cookies will be used to attempt a
-        renewal without having to prompt the user. If this fails, then the
-        user will be prompted for their credentials.
-
         :param user: SessionUserImpl instance of the user that needs its session
                      renewed.
         :param credentials_handler: Object that actually prompts the user for
@@ -142,23 +132,18 @@ class SessionRenewal(object):
 
             # We're the first thread, so authenticate.
             try:
-                if user.get_cookies() is not None:
-                    logger.debug("Attempting to renew our SSO session.")
-                else:
-                    logger.debug("Not authenticated, requesting user input.")
-                hostname, login, session_token, cookies, saml_expiration = credentials_handler.authenticate(
+                logger.debug("Not authenticated, requesting user input.")
+                hostname, login, session_token = credentials_handler.authenticate(
                     user.get_host(),
                     user.get_login(),
                     user.get_http_proxy()
                 )
                 SessionRenewal._auth_state = SessionRenewal.SUCCESS
-                logger.debug("Renewal successful!")
+                logger.debug("Login successful!")
                 user.set_session_token(session_token)
-                user.set_cookies(cookies)
-                user.set_saml_expiration(saml_expiration)
             except AuthenticationCancelled:
                 SessionRenewal._auth_state = SessionRenewal.CANCELLED
-                logger.debug("Renewal cancelled")
+                logger.debug("Authentication cancelled")
                 raise
 
     @staticmethod
@@ -198,6 +183,7 @@ class SessionRenewal(object):
                 # it will keep being propagated.
 
 
+
 ###############################################################################################
 # public methods
 
@@ -212,10 +198,10 @@ def renew_session(user):
                                      this exception is raised.
     """
     logger.debug("Credentials were out of date, renewing them.")
-    QtCore, QtGui, QtNetwork, QtWebKit, has_ui = _get_qt_state()
+    QtCore, QtGui, has_ui = _get_qt_state()
     # If we have a gui, we need gui based authentication
     if has_ui:
-        authenticator = UiAuthenticationHandler(is_session_renewal=True, cookies=user.get_cookies())
+        authenticator = UiAuthenticationHandler(is_session_renewal=True)
     else:
         authenticator = ConsoleRenewSessionHandler()
     SessionRenewal.renew_session(user, authenticator)
@@ -242,7 +228,7 @@ def authenticate(default_host, default_login, http_proxy, fixed_host):
     # If there is no default login, let's provide the os user's instead.
     default_login = default_login or _get_current_os_user()
 
-    QtCore, QtGui, QtNetwork, QtWebKit, has_ui = _get_qt_state()
+    QtCore, QtGui, has_ui = _get_qt_state()
 
     # If we have a gui, we need gui based authentication
     if has_ui:
