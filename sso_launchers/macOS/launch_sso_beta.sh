@@ -1,4 +1,4 @@
-/Applications/Shotgun.app/Resources/Python/bin/python - <<EOF
+/Applications/Shotgun.app/Contents/Frameworks/Python/bin/python - <<EOF
 
 import os
 import sys
@@ -63,7 +63,7 @@ def _get_sg_desktop_executable():
 
 def _launch_shotgun_desktop(shotgun_home, desktop_startup_location):
 
-    descriptor = "sgtk:descriptor:path?path=$SGTK_DESKTOP_STARTUP_LOCATION/python/bundle_cache/tk-config-basic"
+    descriptor = "sgtk:descriptor:path?path=%s/python/bundle_cache/tk-config-basic" % desktop_startup_location
 
     os.environ["SGTK_DESKTOP_STARTUP_LOCATION"] = desktop_startup_location
     os.environ["SHOTGUN_HOME"] = shotgun_home
