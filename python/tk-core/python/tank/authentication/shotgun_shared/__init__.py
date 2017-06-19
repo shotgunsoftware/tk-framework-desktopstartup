@@ -1,4 +1,4 @@
-# Copyright (c) 2016 Shotgun Software Inc.
+# Copyright (c) 2015 Shotgun Software Inc.
 #
 # CONFIDENTIAL AND PROPRIETARY
 #
@@ -7,10 +7,6 @@
 # By accessing, using, copying or modifying this work you indicate your
 # agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
 # not expressly granted therein are reserved by Shotgun Software Inc.
-
-from .factory import (
-    create_io_descriptor,
-    descriptor_uri_to_dict,
-    descriptor_dict_to_uri,
-    is_descriptor_version_missing
-)
+"""
+This module contains files which are shared between RV and Toolkit.
+"""
