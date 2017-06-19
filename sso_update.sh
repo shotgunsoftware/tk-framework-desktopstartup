@@ -12,17 +12,17 @@ echo Updating core to latest from feature/sso
 
 # The the latest tk-config-basic
 echo Getting the latest tk-config-basic
-wget https://github.com/shotgunsoftware/tk-config-basic/archive/master.zip
-unzip master.zip -d python/bundle_cache
+wget https://github.com/shotgunsoftware/tk-config-basic/archive/$BRANCH_NAME.zip
+unzip sso.zip -d python/bundle_cache
 
 # Rename the folder so we can reliably refer to it regardless of which branch this could come from in the future.
-mv python/bundle_cache/tk-config-basic-master python/bundle_cache/tk-config-basic
+mv python/bundle_cache/tk-config-basic-feature-sso python/bundle_cache/tk-config-basic
 
 echo Updating tk-config-basic to use an SSO enabled core.
 # Update the core_api.yml to use the same core in the config as the one that is bundled with the desktop startup,
 # which is sso enabled.
 echo 'location: {type: path, path: $SGTK_DESKTOP_STARTUP_LOCATION/python/tk-core}' > python/bundle_cache/tk-config-basic/core/core_api.yml
-rm master.zip
+rm sso.zip
 
 echo Rewriting the sso sso_launchers
 

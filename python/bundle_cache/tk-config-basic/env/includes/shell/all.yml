@@ -16,7 +16,7 @@ includes:
 - ../common/frameworks.yml
 - ../common/apps.yml
 
-shell.site:
+shell.all:
   apps:
     tk-multi-launchapp:
       use_software_entity: true
