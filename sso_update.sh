@@ -42,7 +42,7 @@ echo '"""' >> sso_launchers/windows/launch_sso_beta.bat
 cat sso_launchers/launch_sso_beta.py >> sso_launchers/windows/launch_sso_beta.bat
 
 # Udpates the Shotgun App for MacOS.
-echo "/Applications/Shotgun.app/Resources/Python/bin/python - <<EOF" > sso_launchers/macOS/launch_sso_beta.sh
+echo "/Applications/Shotgun.app/Contents/Resources/Python/bin/python - <<EOF" > sso_launchers/macOS/launch_sso_beta.sh
 cat sso_launchers/launch_sso_beta.py >> sso_launchers/macOS/launch_sso_beta.sh
 chmod u+x sso_launchers/macOS/launch_sso_beta.sh 
 
