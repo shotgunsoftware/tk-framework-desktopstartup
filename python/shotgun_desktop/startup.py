@@ -622,6 +622,8 @@ def __handle_unexpected_exception(splash, shotgun_authenticator, error_message, 
     if splash:
         splash.hide()
 
+    import sgtk
+
     exc_type, exc_value, exc_traceback = sys.exc_info()
 
     logger.exception("Fatal error, user will be logged out.")
@@ -631,7 +633,7 @@ def __handle_unexpected_exception(splash, shotgun_authenticator, error_message, 
         "support@shotgunsoftware.com, we'll help you diagnose the issue.\n"
         "Error: %s\n"
         "For more information, see the log file at %s." % (
-            str(error_message), app_bootstrap.get_logfile_location()
+            str(error_message), sgtk.LogManager().base_file_handler.baseFilename
         ),
         detailed_text="".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
     )
