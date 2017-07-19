@@ -33,7 +33,7 @@ from .errors import (
     TankEngineInitError,
     TankContextChangeNotSupportedError,
     TankEngineEventError,
-    TankMissingEnvironmentFile
+    TankMissingEngineError
 )
 
 from ..util import log_user_activity_metric as util_log_user_activity_metric
@@ -877,13 +877,21 @@ class Engine(TankBundle):
 
     def register_command(self, name, callback, properties=None):
         """
-        Register a command with a name and a callback function.
+        Register a ``command`` with a name and a callback function.
 
         A *command* refers to an access point for some functionality.
         In most cases, commands will appear as items on a Shotgun dropdown
         menu, but it ultimately depends on the engine - in the Shell engine,
         commands are instead represented as a text base listing and in the
         Shotgun Desktop it is a scrollable list of larger icons.
+
+        .. note:: This method is used to add menu entries for launching
+           toolkit UIs. If you wish to register a panel UI with toolkit,
+           you need call this method in order to register a menu command
+           with which a user can launch the panel. In addition to this,
+           you also need to call :meth:`register_panel` in order to
+           register the panel so that the engine can handle its
+           management and persistence.
 
         An arbitrary list of properties can be passed into the engine
         in the form of a properties dictionary. The interpretation of
@@ -899,16 +907,23 @@ class Engine(TankBundle):
 
         - ``title`` - Title to appear on shotgun action menu (e.g. "Create Folders")
 
-        - ``type`` - The type of command - hinting where it should appear. Options vary between
-          engines and the following three are supported:
+        - ``type`` - The type of command - hinting at which menu the command should appear.
+          Options vary between engines and the following are supported:
 
-            - ``context_menu`` - Supported on all engines. Place item on
-              the context menu (first item on the shotgun menu).
-            - ``panel`` - This command is associated with a panel app if the target
-              environment supports a special notion of panel related actions, place
-              the command there. (supported by for example Nuke)
-            - ``node`` - For applications that have a specific node menu (like Nuke),
-              place the command there.
+            - ``context_menu`` - Supported on all engines. Places an item on
+              the context menu (first item on the shotgun menu). The context menu is a
+              suitable location for utility items, helpers and tools.
+
+            - ``panel`` - Some DCCs have a special menu which is accessible only when
+              right clicking on a panel. Passing ``panel`` as the command type hints
+              to the system that the command should be added to this menu. If no panel
+              menu is available, it will be added to the main menu. Nuke is an example
+              of a DCC which supports this behavior.
+
+            - ``node`` - Node based applications such as Nuke typically have a separate
+              menu system for accessing nodes. If you want your registered command to appear
+              on this menu, use this type.
+
 
         **Grouping commands into collections**
 
@@ -929,7 +944,8 @@ class Engine(TankBundle):
         - ``group_default`` - Boolean value indicating whether this command should represent the
           group as a whole.
 
-        .. note:: It is up to each engine to implement grouping and group defaults in an appropriate way. Some engines may not support grouping.
+        .. note:: It is up to each engine to implement grouping and group defaults in an
+                  appropriate way. Some engines may not support grouping.
 
 
         The following properties are supported for the Shotgun engine specifically:
@@ -2386,13 +2402,13 @@ class Engine(TankBundle):
                 # We will only track apps that we know can handle a context
                 # change. Any that do not will not be treated as a persistent
                 # app.
-                if app.context_change_allowed:
+                if app.context_change_allowed and app.instance_name == app_instance_name:
                     app_path = app.descriptor.get_path()
 
                     if app_path not in self.__application_pool:
                         self.__application_pool[app_path] = dict()
 
-                    self.__application_pool[app.descriptor.get_path()][app_instance_name] = app
+                    self.__application_pool[app_path][app_instance_name] = app
 
             # Update the persistent commands pool for use in context changes.
             for command_name, command in self.__commands.iteritems():
@@ -2665,69 +2681,35 @@ def _start_engine(engine_name, tk, old_context, new_context):
 
     :returns: A new sgtk.platform.Engine object.
     """
-    try:
-        # first ensure that an engine is not currently running
-        if current_engine():
-            raise TankError("An engine (%s) is already running! Before you can start a new engine, "
-                            "please shut down the previous one using the command "
-                            "tank.platform.current_engine().destroy()." % current_engine())
+    # first ensure that an engine is not currently running
+    if current_engine():
+        raise TankError("An engine (%s) is already running! Before you can start a new engine, "
+                        "please shut down the previous one using the command "
+                        "tank.platform.current_engine().destroy()." % current_engine())
 
-        # begin writing log to disk, associated with the engine
-        # only do this if a logger hasn't been previously set up.
-        if LogManager().base_file_handler is None:
-            LogManager().initialize_base_file_handler(engine_name)
+    # begin writing log to disk, associated with the engine
+    # only do this if a logger hasn't been previously set up.
+    if LogManager().base_file_handler is None:
+        LogManager().initialize_base_file_handler(engine_name)
 
-        # get environment and engine location
-        try:
-            (env, engine_descriptor) = get_env_and_descriptor_for_engine(engine_name, tk, new_context)
-        except (TankEngineInitError, TankMissingEnvironmentFile):
-            # If we failed using the typical pick_environment approach, then we
-            # need to check and see if this is the Shotgun engine. If it is, then
-            # we can also try the legacy engine start method, which will make use
-            # of shotgun_xxx.yml environment files if they exist in the config.
-            if engine_name == constants.SHOTGUN_ENGINE_NAME:
-                # If the new context has an associated entity, we get the type from
-                # that. If it doesn't, then we can check to see if it's a project
-                # context. If neither is the case, meaning we have an empty context,
-                # then we re-raise.
-                if new_context.entity is not None:
-                    entity_type = new_context.entity["type"]
-                elif new_context.project is not None:
-                    entity_type = "Project"
-                else:
-                    # Empty context, in which case we know the start_shotgun_engine won't do what we need.
-                    raise TankError(
-                        "Legacy shotgun environment configuration "
-                        "does not support context '%s'" % new_context
-                    )
+    # get environment and engine location
+    (env, engine_descriptor) = get_env_and_descriptor_for_engine(engine_name, tk, new_context)
 
-                core_logger.debug("Starting Shotgun engine in legacy mode...")
-                return start_shotgun_engine(tk, entity_type, new_context)
-            # If this isn't the Shotgun engine or we haven't yet returned, then
-            # we just re-raise.
-            raise
+    # make sure it exists locally
+    if not engine_descriptor.exists_local():
+        raise TankEngineInitError("Cannot start engine! %s does not exist on disk" % engine_descriptor)
 
-        # make sure it exists locally
-        if not engine_descriptor.exists_local():
-            raise TankEngineInitError("Cannot start engine! %s does not exist on disk" % engine_descriptor)
+    # get path to engine code
+    engine_path = engine_descriptor.get_path()
+    plugin_file = os.path.join(engine_path, constants.ENGINE_FILE)
+    class_obj = load_plugin(plugin_file, Engine)
 
-        # get path to engine code
-        engine_path = engine_descriptor.get_path()
-        plugin_file = os.path.join(engine_path, constants.ENGINE_FILE)
-        class_obj = load_plugin(plugin_file, Engine)
-
-        # Notify the context change and start the engine.
-        with _CoreContextChangeHookGuard(tk, old_context, new_context):
-            # Instantiate the engine
-            engine = class_obj(tk, new_context, engine_name, env)
-            # register this engine as the current engine
-            set_current_engine(engine)
-
-    except:
-        # trap and log the exception and let it bubble in
-        # unchanged form
-        core_logger.exception("Exception raised in start_engine.")
-        raise
+    # Notify the context change and start the engine.
+    with _CoreContextChangeHookGuard(tk, old_context, new_context):
+        # Instantiate the engine
+        engine = class_obj(tk, new_context, engine_name, env)
+        # register this engine as the current engine
+        set_current_engine(engine)
 
     return engine
 
@@ -2830,8 +2812,8 @@ def start_shotgun_engine(tk, entity_type, context):
     env = tk.pipeline_configuration.get_environment("shotgun_%s" % entity_type.lower(), context)
 
     # get the location for our engine
-    if not constants.SHOTGUN_ENGINE_NAME in env.get_engines():
-        raise TankEngineInitError("Cannot find a shotgun engine in %s. Please contact support." % env)
+    if constants.SHOTGUN_ENGINE_NAME not in env.get_engines():
+        raise TankMissingEngineError("Cannot find a shotgun engine in %s. Please contact support." % env)
     
     engine_descriptor = env.get_engine_descriptor(constants.SHOTGUN_ENGINE_NAME)
 
@@ -2913,8 +2895,8 @@ def get_env_and_descriptor_for_engine(engine_name, tk, context):
     env = tk.pipeline_configuration.get_environment(env_name, context)
 
     # make sure that the environment has an engine instance with that name
-    if not engine_name in env.get_engines():
-        raise TankEngineInitError("Cannot find an engine instance %s in %s." % (engine_name, env))
+    if engine_name not in env.get_engines():
+        raise TankMissingEngineError("Cannot find an engine instance %s in %s." % (engine_name, env))
 
     # get the location for our engine
     engine_descriptor = env.get_engine_descriptor(engine_name)

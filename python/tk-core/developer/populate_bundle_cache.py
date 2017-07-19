@@ -30,15 +30,14 @@ sys.path.append(python_folder)
 # sgtk imports
 from sgtk import LogManager
 from sgtk.util import filesystem
-from sgtk.descriptor import Descriptor, create_descriptor
+from sgtk.descriptor import Descriptor, create_descriptor, is_descriptor_version_missing
 
 from utils import (
-    cache_apps, authenticate, add_authentication_options, OptionParserLineBreakingEpilog, cleanup_bundle_cache,
-    wipe_folder
+    cache_apps, authenticate, add_authentication_options, OptionParserLineBreakingEpilog, cleanup_bundle_cache
 )
 
 # set up logging
-logger = LogManager.get_logger("build_plugin")
+logger = LogManager.get_logger("populate_bundle_cache")
 
 # the folder where all items will be cached
 BUNDLE_CACHE_ROOT_FOLDER_NAME = "bundle_cache"
@@ -58,11 +57,6 @@ def _build_bundle_cache(sg_connection, target_path, config_descriptor_uri):
 
     bundle_cache_root = os.path.join(target_path, BUNDLE_CACHE_ROOT_FOLDER_NAME)
 
-    # check that target path doesn't exist
-    if os.path.exists(bundle_cache_root):
-        logger.info("The folder '%s' already exists on disk. Removing it" % bundle_cache_root)
-        wipe_folder(bundle_cache_root)
-
     # try to create target path
     logger.info("Creating bundle cache folder...")
     filesystem.ensure_folder_exists(bundle_cache_root)
@@ -73,7 +67,7 @@ def _build_bundle_cache(sg_connection, target_path, config_descriptor_uri):
         Descriptor.CONFIG,
         config_descriptor_uri,
         # If the user hasn't specified the version to retrieve, resolve the latest from Shotgun.
-        resolve_latest="version" not in config_descriptor_uri
+        resolve_latest=is_descriptor_version_missing(config_descriptor_uri)
     )
 
     logger.info("Resolved config %r" % cfg_descriptor)
@@ -123,7 +117,7 @@ def main():
 
     usage = "%prog [options] config_descriptor target_path"
 
-    desc = "Builds a bundle cache for a given configuration."
+    desc = "Populates a bundle cache for a given configuration."
 
     epilog = """
 
@@ -133,7 +127,7 @@ Details and Examples
 In it's simplest form, provide a descriptor to a configuration and the location
 where the bundle cache should be created.
 
-> python build_bundle_cache.py
+> python populate_bundle_cache.py
             "sgtk:descriptor:app_store?version=v0.3.6&name=tk-config-basic"
             /tmp
 
@@ -143,7 +137,7 @@ give special meaning to the & character.
 For automated build setups, you can provide a specific shotgun API script name and
 and corresponding script key:
 
-> python build_bundle_cache.py
+> python populate_bundle_cache.py
             --shotgun-host='https://mysite.shotgunstudio.com'
             --shotgun-script-name='plugin_build'
             --shotgun-script-key='<script-key-here>'
