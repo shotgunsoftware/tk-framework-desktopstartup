@@ -14,7 +14,6 @@ import os
 import sys
 import time
 import subprocess
-import threading
 import traceback
 
 # initialize logging
@@ -699,45 +698,6 @@ class _BootstrapProxy(object):
             return os.environ.get("SHOTGUN_DESKTOP_BUNDLE_CACHE_LOCATION") or None
 
 
-def automatic_claims_renewal(user, preemtive_renewal_threshold=0.9):
-    """
-    Handles automatic renewal of the SAML2 claims for the user.
-
-    :params user: an already logged in user.
-    :params preemtive_renewal_threshold: How far into the claims duration we will attempt renewal.
-                                         Defaults to 90%, usually 3 minutes 45 seconds.
-
-    This will only be used in a context where SSO is enabled on the
-    Shotgun site.
-    """
-    from tank.authentication import interactive_authentication
-    from sgtk.authentication import AuthenticationCancelled
-
-    logger.debug("Automatic claims renewal")
-    try:
-        previous_expiration = user._impl.get_saml_expiration()
-        # A call to renew_session when SSO is used will not prompt the user for
-        # their credentials if it is not necessary.
-        interactive_authentication.renew_session(user._impl)
-        new_expiration = user._impl.get_saml_expiration()
-
-        if new_expiration > previous_expiration:
-
-            logger.debug("Automatic claims renewal succeeded.")
-            delta = (new_expiration - time.time()) * preemtive_renewal_threshold
-            # If we are debugging, we will use a shorter expiration time.
-            if "SHOTGUN_SSO_DEVELOPER_ENABLED" in os.environ:
-                delta = 5.0
-            logger.debug("Next claims renewal attempt: %f" % delta)
-            t = threading.Timer(delta, automatic_claims_renewal, [user, preemtive_renewal_threshold])
-            t.start()
-        else:
-            logger.warning("Automatic claims renewal failed. No longer attempting to renew claims.")
-    except AuthenticationCancelled:
-        logger.debug("Authentication cancelled, most likely from quitting the application.")
-        pass
-
-
 def main(**kwargs):
     """
     Main
@@ -793,6 +753,7 @@ def main(**kwargs):
 
     from sgtk import authentication
     from sgtk.descriptor import InvalidAppStoreCredentialsError
+    from sgtk.authentication.user import ShotgunSamlUser
 
     try:
         # Reading user settings from disk.
@@ -816,9 +777,9 @@ def main(**kwargs):
 
         # In the case where the site is using SSO, the user needs to renew
         # its claims regularily. So we kick off a separate newewal thread.
-        if user._impl.get_saml_expiration() is not None:
+        if isinstance(user, ShotgunSamlUser):
             logger.debug("Starting SSO claims renewal")
-            automatic_claims_renewal(user)
+            user.start_claims_renewal()
         else:
             logger.debug("Not using SSO")
 
