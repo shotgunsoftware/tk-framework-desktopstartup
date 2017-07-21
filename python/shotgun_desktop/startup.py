@@ -753,7 +753,7 @@ def main(**kwargs):
 
     from sgtk import authentication
     from sgtk.descriptor import InvalidAppStoreCredentialsError
-    from sgtk.authentication.user import ShotgunSamlUser
+    from sgtk.authentication import ShotgunSamlUser
 
     try:
         # Reading user settings from disk.
