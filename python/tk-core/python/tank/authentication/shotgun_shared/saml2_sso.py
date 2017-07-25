@@ -51,12 +51,48 @@ PREEMPTIVE_RENEWAL_THRESHOLD = 0.9
 SHOTGUN_SSO_RENEWAL_INTERVAL = 5000
 
 
+class Saml2SssoError(Exception):
+    """
+    Top level exception for all saml2_sso level runtime errors
+    """
+
+
+class Saml2SssoMultiSessionNotSupportedError(Saml2SssoError):
+    """
+    Exception that indicates the cookies contains sets of tokens from mutliple users.
+    """
+
+
+class Saml2SssoMissingQtModule(Saml2SssoError):
+    """
+    Exception that indicates that a required Qt component is missing.
+    """
+
+
+class Saml2SssoMissingQtNetwork(Saml2SssoMissingQtModule):
+    """
+    Exception that indicates that the QtNetwork component is missing.
+    """
+
+
+class Saml2SssoMissingQtWebKit(Saml2SssoMissingQtModule):
+    """
+    Exception that indicates that the QtWebKit component is missing.
+    """
+
+
 class Saml2Sso(object):
     """Performs Shotgun SSO login and pre-emptive renewal."""
 
     def __init__(self, window_title="SSO"):
         """Initialize the RV mode."""
         log.debug("==- __init__")
+
+        if QtNetwork is None:
+            raise Saml2SssoMissingQtNetwork("The QtNetwork module is unavailable")
+
+        if QtWebKit is None:
+            raise Saml2SssoMissingQtWebKit("The QtWebKit module is unavailable")
 
         self._event_data = None
         self._sessions_stack = []
@@ -80,16 +116,27 @@ class Saml2Sso(object):
         # background color.
         self._view.setStyleSheet("background-color:white;")
 
-        # Ensure that we do not show any warnings about unsupported browser.
-        # There are circumstances where you will be presented some Shotgun
-        # pages (e.g. account linking). In those cases, Shotgun will complain
-        # about the browser used not being supported... Since login flow uses
-        # very simple pages, the warning is not warranted. Given that we do not
-        # know on the Shotgun side that the client is a Qt app, and that we
-        # will only limit the visit to the login flow, it is difficult to
-        # display the warning only conditionnally. It is much simpler to hide
-        # the message on our side.
-        css_style = base64.b64encode('div.browser_not_approved { display: none !important; }')
+        # The context : in some special cases, Shotgun will take you into an alternate
+        # login flow. E.g. when you need to change your password, enter a 2FA value,
+        # link your SSO account with an existing account on the site, etc.
+        #
+        # The issue : when using a non-approved browser, Shotgun will display a
+        # warning stating that your browser is not supported. This is fine should
+        # you be interacting with the whole site. But in our case, we only
+        # navigate the login flow; presenting relatively simple pages. The warning
+        # is not warranted. The browser used is dependent on the version of Qt/PySide
+        # being used and we have little or no control over it.
+        #
+        # The solution : hide the warning by overriding the CSS of the page.
+        # Fixing Shotgun to recognize the user-agent used by the different version
+        # of Qt so that the warning is not displayed would be a tedious task. The
+        # present solution is simpler, with the only drawback being the dependency
+        # on the name of the div for the warning. No error is generated
+        # if that div.browser_not_approved is not present in the page.
+        #
+        # Worst case scenario : should Shotgun modify how the warning is displayed
+        # it would show up in the page.
+        css_style = base64.b64encode("div.browser_not_approved { display: none !important; }")
         self._view.settings().setUserStyleSheetUrl("data:text/css;charset=utf-8;base64," + css_style)
 
         # Threshold percentage of the SSO session duration, at which
@@ -227,7 +274,7 @@ class Saml2Sso(object):
         qt_cookies = []
         if self._session is not None:
             cookies = _decode_cookies(self._session.cookies)
-            qt_cookies = QtNetwork.QNetworkCookie.parseCookies(cookies.output(header=''))
+            qt_cookies = QtNetwork.QNetworkCookie.parseCookies(cookies.output(header=""))
 
         self._view.page().networkAccessManager().cookieJar().setAllCookies(qt_cookies)
 
@@ -614,14 +661,19 @@ def _get_shotgun_user_id(cookies):
     :returns: A string user id value, or None.
     """
     user_id = None
+    user_domain = None
     for cookie in cookies:
+        # Shotgun appends the unique numerical ID of the user to the cookie name:
+        # ex: shotgun_sso_session_userid_u78
         if cookie.startswith("shotgun_sso_session_userid_u"):
             if user_id is not None:
                 # Should we find multiple cookies with the same prefix, it means
                 # that we are using cookies from a multi-session environment. We
                 # have no way to identify the proper user id in the lot.
-                raise Exception('Multi-session not supported')
+                message = "The cookies for this user seem to come from two different shotgun sites: '%s' and '%s'"
+                raise Saml2SssoMultiSessionNotSupportedError(message % (user_domain, cookies[cookie]['domain']))
             user_id = cookie[28:]
+            user_domain = cookies[cookie]['domain']
     return user_id
 
 
@@ -662,6 +714,8 @@ def get_saml_claims_expiration(encoded_cookies):
 
     :returns: An int with the time in seconds since January 1st 1970 UTC, or None
     """
+    # Shotgun appends the unique numerical ID of the user to the cookie name:
+    # ex: shotgun_sso_session_expiration_u78
     saml_claims_expiration = _get_cookie_from_prefix(encoded_cookies, "shotgun_sso_session_expiration_u")
     if saml_claims_expiration is not None:
         saml_claims_expiration = int(saml_claims_expiration)
@@ -676,6 +730,8 @@ def get_saml_user_name(encoded_cookies):
 
     :returns: A string with the user name, or None
     """
+    # Shotgun appends the unique numerical ID of the user to the cookie name:
+    # ex: shotgun_sso_session_userid_u78
     user_name = _get_cookie_from_prefix(encoded_cookies, "shotgun_sso_session_userid_u")
     if user_name is not None:
         user_name = urllib.unquote(user_name)
@@ -706,6 +762,8 @@ def get_csrf_token(encoded_cookies):
 
     :returns: A string with the csrf token, or None
     """
+    # Shotgun appends the unique numerical ID of the user to the cookie name:
+    # ex: csrf_token_u78
     return _get_cookie_from_prefix(encoded_cookies, "csrf_token_u")
 
 
@@ -718,6 +776,8 @@ def get_csrf_key(encoded_cookies):
     :returns: A string with the csrf token name
     """
     cookies = _decode_cookies(encoded_cookies)
+    # Shotgun appends the unique numerical ID of the user to the cookie name:
+    # ex: csrf_token_u78
     return "csrf_token_u%s" % _get_shotgun_user_id(cookies)
 
 
