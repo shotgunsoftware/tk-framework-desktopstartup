@@ -626,6 +626,11 @@ def __handle_unexpected_exception(splash, shotgun_authenticator, error_message, 
 
     exc_type, exc_value, exc_traceback = sys.exc_info()
 
+    if hasattr(sgtk, "LogManager"):
+        log_location = sgtk.LogManager().base_file_handler.baseFilename
+    else:
+        log_location = app_bootstrap.get_logfile_location()
+
     logger.exception("Fatal error, user will be logged out.")
     DesktopMessageBox.critical(
         "Shotgun Desktop Error",
@@ -633,7 +638,7 @@ def __handle_unexpected_exception(splash, shotgun_authenticator, error_message, 
         "support@shotgunsoftware.com, we'll help you diagnose the issue.\n"
         "Error: %s\n"
         "For more information, see the log file at %s." % (
-            str(error_message), sgtk.LogManager().base_file_handler.baseFilename
+            str(error_message), log_location
         ),
         detailed_text="".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
     )
