@@ -8,6 +8,11 @@
 # agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
+# DEBUGGING NOTES:
+#
+#  To use a test core for authentication rather than the one bundled
+#  set the env var "SGTK_CORE_LOCATION" to the path to the core.
+
 from __future__ import absolute_import
 
 import os
@@ -92,9 +97,9 @@ def __desktop_engine_supports_authentication_module(engine):
 
     :returns: True if the engine supports the authentication module, False otherwise.
     """
-    if engine.version.lower() == 'undefined':
+    if engine.version.lower() == 'undefined' or engine.version.startswith("v") is False:
         logger.warning(
-            "The version of the tk-desktop engine is undefined. "
+            "The version of the tk-desktop engine is not a semantic version number. "
             "Assuming engine it supports sgtk.authentication module."
         )
         return True
@@ -110,9 +115,9 @@ def __desktop_engine_supports_websocket(engine):
 
     :returns: True if the engine supports the authentication module, False otherwise.
     """
-    if engine.version.lower() == 'undefined':
+    if engine.version.lower() == 'undefined' or engine.version.startswith("v") is False:
         logger.warning(
-            "The version of the tk-desktop engine is undefined. "
+            "The version of the tk-desktop engine is not a semantic version number. "
             "Assuming it has built-in browser integration support."
         )
         return True
@@ -571,22 +576,6 @@ class _BootstrapProxy(object):
         # Python hasn't found the requested attribute on this class, so let's look for it on the
         # proxied class.
         return getattr(self._app_bootstrap, name)
-
-    def get_app_root(self):
-        """
-        Retrieves the application root.
-
-        :returns: Path to the root of the installation directory.
-        """
-        # If the bootstrap now has the method, forward the call to it.
-        if hasattr(self._app_bootstrap, "get_app_root"):
-            return self._app_bootstrap.get_app_root()
-        # Otherwise retrieve the bootstrap.py module from tk-desktop-internal (which can't be imported manually since it
-        # isn't in the Python path.
-        bootstrap_module = sys.modules[self._app_bootstrap.__module__]
-        # Pick the SHOTGUN_APP_ROOT:
-        # https://github.com/shotgunsoftware/tk-desktop-internal/blob/a31e9339b7e438cd111fb8f4a2b0436e77c98a17/Common/Shotgun/python/bootstrap.py#L80
-        return bootstrap_module.SHOTGUN_APP_ROOT
 
     def get_bundle_cache_location(self):
         """
