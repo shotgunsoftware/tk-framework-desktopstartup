@@ -53,7 +53,6 @@ from shotgun_desktop.turn_on_toolkit import TurnOnToolkit
 from shotgun_desktop.desktop_message_box import DesktopMessageBox
 from shotgun_desktop.upgrade_startup import upgrade_startup
 from shotgun_desktop.location import get_startup_descriptor
-from shotgun_desktop.systray_icon import ShotgunSystemTrayIcon
 from distutils.version import LooseVersion
 
 from shotgun_desktop.errors import (ShotgunDesktopError, RequestRestartException, UpgradeEngineError,
@@ -179,70 +178,6 @@ def __init_app():
     return QtGui.QApplication(sys.argv), shotgun_desktop.splash.Splash()
 
 
-class SystrayEventLoop(QtCore.QEventLoop):
-    """
-    Local event loop for the system tray. The return value of _exec() indicates what the user picked in the
-    menu.
-    """
-
-    CLOSE_APP, LOGIN = range(0, 2)
-
-    def __init__(self, systray, parent=None):
-        """
-        Constructor
-        """
-        QtCore.QEventLoop.__init__(self, parent)
-        systray.login.connect(self._login)
-        systray.quit.connect(self._quit)
-
-    def _login(self):
-        """
-        Called when "Login" is selected. Exits the loop.
-        """
-        self.exit(self.LOGIN)
-
-    def _quit(self):
-        """
-        Called when "Quit" is selected. Exits the loop.
-        """
-        self.exit(self.CLOSE_APP)
-
-    def exec_(self):
-        """
-        Execute the local event loop. If CmdQ was hit in the past, it will be handled just as if the
-        user had picked the Quit menu.
-
-        :returns: The exit code for the loop.
-        """
-        code = QtCore.QEventLoop.exec_(self)
-        # Somebody requested the app to close, so pretend the close menu was picked.
-        if code == -1:
-            return self.CLOSE_APP
-        elif code in [self.CLOSE_APP, self.LOGIN]:
-            return code
-        else:
-            raise Exception("Unexpected return code in local event loop: %s" % code)
-
-
-def __run_with_systray():
-    """
-    Creates a systray and runs a local event loop to process events for that systray.
-
-    :returns: SystrayEventLoop.LOGIN if the user clicked Login, SystrayEventLoop.CLOSE_APP
-        is the user clicked Quit.
-    """
-    systray = ShotgunSystemTrayIcon()
-    systray.show()
-    systray.showMessage(
-        "Shotgun",
-        "Browser integration is running in the background. Click the Shotgun icon to sign in.",
-        QtGui.QSystemTrayIcon.Information,
-        5000
-    )
-    # Executes until user clicks on the systray and chooses Login or Quit.
-    return SystrayEventLoop(systray).exec_()
-
-
 def __optional_state_cleanup(splash, shotgun_authenticator, app_bootstrap):
     """
     Cleans the Desktop state if the alt key is pressed. Restarts the Desktop when done.
@@ -289,43 +224,6 @@ def __do_login(splash, shotgun_authenticator):
         return None
 
     return user
-
-
-def __wait_for_login(
-    splash,
-    shotgun_authenticator,
-    force_login
-):
-    """
-    Runs the login dialog or the tray icon.
-
-    :param splash: Splash screen widget.
-    :param shotgun_authenticator: Instance of the Shotgun Authenticator to use for login.
-    :params force_login: If True, the prompt will be shown automatically instead of going
-        into tray mode.
-
-    :returns tank.authentication.ShotgunUser: The authenticated user or None.
-    """
-    # The workflow is the following (fl stands for force login, du stands for default user)
-    # 1. If you've never used the Desktop before, you will get the tray (!fl and !du)
-    # 2. If you've used the desktop before but never logged in, you'll get the tray !fl and !du)
-    # 3. If you've just logged out of desktop, you'll get the login screen (fl and !du)
-    # 4. If you quit desktop and restart it later you won't see the tray and will auto-login (!fl and du)
-    # 5. If you've cancelled the login screen at some point, you'll get the tray. (!fl and !du)
-    if force_login is False and shotgun_authenticator.get_default_user() is None:
-        if __run_with_systray() == SystrayEventLoop.CLOSE_APP:
-            return None
-
-    # Loop until there is a connection or the user wants to quit.
-    while True:
-        user = __do_login(splash, shotgun_authenticator)
-        # If we logged in, return the connection.
-        if user:
-            return user
-        else:
-            # Now tell the user the Desktop is running in the tray.
-            if __run_with_systray() == SystrayEventLoop.CLOSE_APP:
-                return None
 
 
 def __restart_app_with_countdown(splash, reason):

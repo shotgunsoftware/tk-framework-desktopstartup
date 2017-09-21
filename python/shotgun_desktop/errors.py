@@ -107,35 +107,3 @@ class ToolkitDisabledError(ShotgunDesktopError):
             self,
             "Toolkit has not been activated on your site. Please activate Toolkit before relaunching Shotgun Desktop."
         )
-
-
-class BundledDescriptorEnvVarError(ShotgunDesktopError):
-    """
-    This exception notifies the catcher that the bundled descriptor in
-    SGTK_DESKTOP_BUNDLED_DESCRIPTOR couldn't be parsed correctly.
-    """
-    def __init__(self, reason):
-        ShotgunDesktopError.__init__(
-            self,
-            "Error parsing SGTK_DESKTOP_BUNDLED_DESCRIPTOR: %s" % reason
-        )
-
-
-class EnvironmentVariableFileLookupError(ShotgunDesktopError):
-    """
-    Raised when an environment variable specifying a location points to configuration
-    file that doesn't exist.
-    """
-
-    def __init__(self, var_name, path):
-        """
-        :param str var_name: Name of the environment variable used.
-        :param str path: Path to the configuration file that doesn't exist.
-        """
-        ShotgunDesktopError.__init__(
-            self,
-            "The environment variable '%s' refers to a configuration file on disk at '%s' that doesn't exist." % (
-                var_name,
-                path
-            )
-        )
