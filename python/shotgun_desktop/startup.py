@@ -97,7 +97,9 @@ def __desktop_engine_supports_authentication_module(engine):
 
     :returns: True if the engine supports the authentication module, False otherwise.
     """
-    if engine.version.lower() == 'undefined' or engine.version.startswith("v") is False:
+    # Looking for v should be good enough. No need to complicate things with a regular
+    # expression. Github hashes start with a 0-f character.
+    if engine.version.startswith("v") is False:
         logger.warning(
             "The version of the tk-desktop engine is not a semantic version number. "
             "Assuming engine it supports sgtk.authentication module."
@@ -115,7 +117,9 @@ def __desktop_engine_supports_websocket(engine):
 
     :returns: True if the engine supports the authentication module, False otherwise.
     """
-    if engine.version.lower() == 'undefined' or engine.version.startswith("v") is False:
+    # Looking for v should be good enough. No need to complicate things with a regular
+    # expression. Github hashes start with a 0-f character.
+    if engine.version.startswith("v") is False:
         logger.warning(
             "The version of the tk-desktop engine is not a semantic version number. "
             "Assuming it has built-in browser integration support."
