@@ -79,12 +79,19 @@ rm -rf $DEST/*
 
 echo "Cloning the Shotgun API into a temp location, hang on..."
 # Clone the repo
-git clone --depth 1 --branch $1 $SRC_REPO $DEST_REPO
+git clone $SRC_REPO $DEST_REPO
+
+echo "Checking out the requested version..."
+# Move to the git repo to generate the sha and write it to the $DEST
+pushd $DEST_REPO
+git checkout $1
+git rev-parse HEAD > $DEST/commit_id
+popd
 
 echo "Copying Shotgun API to the required location..."
 
 # Copy the files to the destination
-cp -R $DEST_REPO/shotgun_api3 $DEST/..
+cp -R $DEST_REPO/shotgun_api3/* $DEST
 
 # Put files in the staging area.
 echo "adding new files to git..."

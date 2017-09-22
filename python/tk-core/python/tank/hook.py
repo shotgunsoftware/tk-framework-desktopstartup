@@ -152,10 +152,6 @@ class Hook(object):
     determined to be the default value set in the manifest, allowing for the app to carry a default
     base implementation that is always taken into account.
 
-    .. _hook-formats:
-
-    **Resolving paths to hooks**
-
     Several different path formats exist, making this a very powerful configuration mechanism:
 
     - ``{self}/path/to/foo.py`` -- looks in the ``hooks`` folder in the local app, engine of framework.

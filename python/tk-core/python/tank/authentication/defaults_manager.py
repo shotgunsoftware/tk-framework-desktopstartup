@@ -9,8 +9,6 @@
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
 from . import session_cache
-from ..util.user_settings import UserSettings
-from ..util.system_settings import SystemSettings
 
 
 class DefaultsManager(object):
@@ -33,6 +31,9 @@ class DefaultsManager(object):
     """
 
     def __init__(self):
+        # Breaks circular dependency between util and authentication framework
+        from ..util.user_settings import UserSettings
+        from ..util.system_settings import SystemSettings
         self._user_settings = UserSettings()
         self._system_settings = SystemSettings()
 

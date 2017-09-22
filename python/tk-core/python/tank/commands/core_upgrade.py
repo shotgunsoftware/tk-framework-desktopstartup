@@ -180,9 +180,6 @@ class CoreUpdateAction(Action):
         elif status == TankCoreUpdater.UPDATE_POSSIBLE:
 
             (summary, url) = installer.get_release_notes()
-
-            log.info("")
-            log.info("Newer version %s is available." % new_version)
             log.info("")
             log.info("Change Summary:")
             for x in textwrap.wrap(summary, width=60):
@@ -195,7 +192,7 @@ class CoreUpdateAction(Action):
                      "this will affect the other projects as well.")
             log.info("")
 
-            if suppress_prompts or console_utils.ask_yn_question("Update to %s of the Core API?" % new_version):
+            if suppress_prompts or console_utils.ask_yn_question("Update to this version of the Core API?"):
                 # install it!
                 installer.do_install()
 
