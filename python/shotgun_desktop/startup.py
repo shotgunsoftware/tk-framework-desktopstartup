@@ -299,6 +299,20 @@ def __launch_app(app, splash, user, app_bootstrap, settings):
     logger.debug("Getting the default site configuration.")
     pc_path, pc, toolkit_classic_required = shotgun_desktop.paths.get_pipeline_configuration_info(connection)
 
+    # We need to toggle the global debug logging setting back prior to swapping
+    # core. Cores older than v0.18.117 do not manage the TK_DEBUG environment
+    # variable when global debug is toggled, so we can end up in a situation
+    # where the new core in desktopstartup toggles it on, setting the env var,
+    # and then when the toggle off occurs we end up with the older core in the
+    # site config NOT purging the TK_DEBUG env var. The result is that any
+    # subprocesses spawned then end up with debug logging on when the user
+    # didn't ask for it. This impacts engine command execution from both Desktop
+    # and via browser integration. It is the biggest issue with browser
+    # integration, however, as the debug logs are reported back to the web
+    # app from the desktopserver RPC API, and the user is presented with a
+    # dialog full of debug log messages.
+    __restore_global_debug_flag()
+
     # We're about to bootstrap, so remove sgtk from our scope so that if we add
     # code that uses it after the bootstrap we have to import the
     # new core.
@@ -376,8 +390,6 @@ def __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path):
                 ctx.sgtk.pipeline_configuration.convert_to_site_config()
 
         splash.set_message("Launching Engine...")
-
-        __restore_global_debug_flag()
 
     # We need to validate a few things before the engine starts.
     mgr.pre_engine_start_callback = pre_engine_start_callback
