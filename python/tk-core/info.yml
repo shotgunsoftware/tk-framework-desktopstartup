@@ -12,6 +12,12 @@
 # This is automatically replaced with appropriate values
 # as the core bundle is uploaded to the app store.
 
-version: "v0.18.124"
+version: "v0.18.125"
 documentation_url: ""
 requires_shotgun_version: "v5.0.0"
+
+features:
+   # lean_config history
+   # v1: When bootstrapping with a descriptor based configuration, the
+   #     config folder is run from the bundle cache.
+   bootstrap.lean_config.version: 1
