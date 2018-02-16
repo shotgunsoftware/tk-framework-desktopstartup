@@ -18,11 +18,19 @@ import traceback
 
 # initialize logging
 import logging
-import shotgun_desktop.splash
 
 logger = logging.getLogger("tk-desktop.startup")
 logger.info("------------------ Desktop Engine Startup ------------------")
-
+logger.info("Logging PYTHON state:")
+logger.info("sys.path=%s", sys.path)
+# Log a few environment variables to help with support.
+for var_name in [
+    "PYTHONHOME",
+    "PYTHONPATH",
+    "SGTK_DESKTOP_ORIGINAL_PYTHONPATH",
+    "SGTK_DESKTOP_ORIGINAL_PYTHONHOME", "PATH"
+]:
+    logger.info("%s=%s", var_name, os.environ.get(var_name))
 
 def add_to_python_path(bundled_path, env_var_override, module_name):
     """
@@ -49,6 +57,7 @@ add_to_python_path(os.path.join("..", "tk-core", ), "SGTK_CORE_LOCATION", "tk-co
 from PySide import QtCore, QtGui
 
 import shotgun_desktop.paths
+import shotgun_desktop.splash
 from shotgun_desktop.turn_on_toolkit import TurnOnToolkit
 from shotgun_desktop.desktop_message_box import DesktopMessageBox
 from shotgun_desktop.upgrade_startup import upgrade_startup
