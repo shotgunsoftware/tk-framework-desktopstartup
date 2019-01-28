@@ -5,11 +5,10 @@ This repository is a part of the Shotgun Pipeline Toolkit.
 - For general information and documentation, click here: https://support.shotgunsoftware.com/entries/95441257
 - For information about Shotgun in general, click here: http://www.shotgunsoftware.com/toolkit
 
-## Using this app in your Setup
-All the apps that are part of our standard app suite are pushed to our App Store. 
-This is where you typically go if you want to install an app into a project you are
-working on. For an overview of all the Apps and Engines in the Toolkit App Store,
-click here: https://support.shotgunsoftware.com/entries/95441247.
+# Integrating a new version of tk-core
+
+Run the script tk_core_update.sh with the version tag of the core you want to use. Note that if you currently testing your changes and the tag doesn't exist yet, you can also put a branch name or a commit id.
+
 
 ## Have a Question?
 Don't hesitate to contact us! You can find us on support@shotgunsoftware.com
