@@ -297,6 +297,12 @@ def __launch_app(app, splash, user, app_bootstrap, settings):
         app_bootstrap
     )
     if startup_updated:
+        # We need to restore the global debug logging setting prior to
+        # restarting the app so that forced debug logging is not remembered
+        # as the startup state.  Once Desktop relaunches it will resume forced
+        # debug logging until core swap, when the original launch setting is
+        # restored.
+        __restore_global_debug_flag()
         __restart_app_with_countdown(splash, "Shotgun Desktop updated.")
 
     splash.set_message("Looking up site configuration.")
