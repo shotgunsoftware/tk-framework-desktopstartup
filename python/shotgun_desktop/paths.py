@@ -10,7 +10,7 @@
 
 import os
 import sys
-import urlparse
+from tank_vendor.six.moves.urllib import parse
 import pprint
 import sgtk
 
@@ -138,5 +138,5 @@ def __get_site_from_connection(connection):
     """ return the site from the information in the connection """
     # grab just the non-port part of the netloc of the url
     # eg site.shotgunstudio.com
-    site = urlparse.urlparse(connection.base_url)[1].split(":")[0]
+    site = parse.urlparse(connection.base_url)[1].split(":")[0]
     return site

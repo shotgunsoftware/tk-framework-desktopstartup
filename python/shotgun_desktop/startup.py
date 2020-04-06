@@ -61,7 +61,6 @@ from .qt import QtCore, QtGui
 
 import shotgun_desktop.paths
 import shotgun_desktop.splash
-from shotgun_desktop.turn_on_toolkit import TurnOnToolkit
 from shotgun_desktop.desktop_message_box import DesktopMessageBox
 from shotgun_desktop.upgrade_startup import upgrade_startup
 from shotgun_desktop.location import get_startup_descriptor
@@ -148,34 +147,6 @@ def __supports_pipeline_configuration_upgrade(pipeline_configuration):
     """
     # if the authentication module is not supported, this method won't be present on the core.
     return hasattr(pipeline_configuration, "convert_to_site_config")
-
-
-def _assert_toolkit_enabled(splash, connection):
-    """
-    Returns the path to the pipeline configuration for a given site.
-
-    :param splash: Splash dialog
-    """
-    # get the pipeline configuration for the site we are logged into
-    while True:
-        pc_schema = connection.schema_entity_read().get("PipelineConfiguration")
-        if pc_schema is not None:
-            break
-
-        # Toolkit is not turned on show the dialog that explains what to do
-        splash.hide()
-        dialog = TurnOnToolkit(connection)
-        dialog.show()
-        dialog.raise_()
-        dialog.activateWindow()
-        results = dialog.exec_()
-
-        if results == dialog.Rejected:
-            # dialog was canceled, raise the exception and let the main exception handler deal
-            # with it.
-            raise ToolkitDisabledError()
-
-    splash.show()
 
 
 def __init_app():
@@ -319,7 +290,7 @@ def __launch_app(app, splash, user, app_bootstrap, settings):
 
     connection = user.create_sg_connection()
 
-    _assert_toolkit_enabled(splash, connection)
+    splash.show()
 
     logger.debug("Getting the default site configuration.")
     (

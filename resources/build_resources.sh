@@ -38,7 +38,6 @@ function build_res {
 # build UI's:
 echo "building user interfaces..."
 build_ui splash
-build_ui turn_on_toolkit
 
 # build resources
 echo "building resources..."
