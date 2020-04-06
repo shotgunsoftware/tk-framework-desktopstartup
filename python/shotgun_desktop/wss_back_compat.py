@@ -54,20 +54,34 @@ class Settings(object):
         :param default_certificate_folder: Default location for the certificate file. This value
             is overridable for each app that can use this settings object.
         """
-        self._port = user_settings.get_integer_setting(
-            self._BROWSER_INTEGRATION, self._PORT_SETTING
-        ) or self._DEFAULT_PORT
+        self._port = (
+            user_settings.get_integer_setting(
+                self._BROWSER_INTEGRATION, self._PORT_SETTING
+            )
+            or self._DEFAULT_PORT
+        )
 
-        self._low_level_debug = user_settings.get_boolean_setting(
-            self._BROWSER_INTEGRATION, self._LOW_LEVEL_DEBUG_SETTING
-        ) or self._DEFAULT_LOW_LEVEL_DEBUG_VALUE
+        self._low_level_debug = (
+            user_settings.get_boolean_setting(
+                self._BROWSER_INTEGRATION, self._LOW_LEVEL_DEBUG_SETTING
+            )
+            or self._DEFAULT_LOW_LEVEL_DEBUG_VALUE
+        )
 
-        self._certificate_folder = user_settings.get_setting(
-            self._BROWSER_INTEGRATION, self._CERTIFICATE_FOLDER_SETTING
-        ) or default_certificate_folder
+        self._certificate_folder = (
+            user_settings.get_setting(
+                self._BROWSER_INTEGRATION, self._CERTIFICATE_FOLDER_SETTING
+            )
+            or default_certificate_folder
+        )
 
-        self._integration_enabled = user_settings.get_boolean_setting(self._BROWSER_INTEGRATION, self._ENABLED)
-        self._whitelist = user_settings.get_setting(self._BROWSER_INTEGRATION, self._WHITELIST) or "*.shotgunstudio.com"
+        self._integration_enabled = user_settings.get_boolean_setting(
+            self._BROWSER_INTEGRATION, self._ENABLED
+        )
+        self._whitelist = (
+            user_settings.get_setting(self._BROWSER_INTEGRATION, self._WHITELIST)
+            or "*.shotgunstudio.com"
+        )
 
     @property
     def port(self):
@@ -81,7 +95,9 @@ class Settings(object):
         """
         :returns: True if the browser integration is enabled, False otherwise.
         """
-        return self._integration_enabled if self._integration_enabled is not None else True
+        return (
+            self._integration_enabled if self._integration_enabled is not None else True
+        )
 
     @property
     def low_level_debug(self):
@@ -147,10 +163,8 @@ def init_websockets(splash, app_bootstrap, settings, global_logger):
     integration_settings = Settings(
         settings,
         os.path.join(
-            app_bootstrap.get_shotgun_desktop_cache_location(),
-            "config",
-            "certificates"
-        )
+            app_bootstrap.get_shotgun_desktop_cache_location(), "config", "certificates"
+        ),
     )
 
     integration_settings.dump(logger)
@@ -166,11 +180,7 @@ def init_websockets(splash, app_bootstrap, settings, global_logger):
         path = os.path.expanduser(os.path.expandvars(path))
     else:
         path = os.path.normpath(
-            os.path.join(
-                os.path.split(__file__)[0],
-                "..",
-                "server"
-            )
+            os.path.join(os.path.split(__file__)[0], "..", "server")
         )
     path = os.path.join(path, "python")
     sys.path.insert(0, path)
@@ -183,21 +193,30 @@ def init_websockets(splash, app_bootstrap, settings, global_logger):
         splash.set_message("Initializing browser integration")
         # Import framework
         import tk_framework_desktopserver
-    except Exception, e:
-        return None, __handle_unexpected_exception_during_websocket_init(splash, app_bootstrap, e)
+    except Exception as e:
+        return (
+            None,
+            __handle_unexpected_exception_during_websocket_init(
+                splash, app_bootstrap, e
+            ),
+        )
 
     # We need to break these two try's because if we can't import the tk-framework-desktopserver
     # module we won't be able to catch any exception types from that module.
     try:
         # Makes sure that the certificate has been created on disk and registered with the OS (or browser on Linux).
-        __ensure_certificate_ready(app_bootstrap, tk_framework_desktopserver, integration_settings.certificate_folder)
+        __ensure_certificate_ready(
+            app_bootstrap,
+            tk_framework_desktopserver,
+            integration_settings.certificate_folder,
+        )
 
         # Launch the server
         server = tk_framework_desktopserver.Server(
             port=integration_settings.port,
             low_level_debug=integration_settings.low_level_debug,
             whitelist=integration_settings.whitelist,
-            keys_path=integration_settings.certificate_folder
+            keys_path=integration_settings.certificate_folder,
         )
 
         # This might throw a PortBusyError.
@@ -209,13 +228,22 @@ def init_websockets(splash, app_bootstrap, settings, global_logger):
         # Gracefully let the user know that the Desktop might already be running.
         logger.exception("Could not start the browser integration:")
         splash.hide()
-        return None, __query_quit_or_continue_launching(
-            "Browser integration failed to start because port %d is already in use. The Shotgun "
-            "Desktop may already be running on your machine." % integration_settings.port,
-            app_bootstrap
+        return (
+            None,
+            __query_quit_or_continue_launching(
+                "Browser integration failed to start because port %d is already in use. The Shotgun "
+                "Desktop may already be running on your machine."
+                % integration_settings.port,
+                app_bootstrap,
+            ),
         )
-    except Exception, e:
-        return None, __handle_unexpected_exception_during_websocket_init(splash, app_bootstrap, e)
+    except Exception as e:
+        return (
+            None,
+            __handle_unexpected_exception_during_websocket_init(
+                splash, app_bootstrap, e
+            ),
+        )
 
 
 def __handle_unexpected_exception_during_websocket_init(splash, app_bootstrap, ex):
@@ -235,7 +263,7 @@ def __handle_unexpected_exception_during_websocket_init(splash, app_bootstrap, e
         "Browser integration failed to start. It will not be available if "
         "you continue.\n"
         "Error: %s" % str(ex),
-        app_bootstrap
+        app_bootstrap,
     )
 
 
@@ -251,14 +279,13 @@ def __query_quit_or_continue_launching(msg, app_bootstrap):
     warning_box = DesktopMessageBox(
         DesktopMessageBox.Warning,
         "Browser Integration error",
-        "%s\n"
-        "Do you want to continue launching the Shotgun Desktop?" % msg,
+        "%s\n" "Do you want to continue launching the Shotgun Desktop?" % msg,
         DesktopMessageBox.Yes,
         DesktopMessageBox.Yes | DesktopMessageBox.No,
         "If you drop us an email at support@shotgunsoftware.com, we'll help you diagnose "
         "the issue.\n\n"
         "For more information, see the log file at %s.\n\n"
-        "%s" % (app_bootstrap.get_logfile_location(), traceback.format_exc())
+        "%s" % (app_bootstrap.get_logfile_location(), traceback.format_exc()),
     )
     warning_box.button(DesktopMessageBox.Yes).setText("Continue")
     warning_box.button(DesktopMessageBox.No).setText("Quit")
@@ -266,7 +293,9 @@ def __query_quit_or_continue_launching(msg, app_bootstrap):
     return warning_box.exec_() == DesktopMessageBox.Yes
 
 
-def __ensure_certificate_ready(app_bootstrap, tk_framework_desktopserver, certificate_folder):
+def __ensure_certificate_ready(
+    app_bootstrap, tk_framework_desktopserver, certificate_folder
+):
     """
     Ensures that the certificates are created and registered. If something is amiss, then the
     configuration is fixed.
@@ -277,7 +306,9 @@ def __ensure_certificate_ready(app_bootstrap, tk_framework_desktopserver, certif
 
     :returns: True is the certificate is ready, False otherwise.
     """
-    cert_handler = tk_framework_desktopserver.get_certificate_handler(certificate_folder)
+    cert_handler = tk_framework_desktopserver.get_certificate_handler(
+        certificate_folder
+    )
 
     # We only warn once.
     warned = False
@@ -322,9 +353,11 @@ def __get_certificate_prompt(keychain_name, action):
 
     :returns: String containing an error message formatted
     """
-    return ("The Shotgun Desktop needs to update the security certificate list from your %s before "
-            "it can turn on the browser integration.\n"
-            "%s" % (keychain_name, action))
+    return (
+        "The Shotgun Desktop needs to update the security certificate list from your %s before "
+        "it can turn on the browser integration.\n"
+        "%s" % (keychain_name, action)
+    )
 
 
 def __warn_for_prompt():
@@ -337,15 +370,15 @@ def __warn_for_prompt():
             __get_certificate_prompt(
                 "keychain",
                 "You will be prompted to enter your username and password by MacOS's keychain "
-                "manager in order to proceed with the updates."
-            )
+                "manager in order to proceed with the updates.",
+            ),
         )
     elif sys.platform == "win32":
         DesktopMessageBox.information(
             "Shotgun browser integration",
             __get_certificate_prompt(
                 "Windows certificate store",
-                "Windows will now prompt you to accept one or more updates to your certificate store."
-            )
+                "Windows will now prompt you to accept one or more updates to your certificate store.",
+            ),
         )
     # On Linux there's no need to prompt. It's all silent.

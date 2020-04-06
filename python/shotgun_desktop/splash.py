@@ -18,6 +18,7 @@ class Splash(QtGui.QDialog):
     """
     Splash screen with customizable message shown during the application startup.
     """
+
     def __init__(self, parent=None):
         """
         Constructor. Widget is initially hidden.

@@ -47,7 +47,7 @@
 # ../resources/keys.
 #
 # For reference, here are the paths that the Shotgun Desktop uses.
-# MacOS: 
+# MacOS:
 # certificate_folder=~/Library/Caches/Shotgun/desktop/config/certificates
 # Windows
 # certificate_folder=$APPDATA\Shotgun\desktop\config\certificates

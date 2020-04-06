@@ -31,11 +31,7 @@ def _get_location_yaml_location(root):
 
     :returns: A string pointing to root/resources/location.yml
     """
-    return os.path.join(
-        root,
-        "resources",
-        "location.yml"
-    )
+    return os.path.join(root, "resources", "location.yml")
 
 
 def get_location(app_bootstrap):
@@ -49,7 +45,7 @@ def get_location(app_bootstrap):
     """
     dev_descriptor = {
         "type": "dev",
-        "path": app_bootstrap.get_startup_location_override()
+        "path": app_bootstrap.get_startup_location_override(),
     }
     # If the startup location had been overriden, the descriptor is automatically
     # a dev descriptor.
@@ -67,10 +63,7 @@ def get_location(app_bootstrap):
     location = _get_location_yaml_location(app_bootstrap.get_startup_path())
     # If the file is missing, we're in dev mode.
     if not os.path.exists(location):
-        return {
-            "type": "dev",
-            "path": app_bootstrap.get_startup_path()
-        }
+        return {"type": "dev", "path": app_bootstrap.get_startup_path()}
 
     # Read the location.yml file.
     with open(location, "r") as location_file:
@@ -88,10 +81,8 @@ def get_startup_descriptor(sgtk, sg, app_bootstrap):
     return sgtk.deploy.descriptor.get_from_location_and_paths(
         sgtk.deploy.descriptor.AppDescriptor.FRAMEWORK,
         app_bootstrap.get_shotgun_desktop_cache_location(),
-        os.path.join(
-            app_bootstrap.get_shotgun_desktop_cache_location(), "install"
-        ),
-        get_location(app_bootstrap)
+        os.path.join(app_bootstrap.get_shotgun_desktop_cache_location(), "install"),
+        get_location(app_bootstrap),
     )
 
 
@@ -101,10 +92,13 @@ def write_location(descriptor):
     """
     # Local import since sgtk is lazily loaded.
     from tank_vendor import yaml
-    old_umask = os.umask(0077)
+
+    old_umask = os.umask(0o077)
     try:
         # Write the toolkit descriptor information to disk.
-        location_yml_path = os.path.join(_get_location_yaml_location(descriptor.get_path()))
+        location_yml_path = os.path.join(
+            _get_location_yaml_location(descriptor.get_path())
+        )
         with open(location_yml_path, "w") as location_yml:
             location_yml.write(copyright)
             yaml.dump(descriptor.get_location(), location_yml)

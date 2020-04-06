@@ -28,9 +28,11 @@ for var_name in [
     "PYTHONHOME",
     "PYTHONPATH",
     "SGTK_DESKTOP_ORIGINAL_PYTHONPATH",
-    "SGTK_DESKTOP_ORIGINAL_PYTHONHOME", "PATH"
+    "SGTK_DESKTOP_ORIGINAL_PYTHONHOME",
+    "PATH",
 ]:
     logger.info("%s=%s", var_name, os.environ.get(var_name))
+
 
 def add_to_python_path(bundled_path, env_var_override, module_name):
     """
@@ -50,8 +52,9 @@ def add_to_python_path(bundled_path, env_var_override, module_name):
     sys.path.insert(0, path)
     logger.info("Using %s from '%s'", module_name, path)
 
+
 # Add Toolkit to the path.
-add_to_python_path(os.path.join("..", "tk-core", ), "SGTK_CORE_LOCATION", "tk-core")
+add_to_python_path(os.path.join("..", "tk-core",), "SGTK_CORE_LOCATION", "tk-core")
 
 # now proceed with non builtin imports
 from PySide import QtCore, QtGui
@@ -64,9 +67,14 @@ from shotgun_desktop.upgrade_startup import upgrade_startup
 from shotgun_desktop.location import get_startup_descriptor
 from distutils.version import LooseVersion
 
-from shotgun_desktop.errors import (ShotgunDesktopError, RequestRestartException, UpgradeEngineError,
-                                    ToolkitDisabledError, UpgradeCoreError,
-                                    InvalidPipelineConfiguration)
+from shotgun_desktop.errors import (
+    ShotgunDesktopError,
+    RequestRestartException,
+    UpgradeEngineError,
+    ToolkitDisabledError,
+    UpgradeCoreError,
+    InvalidPipelineConfiguration,
+)
 
 
 global_debug_flag_at_startup = None
@@ -78,6 +86,7 @@ def __restore_global_debug_flag():
     """
     global global_debug_flag_at_startup
     import sgtk
+
     # If there is no LogManager for the new core, there's no need to restore any flag.
     if hasattr(sgtk, "LogManager"):
         sgtk.LogManager().global_debug = global_debug_flag_at_startup
@@ -89,6 +98,7 @@ def __backup_global_debug_flag():
     """
     global global_debug_flag_at_startup
     import sgtk
+
     global_debug_flag_at_startup = sgtk.LogManager().global_debug
 
 
@@ -196,7 +206,9 @@ def __optional_state_cleanup(splash, shotgun_authenticator, app_bootstrap):
     :params app_bootstrap: The application bootstrap.
     """
     # If the application was launched holding the alt key, log the user out.
-    if (QtGui.QApplication.queryKeyboardModifiers() & QtCore.Qt.AltModifier) == QtCore.Qt.AltModifier:
+    if (
+        QtGui.QApplication.queryKeyboardModifiers() & QtCore.Qt.AltModifier
+    ) == QtCore.Qt.AltModifier:
         logger.info("Alt was pressed, clearing default user and startup descriptor")
         shotgun_authenticator.clear_default_user()
         app_bootstrap.clear_startup_location()
@@ -214,6 +226,7 @@ def __do_login(splash, shotgun_authenticator):
     :returns tank.authentication.ShotgunUser: The logged in user or None
     """
     from sgtk.authentication import AuthenticationCancelled
+
     logger.debug("Retrieving credentials")
     try:
         user = shotgun_authenticator.get_user()
@@ -288,14 +301,11 @@ def __launch_app(app, splash, user, app_bootstrap, settings):
     splash.show()
 
     import sgtk
+
     sgtk.set_authenticated_user(user)
 
     # Downloads an upgrade for the startup if available.
-    startup_updated = upgrade_startup(
-        splash,
-        sgtk,
-        app_bootstrap
-    )
+    startup_updated = upgrade_startup(splash, sgtk, app_bootstrap)
     if startup_updated:
         # We need to restore the global debug logging setting prior to
         # restarting the app so that forced debug logging is not remembered
@@ -312,7 +322,11 @@ def __launch_app(app, splash, user, app_bootstrap, settings):
     _assert_toolkit_enabled(splash, connection)
 
     logger.debug("Getting the default site configuration.")
-    pc_path, pc, toolkit_classic_required = shotgun_desktop.paths.get_pipeline_configuration_info(connection)
+    (
+        pc_path,
+        pc,
+        toolkit_classic_required,
+    ) = shotgun_desktop.paths.get_pipeline_configuration_info(connection)
 
     # We need to toggle the global debug logging setting back prior to swapping
     # core. Cores older than v0.18.117 do not manage the TK_DEBUG environment
@@ -366,6 +380,7 @@ def __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path):
     :returns: Toolkit engine that was started.
     """
     import sgtk
+
     mgr = sgtk.bootstrap.ToolkitManager(user)
     # Tell the manager to resolve the config in Shotgun so it can resolve the location on disk.
     mgr.do_shotgun_config_lookup = True
@@ -393,11 +408,13 @@ def __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path):
         if pc["project"] is None:
 
             # make sure that the version of core we are using supports the new-style site configuration
-            if not __supports_pipeline_configuration_upgrade(ctx.sgtk.pipeline_configuration):
+            if not __supports_pipeline_configuration_upgrade(
+                ctx.sgtk.pipeline_configuration
+            ):
                 raise UpgradeCoreError(
                     "Running a site configuration without the Template Project requires core v0.16.8 "
                     "or higher.",
-                    pc_path
+                    pc_path,
                 )
 
             # If the configuration on disk is not the site configuration, update it to the site config.
@@ -414,7 +431,7 @@ def __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path):
     if not __desktop_engine_supports_authentication_module(engine):
         raise UpgradeEngineError(
             "This version of the Shotgun Desktop only supports tk-desktop engine 2.0.0 and higher.",
-            pc_path
+            pc_path,
         )
 
     return engine
@@ -433,13 +450,14 @@ def __start_engine_in_zero_config(app, app_bootstrap, splash, user):
     """
     # The startup is up to date, now it's time to bootstrap Toolkit.
     import sgtk
+
     mgr = sgtk.bootstrap.ToolkitManager(user)
 
     # Allows to take over the site config to use with Desktop without impacting the projects
     # configurations.
     mgr.base_configuration = os.environ.get(
         "SHOTGUN_DESKTOP_CONFIG_FALLBACK_DESCRIPTOR",
-        "sgtk:descriptor:app_store?name=tk-config-basic"
+        "sgtk:descriptor:app_store?name=tk-config-basic",
     )
     mgr.progress_callback = lambda progress_value, message: __bootstrap_progress_callback(
         splash, app, progress_value, message
@@ -491,27 +509,33 @@ def __post_bootstrap_engine(splash, app_bootstrap, engine, settings):
             splash,
             version=app_bootstrap.get_version(),
             startup_version=startup_version,
-            startup_descriptor=startup_desc
+            startup_descriptor=startup_desc,
         )
     else:
         logger.info(
             "tk-desktop version %s does not have built-in browser integration "
-            "launching legacy browser integration.", engine.version
+            "launching legacy browser integration.",
+            engine.version,
         )
         from . import wss_back_compat
-        server, should_run = wss_back_compat.init_websockets(splash, app_bootstrap, settings, logger)
+
+        server, should_run = wss_back_compat.init_websockets(
+            splash, app_bootstrap, settings, logger
+        )
         if not should_run:
             return False
 
         if server:
-            QtGui.QApplication.instance().aboutToQuit.connect(lambda: server.tear_down())
+            QtGui.QApplication.instance().aboutToQuit.connect(
+                lambda: server.tear_down()
+            )
 
         # This is how the old desktop engine used to be invoked.
         return engine.run(
             splash,
             version=app_bootstrap.get_version(),
             server=server,
-            startup_version=startup_version
+            startup_version=startup_version,
         )
 
 
@@ -534,7 +558,9 @@ def __handle_exception(splash, shotgun_authenticator, error_message):
         shotgun_authenticator.clear_default_user()
 
 
-def __handle_unexpected_exception(splash, shotgun_authenticator, error_message, app_bootstrap):
+def __handle_unexpected_exception(
+    splash, shotgun_authenticator, error_message, app_bootstrap
+):
     """
     Tears down the application, logs you out and displays an error message.
 
@@ -562,10 +588,11 @@ def __handle_unexpected_exception(splash, shotgun_authenticator, error_message, 
         "Something went wrong in the Shotgun Desktop! If you drop us an email at "
         "support@shotgunsoftware.com, we'll help you diagnose the issue.\n"
         "Error: %s\n"
-        "For more information, see the log file at %s." % (
-            str(error_message), log_location
+        "For more information, see the log file at %s."
+        % (str(error_message), log_location),
+        detailed_text="".join(
+            traceback.format_exception(exc_type, exc_value, exc_traceback)
         ),
-        detailed_text="".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
     )
     # If we are logged in, we should log out so the user is not stuck in a loop of always
     # automatically logging in each time the app is launched again
@@ -653,7 +680,10 @@ def main(**kwargs):
 
     # Older versions of the desktop on Windows logged at %APPDATA%\Shotgun\tk-desktop.log. Notify the user that
     # this logging location is deprecated and the logs are now at %APPDATA%\Shotgun\Logs\tk-desktop.log
-    if sys.platform == "win32" and LooseVersion(app_bootstrap.get_version()) <= "v1.3.6":
+    if (
+        sys.platform == "win32"
+        and LooseVersion(app_bootstrap.get_version()) <= "v1.3.6"
+    ):
         logger.info(
             "Logging at this location will now stop and resume at {0}\\tk-desktop.log".format(
                 sgtk.LogManager().log_folder
@@ -699,10 +729,7 @@ def main(**kwargs):
 
         __optional_state_cleanup(splash, shotgun_authenticator, app_bootstrap)
 
-        user = __do_login(
-            splash,
-            shotgun_authenticator
-        )
+        user = __do_login(splash, shotgun_authenticator)
 
         if not user:
             logger.info("Login canceled. Quitting.")
@@ -718,13 +745,7 @@ def main(**kwargs):
 
         # Now that we are logged, we can proceed with launching the
         # application.
-        exit_code = __launch_app(
-            app,
-            splash,
-            user,
-            app_bootstrap,
-            settings
-        )
+        exit_code = __launch_app(app, splash, user, app_bootstrap, settings)
         return exit_code
     except RequestRestartException:
         subprocess.Popen(sys.argv, close_fds=True)
@@ -734,12 +755,12 @@ def main(**kwargs):
         splash.hide()
         shotgun_authenticator.clear_default_user()
         return 0
-    except InvalidAppStoreCredentialsError, e:
+    except InvalidAppStoreCredentialsError as e:
         __handle_exception(splash, shotgun_authenticator, str(e))
         return -1
-    except ShotgunDesktopError, e:
+    except ShotgunDesktopError as e:
         __handle_exception(splash, shotgun_authenticator, str(e))
         return -1
-    except Exception, e:
+    except Exception as e:
         __handle_unexpected_exception(splash, shotgun_authenticator, e, app_bootstrap)
         return -1

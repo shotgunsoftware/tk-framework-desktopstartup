@@ -13,6 +13,7 @@ from shotgun_desktop.desktop_message_box import DesktopMessageBox
 from sgtk.descriptor import CheckVersionConstraintsError
 
 from sgtk import LogManager
+
 logger = LogManager.get_logger(__name__)
 
 from distutils.version import LooseVersion
@@ -99,11 +100,12 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
         return False
 
     # out of date check
-    out_of_date = (latest_descriptor.get_version() != current_desc.get_version())
+    out_of_date = latest_descriptor.get_version() != current_desc.get_version()
 
     if not out_of_date:
         logger.debug(
-            "Desktop startup is up to date. Currently running version %s" % current_desc.get_version()
+            "Desktop startup is up to date. Currently running version %s"
+            % current_desc.get_version()
         )
         return False
 
@@ -113,7 +115,11 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
             desktop_version=app_bootstrap.get_version()
         )
     except CheckVersionConstraintsError as e:
-        logger.warning("Cannot upgrade to the latest Desktop Startup %s. %s", latest_descriptor.version, e)
+        logger.warning(
+            "Cannot upgrade to the latest Desktop Startup %s. %s",
+            latest_descriptor.version,
+            e,
+        )
         return False
 
     try:
@@ -132,7 +138,7 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
         # update the startup so next restart we start with the just downloaded code.
         app_bootstrap.update_startup(latest_descriptor)
         return True
-    except Exception, e:
+    except Exception as e:
         splash.hide()
         # If there is an error updating, don't prevent the user from running the app, but let them
         # know something wrong is going on.
@@ -143,6 +149,7 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
             "Desktop will be launched with the currently installed version of the code.\n"
             "If this problem persists, please contact Shotgun support at "
             "support@shotgunsoftware.com.\n"
-            "Error: %s" % str(e))
+            "Error: %s" % str(e),
+        )
         splash.show()
         return False

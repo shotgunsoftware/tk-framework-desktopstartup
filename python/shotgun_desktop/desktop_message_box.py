@@ -12,9 +12,15 @@ from PySide import QtCore, QtGui
 
 
 class DesktopMessageBox(QtGui.QMessageBox):
-
     @staticmethod
-    def critical(title, message, default_button=QtGui.QMessageBox.Ok, buttons=QtGui.QMessageBox.Ok, detailed_text=None, parent=None):
+    def critical(
+        title,
+        message,
+        default_button=QtGui.QMessageBox.Ok,
+        buttons=QtGui.QMessageBox.Ok,
+        detailed_text=None,
+        parent=None,
+    ):
         """
         Pops a critical message box, very similar to QtGui.QMessageBox.critical.
 
@@ -38,11 +44,18 @@ class DesktopMessageBox(QtGui.QMessageBox):
             default_button,
             buttons,
             detailed_text,
-            parent
+            parent,
         ).exec_()
 
     @staticmethod
-    def information(title, message, default_button=QtGui.QMessageBox.Ok, buttons=QtGui.QMessageBox.Ok, detailed_text=None, parent=None):
+    def information(
+        title,
+        message,
+        default_button=QtGui.QMessageBox.Ok,
+        buttons=QtGui.QMessageBox.Ok,
+        detailed_text=None,
+        parent=None,
+    ):
         """
         Pops an informational message box, very similar to QtGui.QMessageBox.information.
 
@@ -66,11 +79,18 @@ class DesktopMessageBox(QtGui.QMessageBox):
             default_button,
             buttons,
             detailed_text,
-            parent
+            parent,
         ).exec_()
 
     @staticmethod
-    def warning(title, message, default_button=QtGui.QMessageBox.Ok, buttons=QtGui.QMessageBox.Ok, detailed_text=None, parent=None):
+    def warning(
+        title,
+        message,
+        default_button=QtGui.QMessageBox.Ok,
+        buttons=QtGui.QMessageBox.Ok,
+        detailed_text=None,
+        parent=None,
+    ):
         """
         Pops a warning message box, very similar to QtGui.QMessageBox.warning.
 
@@ -94,10 +114,19 @@ class DesktopMessageBox(QtGui.QMessageBox):
             default_button,
             buttons,
             detailed_text,
-            parent
+            parent,
         ).exec_()
 
-    def __init__(self, icon, title, message, default_button, buttons, detailed_text=None, parent=None):
+    def __init__(
+        self,
+        icon,
+        title,
+        message,
+        default_button,
+        buttons,
+        detailed_text=None,
+        parent=None,
+    ):
         """
         Pops a warning message box, very similar to QtGui.QMessageBox.warning.
 
@@ -145,7 +174,8 @@ class DesktopMessageBox(QtGui.QMessageBox):
                 color: rgb(248, 248, 248);
                 background-color: rgb(35, 165, 225);
             }
-            """)
+            """
+        )
         # Set the requested icon
         self.setIcon(icon)
 
@@ -160,10 +190,13 @@ class DesktopMessageBox(QtGui.QMessageBox):
         self.setWindowTitle(title)
 
         # Create a paragraph per \n line of text.
-        message = "".join(["<p><span style=\" font-size:12pt;\">%s</span></p>" % para for para in message.split("\n")])
-        self.setText(
-            "<html><head/><body>%s</body></html>" % message
+        message = "".join(
+            [
+                '<p><span style=" font-size:12pt;">%s</span></p>' % para
+                for para in message.split("\n")
+            ]
         )
+        self.setText("<html><head/><body>%s</body></html>" % message)
 
     def exec_(self):
         """

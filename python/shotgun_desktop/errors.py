@@ -23,6 +23,7 @@ class RequestRestartException(Exception):
     Short circuits all the application code for a quick exit. The user
     wants to reinitialize the app.
     """
+
     pass
 
 
@@ -30,6 +31,7 @@ class ShotgunDesktopError(Exception):
     """
     Common base class for Shotgun Desktop errors.
     """
+
     _SUPPORT_EMAIL = "support@shotgunsoftware.com"
 
     def __init__(self, message, support_required=False):
@@ -40,13 +42,14 @@ class ShotgunDesktopError(Exception):
         """
 
         if support_required:
-            support_message = "Please contact {0} to resolve this issue.".format(self._SUPPORT_EMAIL)
+            support_message = "Please contact {0} to resolve this issue.".format(
+                self._SUPPORT_EMAIL
+            )
         else:
-            support_message = ("If you need help with this issue, please contact {0}.").format(self._SUPPORT_EMAIL)
-        Exception.__init__(
-            self,
-            "%s\n\n%s" % (message, support_message)
-        )
+            support_message = (
+                "If you need help with this issue, please contact {0}."
+            ).format(self._SUPPORT_EMAIL)
+        Exception.__init__(self, "%s\n\n%s" % (message, support_message))
 
 
 class InvalidPipelineConfiguration(ShotgunDesktopError):
@@ -60,12 +63,18 @@ class InvalidPipelineConfiguration(ShotgunDesktopError):
         pc_project_id = pc_entity["project"]["id"] if pc_entity["project"] else None
         ShotgunDesktopError.__init__(
             self,
-            "The pipeline configuration retrieved from Shotgun (named \"%s\" "
+            'The pipeline configuration retrieved from Shotgun (named "%s" '
             "with id %d and project id %s) does not match the site configuration found on disk "
-            "(named \"%s\" with id %d and project id %s). Please contact your Shotgun "
-            "Administrator." %
-            (pc_entity["code"], pc_entity["id"], pc_project_id,
-             site_pc.get_name(), site_pc.get_shotgun_id(), site_pc.get_project_id())
+            '(named "%s" with id %d and project id %s). Please contact your Shotgun '
+            "Administrator."
+            % (
+                pc_entity["code"],
+                pc_entity["id"],
+                pc_project_id,
+                site_pc.get_name(),
+                site_pc.get_shotgun_id(),
+                site_pc.get_project_id(),
+            ),
         )
 
 
@@ -74,12 +83,18 @@ class UpgradeCoreError(ShotgunDesktopError):
     This exception notifies the catcher that the site's core needs to be upgraded in order to
     use this version of the Desktop installer.
     """
+
     def __init__(self, reason, toolkit_path):
         """Constructor"""
         ShotgunDesktopError.__init__(
             self,
-            "%s Please upgrade your site core by running:\n\n%s core" %
-            (reason, os.path.join(toolkit_path, "tank.bat" if sys.platform == "win32" else "tank"))
+            "%s Please upgrade your site core by running:\n\n%s core"
+            % (
+                reason,
+                os.path.join(
+                    toolkit_path, "tank.bat" if sys.platform == "win32" else "tank"
+                ),
+            ),
         )
 
 
@@ -88,12 +103,18 @@ class UpgradeEngineError(ShotgunDesktopError):
     This exception notifies the catcher that the site's desktop engine needs to be upgraded in order
     to use this version of the Desktop installer.
     """
+
     def __init__(self, reason, toolkit_path):
         """Constructor"""
         ShotgunDesktopError.__init__(
             self,
-            "%s Please upgrade your site engine by running:\n\n%s updates site" %
-            (reason, os.path.join(toolkit_path, "tank.bat" if sys.platform == "win32" else "tank"))
+            "%s Please upgrade your site engine by running:\n\n%s updates site"
+            % (
+                reason,
+                os.path.join(
+                    toolkit_path, "tank.bat" if sys.platform == "win32" else "tank"
+                ),
+            ),
         )
 
 
@@ -101,9 +122,10 @@ class ToolkitDisabledError(ShotgunDesktopError):
     """
     This exception notifies the catcher that Toolkit has not been enabled by the user on the site.
     """
+
     def __init__(self):
         """Constructor"""
         ShotgunDesktopError.__init__(
             self,
-            "Toolkit has not been activated on your site. Please activate Toolkit before relaunching Shotgun Desktop."
+            "Toolkit has not been activated on your site. Please activate Toolkit before relaunching Shotgun Desktop.",
         )
