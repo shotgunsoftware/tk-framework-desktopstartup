@@ -20,7 +20,9 @@ class TurnOnToolkit(QtGui.QDialog):
         self.ui = turn_on_toolkit.Ui_TurnOnToolkit()
         self.ui.setupUi(self)
 
-        url_text = "<a href='%s/page/manage_apps'>" \
-            "<span style='font-size:20pt; text-decoration: underline; color:#f0f0f0;'>" \
+        url_text = (
+            "<a href='%s/page/manage_apps'>"
+            "<span style='font-size:20pt; text-decoration: underline; color:#f0f0f0;'>"
             "Manage Apps</span></a>" % connection.base_url
+        )
         self.ui.url_label.setText(url_text)

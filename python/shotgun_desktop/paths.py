@@ -14,6 +14,7 @@ import urlparse
 import pprint
 
 from sgtk import LogManager
+
 logger = LogManager.get_logger(__name__)
 
 
@@ -40,7 +41,16 @@ def get_pipeline_configuration_info(connection):
         raise RuntimeError("unknown platform: %s" % sys.platform)
 
     # interesting fields to return
-    fields = ["id", "code", "windows_path", "mac_path", "linux_path", "project", "sg_plugin_ids", "plugin_ids"]
+    fields = [
+        "id",
+        "code",
+        "windows_path",
+        "mac_path",
+        "linux_path",
+        "project",
+        "sg_plugin_ids",
+        "plugin_ids",
+    ]
 
     # Find the right pipeline configuration. We'll always pick a projectless
     # one over one with the Template Project. To have a deterministic behaviour,
@@ -57,34 +67,38 @@ def get_pipeline_configuration_info(connection):
 
     pcs = connection.find(
         "PipelineConfiguration",
-        [{
-            "filter_operator": "any",
-            "filters": [
-                ["project", "is", None],
-                {
-                    "filter_operator": "all",
-                    "filters": [
-                        ["project.Project.name", "is", "Template Project"],
-                        ["project.Project.layout_project", "is", None]
-                    ]
-                }
-            ]
-        }],
+        [
+            {
+                "filter_operator": "any",
+                "filters": [
+                    ["project", "is", None],
+                    {
+                        "filter_operator": "all",
+                        "filters": [
+                            ["project.Project.name", "is", "Template Project"],
+                            ["project.Project.layout_project", "is", None],
+                        ],
+                    },
+                ],
+            }
+        ],
         fields=fields,
         order=[
             # Sorting on the project id doesn't actually matter. We want
             # some sorting simply because this will force grouping between
             # configurations with a project and those that don't.
             {"field_name": "project.Project.id", "direction": "asc"},
-            {"field_name": "id", "direction": "desc"}
-        ]
+            {"field_name": "id", "direction": "desc"},
+        ],
     )
 
     # We don't filter in the Shotgun query for the plugin ids because not every site these fields yet.
     # So if any pipeline configurations with a plugin id was returned, filter them it out.
-    pcs = filter(lambda pc: not(pc.get("sg_plugin_ids") or pc.get("plugin_ids")), pcs)
+    pcs = filter(lambda pc: not (pc.get("sg_plugin_ids") or pc.get("plugin_ids")), pcs)
 
-    logger.debug("These non-plugin_id based pipeline configurations were found by Desktop:")
+    logger.debug(
+        "These non-plugin_id based pipeline configurations were found by Desktop:"
+    )
     logger.debug(pprint.pformat(pcs))
 
     if len(pcs) == 0:
@@ -96,8 +110,8 @@ def get_pipeline_configuration_info(connection):
         # Log a warning if there was more than one pipeline configuration found.
         if len(pcs) > 1:
             logger.info(
-                "More than one pipeline configuration was found (%s), using %d" %
-                (", ".join([str(p["id"]) for p in pcs]), pc["id"])
+                "More than one pipeline configuration was found (%s), using %d"
+                % (", ".join([str(p["id"]) for p in pcs]), pc["id"])
             )
 
     logger.debug("This pipeline configuration will be used:")

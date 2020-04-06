@@ -15,7 +15,7 @@
 # - any images (*.png)
 # - any pickles (*.pickle)
 # - any files that are compared against the output of a tool (test_post_update_new_parser.yml, test_post_update_old_parser.yml, tank_core.txt)
-exclude: "(python/server)|(python/tk-core)"
+exclude: "python/server|python/tk-core|ui/.*\\.py"
 # List of super useful formatters.
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
