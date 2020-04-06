@@ -14,6 +14,7 @@ Shotgun Desktop Errors
 
 import os
 import sys
+import sgtk
 
 
 # This exception is handled on its own and doesn't have an error message associated to it, compared to other
@@ -92,7 +93,8 @@ class UpgradeCoreError(ShotgunDesktopError):
             % (
                 reason,
                 os.path.join(
-                    toolkit_path, "tank.bat" if sys.platform == "win32" else "tank"
+                    toolkit_path,
+                    "tank.bat" if sgtk.util.is_windows() == "win32" else "tank",
                 ),
             ),
         )
@@ -112,7 +114,7 @@ class UpgradeEngineError(ShotgunDesktopError):
             % (
                 reason,
                 os.path.join(
-                    toolkit_path, "tank.bat" if sys.platform == "win32" else "tank"
+                    toolkit_path, "tank.bat" if sgtk.util.is_windows() else "tank"
                 ),
             ),
         )

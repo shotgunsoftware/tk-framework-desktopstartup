@@ -57,7 +57,7 @@ def add_to_python_path(bundled_path, env_var_override, module_name):
 add_to_python_path(os.path.join("..", "tk-core",), "SGTK_CORE_LOCATION", "tk-core")
 
 # now proceed with non builtin imports
-from PySide import QtCore, QtGui
+from .qt import QtCore, QtGui
 
 import shotgun_desktop.paths
 import shotgun_desktop.splash
@@ -517,6 +517,12 @@ def __post_bootstrap_engine(splash, app_bootstrap, engine, settings):
             "launching legacy browser integration.",
             engine.version,
         )
+        if sys.version_info[0] > 2:
+            logger.warning(
+                "Legacy browser integration is only supported under Python 2."
+            )
+            return
+
         from . import wss_back_compat
 
         server, should_run = wss_back_compat.init_websockets(
@@ -680,10 +686,7 @@ def main(**kwargs):
 
     # Older versions of the desktop on Windows logged at %APPDATA%\Shotgun\tk-desktop.log. Notify the user that
     # this logging location is deprecated and the logs are now at %APPDATA%\Shotgun\Logs\tk-desktop.log
-    if (
-        sys.platform == "win32"
-        and LooseVersion(app_bootstrap.get_version()) <= "v1.3.6"
-    ):
+    if sgtk.util.is_windows() and LooseVersion(app_bootstrap.get_version()) <= "v1.3.6":
         logger.info(
             "Logging at this location will now stop and resume at {0}\\tk-desktop.log".format(
                 sgtk.LogManager().log_folder

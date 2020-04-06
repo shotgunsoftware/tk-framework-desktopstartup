@@ -8,7 +8,7 @@
 # agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
-from PySide import QtCore, QtGui
+from .qt import QtCore, QtGui
 
 
 class DesktopMessageBox(QtGui.QMessageBox):
