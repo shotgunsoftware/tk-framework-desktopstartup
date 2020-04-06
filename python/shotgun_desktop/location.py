@@ -101,7 +101,7 @@ def write_location(descriptor):
     """
     # Local import since sgtk is lazily loaded.
     from tank_vendor import yaml
-    old_umask = os.umask(0077)
+    old_umask = os.umask(0o077)
     try:
         # Write the toolkit descriptor information to disk.
         location_yml_path = os.path.join(_get_location_yaml_location(descriptor.get_path()))

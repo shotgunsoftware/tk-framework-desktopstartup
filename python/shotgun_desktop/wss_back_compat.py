@@ -183,7 +183,7 @@ def init_websockets(splash, app_bootstrap, settings, global_logger):
         splash.set_message("Initializing browser integration")
         # Import framework
         import tk_framework_desktopserver
-    except Exception, e:
+    except Exception as e:
         return None, __handle_unexpected_exception_during_websocket_init(splash, app_bootstrap, e)
 
     # We need to break these two try's because if we can't import the tk-framework-desktopserver
@@ -214,7 +214,7 @@ def init_websockets(splash, app_bootstrap, settings, global_logger):
             "Desktop may already be running on your machine." % integration_settings.port,
             app_bootstrap
         )
-    except Exception, e:
+    except Exception as e:
         return None, __handle_unexpected_exception_during_websocket_init(splash, app_bootstrap, e)
 
 

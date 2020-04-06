@@ -132,7 +132,7 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
         # update the startup so next restart we start with the just downloaded code.
         app_bootstrap.update_startup(latest_descriptor)
         return True
-    except Exception, e:
+    except Exception as e:
         splash.hide()
         # If there is an error updating, don't prevent the user from running the app, but let them
         # know something wrong is going on.

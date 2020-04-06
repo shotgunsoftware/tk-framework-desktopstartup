@@ -734,12 +734,12 @@ def main(**kwargs):
         splash.hide()
         shotgun_authenticator.clear_default_user()
         return 0
-    except InvalidAppStoreCredentialsError, e:
+    except InvalidAppStoreCredentialsError as e:
         __handle_exception(splash, shotgun_authenticator, str(e))
         return -1
-    except ShotgunDesktopError, e:
+    except ShotgunDesktopError as e:
         __handle_exception(splash, shotgun_authenticator, str(e))
         return -1
-    except Exception, e:
+    except Exception as e:
         __handle_unexpected_exception(splash, shotgun_authenticator, e, app_bootstrap)
         return -1
