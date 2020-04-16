@@ -18,7 +18,6 @@ import os
 repo_root = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
 
 sys.path.insert(0, os.path.join(repo_root, "python"))
-sys.path.insert(0, os.path.join(repo_root, "python", "tk-core", "python"))
 
 import shotgun_desktop.startup
 

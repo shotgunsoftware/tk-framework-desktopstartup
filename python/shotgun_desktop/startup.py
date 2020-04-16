@@ -488,6 +488,8 @@ def __post_bootstrap_engine(splash, app_bootstrap, engine, settings):
             "launching legacy browser integration.",
             engine.version,
         )
+        # We can't assume the tk-core post bootstrap has tank_vendor.six,
+        # so use sys.version_info.
         if sys.version_info[0] > 2:
             logger.warning(
                 "Legacy browser integration is only supported under Python 2."

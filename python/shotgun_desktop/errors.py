@@ -93,8 +93,7 @@ class UpgradeCoreError(ShotgunDesktopError):
             % (
                 reason,
                 os.path.join(
-                    toolkit_path,
-                    "tank.bat" if sgtk.util.is_windows() == "win32" else "tank",
+                    toolkit_path, "tank.bat" if sgtk.util.is_windows() else "tank",
                 ),
             ),
         )
