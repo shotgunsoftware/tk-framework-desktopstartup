@@ -130,3 +130,13 @@ class ToolkitDisabledError(ShotgunDesktopError):
             self,
             "Toolkit has not been activated on your site. Please activate Toolkit before relaunching Shotgun Desktop.",
         )
+
+
+class MissingPython3SupportError(ShotgunDesktopError):
+    def __init__(self):
+        """
+        """
+        super(MissingPython3SupportError, self).__init__(
+            "The tk-desktop engine in your site configuration may not support Python 3. "
+            "You need version v2.5.1+."
+        )

@@ -73,6 +73,7 @@ from shotgun_desktop.errors import (
     ToolkitDisabledError,
     UpgradeCoreError,
     InvalidPipelineConfiguration,
+    MissingPython3SupportError,
 )
 
 
@@ -317,10 +318,40 @@ def __launch_app(app, splash, user, app_bootstrap, settings):
     # code that uses it after the bootstrap we have to import the
     # new core.
     del sgtk
-    if toolkit_classic_required:
-        engine = __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path)
-    else:
-        engine = __start_engine_in_zero_config(app, app_bootstrap, splash, user)
+    try:
+        if toolkit_classic_required:
+            engine = __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path)
+        else:
+            engine = __start_engine_in_zero_config(app, app_bootstrap, splash, user)
+    except SyntaxError:
+        # Try to see if this SyntaxError might be due to non-Python 3 compatible
+        # code.
+
+        # If we're not in Python 3, we can reraise right away.
+        if sys.version_info[0] != 3:
+            raise
+
+        # Reach the end of the stack.
+        exc_type, exc_value, current_stack_frame = sys.exc_info()
+        deepest = None
+        while deepest is None:
+            if current_stack_frame.tb_next is None:
+                deepest = current_stack_frame
+                break
+            else:
+                current_stack_frame = current_stack_frame.tb_next
+
+        # If the syntax error was from somewhere in the tk-desktop engine,
+        # then it's likely the engine is too old. This will yield false-positives
+        # in development when making syntax errors, but is robust enough
+        # for released code.
+        if (
+            "python/tk_desktop/".replace("/", os.path.sep)
+            in deepest.tb_frame.f_code.co_filename
+        ):
+            raise MissingPython3SupportError()
+
+        raise
 
     return __post_bootstrap_engine(splash, app_bootstrap, engine, settings)
 
@@ -475,6 +506,23 @@ def __post_bootstrap_engine(splash, app_bootstrap, engine, settings):
     # If the site config is running an older version of the desktop engine, it
     # doesn't include browser integration, so we'll launch it ourselves.
     server = None
+
+    try:
+        _run_engine(
+            engine, splash, startup_version, app_bootstrap, startup_desc, settings
+        )
+    except TypeError as e:
+        if sys.version_info[0] != 3:
+            raise
+        if (
+            "PySide2.QtCore.qRegisterResourceData' called with wrong argument types"
+            in str(e)
+        ):
+            raise MissingPython3SupportError()
+        raise
+
+
+def _run_engine(engine, splash, startup_version, app_bootstrap, startup_desc, settings):
     if __desktop_engine_supports_websocket(engine):
         return engine.run(
             splash,
