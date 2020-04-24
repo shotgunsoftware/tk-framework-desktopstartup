@@ -74,6 +74,7 @@ from shotgun_desktop.errors import (
     UpgradeCoreError,
     InvalidPipelineConfiguration,
     MissingPython3SupportError,
+    UpgradeEngine251Error,
 )
 
 
@@ -350,7 +351,23 @@ def __launch_app(app, splash, user, app_bootstrap, settings):
             in deepest.tb_frame.f_code.co_filename
         ):
             raise MissingPython3SupportError()
-
+        raise
+    except Exception as e:
+        # We end up here when running a Shotgun Desktop that ships with PySide2 (Shotgun Desktop 1.6.0+)
+        # and the tk-desktop engine was written exclusively for a PySide environment (before 2.5.0).
+        #
+        # In that case, the older tk-desktop can't import PySide2 which raises a TankError saying
+        # it can't find PySide.
+        #
+        # Such a scenario can happen if someone installs the newer Shotgun Desktop but have locked their
+        # site configuration.
+        #
+        # In those cases, raise this error, otherwise re-raised it
+        if (
+            "Looks like you are trying to run an App that uses a QT based UI, however the"
+            in str(e)
+        ):
+            raise UpgradeEngine251Error()
         raise
 
     return __post_bootstrap_engine(splash, app_bootstrap, engine, settings)
@@ -512,6 +529,11 @@ def __post_bootstrap_engine(splash, app_bootstrap, engine, settings):
             engine, splash, startup_version, app_bootstrap, startup_desc, settings
         )
     except TypeError as e:
+        # When running in Python 3 mode and launching into tk-desktop 2.5.0, the engine
+        # does support PySide2, but the engine doesn't yet support Python 3 fully and the gui
+        # can't initialize, so a TypeError will be launched by qRegisterResourceData.
+        # So catch it, and let the user know that this error is due to missing Python3
+        # support for the engine.
         if sys.version_info[0] != 3:
             raise
         if (
