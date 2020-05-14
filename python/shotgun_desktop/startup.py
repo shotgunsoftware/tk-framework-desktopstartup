@@ -525,7 +525,7 @@ def __post_bootstrap_engine(splash, app_bootstrap, engine, settings):
     server = None
 
     try:
-        _run_engine(
+        return _run_engine(
             engine, splash, startup_version, app_bootstrap, startup_desc, settings
         )
     except TypeError as e:
