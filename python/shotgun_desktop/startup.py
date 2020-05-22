@@ -69,12 +69,12 @@ from distutils.version import LooseVersion
 from shotgun_desktop.errors import (
     ShotgunDesktopError,
     RequestRestartException,
-    UpgradeEngineError,
+    UpgradeEngine200Error,
     ToolkitDisabledError,
     UpgradeCoreError,
     InvalidPipelineConfiguration,
     MissingPython3SupportError,
-    UpgradeEngine251Error,
+    UpgradeEngine253Error,
 )
 
 
@@ -367,7 +367,7 @@ def __launch_app(app, splash, user, app_bootstrap, settings):
             "Looks like you are trying to run an App that uses a QT based UI, however the"
             in str(e)
         ):
-            raise UpgradeEngine251Error()
+            raise UpgradeEngine253Error()
         raise
 
     return __post_bootstrap_engine(splash, app_bootstrap, engine, settings)
@@ -448,7 +448,7 @@ def __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path):
     engine = mgr.bootstrap_engine("tk-desktop")
 
     if not __desktop_engine_supports_authentication_module(engine):
-        raise UpgradeEngineError(
+        raise UpgradeEngine200Error(
             "This version of the Shotgun Desktop only supports tk-desktop engine 2.0.0 and higher.",
             pc_path,
         )
