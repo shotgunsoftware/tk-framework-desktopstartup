@@ -22,7 +22,7 @@ display_name: "Desktop Startup Framework"
 description: "Startup logic for the Shotgun Desktop"
 
 # Required minimum versions for this item to run
-requires_core_version: "v0.16.0"
+requires_core_version: "v0.19.3"
 requires_desktop_version: "v1.1.0"
 
 # the frameworks this framework requires
