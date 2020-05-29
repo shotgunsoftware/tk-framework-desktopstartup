@@ -57,11 +57,10 @@ def add_to_python_path(bundled_path, env_var_override, module_name):
 add_to_python_path(os.path.join("..", "tk-core",), "SGTK_CORE_LOCATION", "tk-core")
 
 # now proceed with non builtin imports
-from PySide import QtCore, QtGui
+from .qt import QtCore, QtGui
 
 import shotgun_desktop.paths
 import shotgun_desktop.splash
-from shotgun_desktop.turn_on_toolkit import TurnOnToolkit
 from shotgun_desktop.desktop_message_box import DesktopMessageBox
 from shotgun_desktop.upgrade_startup import upgrade_startup
 from shotgun_desktop.location import get_startup_descriptor
@@ -70,10 +69,12 @@ from distutils.version import LooseVersion
 from shotgun_desktop.errors import (
     ShotgunDesktopError,
     RequestRestartException,
-    UpgradeEngineError,
+    UpgradeEngine200Error,
     ToolkitDisabledError,
     UpgradeCoreError,
     InvalidPipelineConfiguration,
+    MissingPython3SupportError,
+    UpgradeEngine253Error,
 )
 
 
@@ -148,34 +149,6 @@ def __supports_pipeline_configuration_upgrade(pipeline_configuration):
     """
     # if the authentication module is not supported, this method won't be present on the core.
     return hasattr(pipeline_configuration, "convert_to_site_config")
-
-
-def _assert_toolkit_enabled(splash, connection):
-    """
-    Returns the path to the pipeline configuration for a given site.
-
-    :param splash: Splash dialog
-    """
-    # get the pipeline configuration for the site we are logged into
-    while True:
-        pc_schema = connection.schema_entity_read().get("PipelineConfiguration")
-        if pc_schema is not None:
-            break
-
-        # Toolkit is not turned on show the dialog that explains what to do
-        splash.hide()
-        dialog = TurnOnToolkit(connection)
-        dialog.show()
-        dialog.raise_()
-        dialog.activateWindow()
-        results = dialog.exec_()
-
-        if results == dialog.Rejected:
-            # dialog was canceled, raise the exception and let the main exception handler deal
-            # with it.
-            raise ToolkitDisabledError()
-
-    splash.show()
 
 
 def __init_app():
@@ -319,7 +292,7 @@ def __launch_app(app, splash, user, app_bootstrap, settings):
 
     connection = user.create_sg_connection()
 
-    _assert_toolkit_enabled(splash, connection)
+    splash.show()
 
     logger.debug("Getting the default site configuration.")
     (
@@ -346,10 +319,56 @@ def __launch_app(app, splash, user, app_bootstrap, settings):
     # code that uses it after the bootstrap we have to import the
     # new core.
     del sgtk
-    if toolkit_classic_required:
-        engine = __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path)
-    else:
-        engine = __start_engine_in_zero_config(app, app_bootstrap, splash, user)
+    try:
+        if toolkit_classic_required:
+            engine = __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path)
+        else:
+            engine = __start_engine_in_zero_config(app, app_bootstrap, splash, user)
+    except SyntaxError:
+        # Try to see if this SyntaxError might be due to non-Python 3 compatible
+        # code.
+
+        # If we're not in Python 3, we can reraise right away.
+        if sys.version_info[0] != 3:
+            raise
+
+        # Reach the end of the stack.
+        exc_type, exc_value, current_stack_frame = sys.exc_info()
+        deepest = None
+        while deepest is None:
+            if current_stack_frame.tb_next is None:
+                deepest = current_stack_frame
+                break
+            else:
+                current_stack_frame = current_stack_frame.tb_next
+
+        # If the syntax error was from somewhere in the tk-desktop engine,
+        # then it's likely the engine is too old. This will yield false-positives
+        # in development when making syntax errors, but is robust enough
+        # for released code.
+        if (
+            "python/tk_desktop/".replace("/", os.path.sep)
+            in deepest.tb_frame.f_code.co_filename
+        ):
+            raise MissingPython3SupportError()
+        raise
+    except Exception as e:
+        # We end up here when running a Shotgun Desktop that ships with PySide2 (Shotgun Desktop 1.6.0+)
+        # and the tk-desktop engine was written exclusively for a PySide environment (before 2.5.0).
+        #
+        # In that case, the older tk-desktop can't import PySide2 which raises a TankError saying
+        # it can't find PySide.
+        #
+        # Such a scenario can happen if someone installs the newer Shotgun Desktop but have locked their
+        # site configuration.
+        #
+        # In those cases, raise this error, otherwise re-raised it
+        if (
+            "Looks like you are trying to run an App that uses a QT based UI, however the"
+            in str(e)
+        ):
+            raise UpgradeEngine253Error()
+        raise
 
     return __post_bootstrap_engine(splash, app_bootstrap, engine, settings)
 
@@ -429,7 +448,7 @@ def __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path):
     engine = mgr.bootstrap_engine("tk-desktop")
 
     if not __desktop_engine_supports_authentication_module(engine):
-        raise UpgradeEngineError(
+        raise UpgradeEngine200Error(
             "This version of the Shotgun Desktop only supports tk-desktop engine 2.0.0 and higher.",
             pc_path,
         )
@@ -504,6 +523,28 @@ def __post_bootstrap_engine(splash, app_bootstrap, engine, settings):
     # If the site config is running an older version of the desktop engine, it
     # doesn't include browser integration, so we'll launch it ourselves.
     server = None
+
+    try:
+        return _run_engine(
+            engine, splash, startup_version, app_bootstrap, startup_desc, settings
+        )
+    except TypeError as e:
+        # When running in Python 3 mode and launching into tk-desktop 2.5.0, the engine
+        # does support PySide2, but the engine doesn't yet support Python 3 fully and the gui
+        # can't initialize, so a TypeError will be launched by qRegisterResourceData.
+        # So catch it, and let the user know that this error is due to missing Python3
+        # support for the engine.
+        if sys.version_info[0] != 3:
+            raise
+        if (
+            "PySide2.QtCore.qRegisterResourceData' called with wrong argument types"
+            in str(e)
+        ):
+            raise MissingPython3SupportError()
+        raise
+
+
+def _run_engine(engine, splash, startup_version, app_bootstrap, startup_desc, settings):
     if __desktop_engine_supports_websocket(engine):
         return engine.run(
             splash,
@@ -517,6 +558,14 @@ def __post_bootstrap_engine(splash, app_bootstrap, engine, settings):
             "launching legacy browser integration.",
             engine.version,
         )
+        # We can't assume the tk-core post bootstrap has tank_vendor.six,
+        # so use sys.version_info.
+        if sys.version_info[0] > 2:
+            logger.warning(
+                "Legacy browser integration is only supported under Python 2."
+            )
+            return
+
         from . import wss_back_compat
 
         server, should_run = wss_back_compat.init_websockets(
@@ -680,10 +729,7 @@ def main(**kwargs):
 
     # Older versions of the desktop on Windows logged at %APPDATA%\Shotgun\tk-desktop.log. Notify the user that
     # this logging location is deprecated and the logs are now at %APPDATA%\Shotgun\Logs\tk-desktop.log
-    if (
-        sys.platform == "win32"
-        and LooseVersion(app_bootstrap.get_version()) <= "v1.3.6"
-    ):
+    if sgtk.util.is_windows() and LooseVersion(app_bootstrap.get_version()) <= "v1.3.6":
         logger.info(
             "Logging at this location will now stop and resume at {0}\\tk-desktop.log".format(
                 sgtk.LogManager().log_folder

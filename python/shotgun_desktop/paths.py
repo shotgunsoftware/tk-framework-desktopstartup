@@ -10,8 +10,9 @@
 
 import os
 import sys
-import urlparse
+from tank_vendor.six.moves.urllib import parse
 import pprint
+import sgtk
 
 from sgtk import LogManager
 
@@ -31,14 +32,8 @@ def get_pipeline_configuration_info(connection):
     """
 
     # find what path field from the entity we need
-    if sys.platform == "darwin":
-        plat_key = "mac_path"
-    elif sys.platform == "win32":
-        plat_key = "windows_path"
-    elif sys.platform.startswith("linux"):
-        plat_key = "linux_path"
-    else:
-        raise RuntimeError("unknown platform: %s" % sys.platform)
+
+    plat_key = sgtk.util.ShotgunPath.get_shotgun_storage_key()
 
     # interesting fields to return
     fields = [
@@ -94,7 +89,9 @@ def get_pipeline_configuration_info(connection):
 
     # We don't filter in the Shotgun query for the plugin ids because not every site these fields yet.
     # So if any pipeline configurations with a plugin id was returned, filter them it out.
-    pcs = filter(lambda pc: not (pc.get("sg_plugin_ids") or pc.get("plugin_ids")), pcs)
+    pcs = list(
+        filter(lambda pc: not (pc.get("sg_plugin_ids") or pc.get("plugin_ids")), pcs)
+    )
 
     logger.debug(
         "These non-plugin_id based pipeline configurations were found by Desktop:"
@@ -123,11 +120,11 @@ def get_pipeline_configuration_info(connection):
         return (str(pc[plat_key]), pc, True)
 
     # get operating system specific root
-    if sys.platform == "darwin":
+    if sgtk.util.is_macos():
         pc_root = os.path.expanduser("~/Library/Application Support/Shotgun")
-    elif sys.platform == "win32":
+    elif sgtk.util.is_windows():
         pc_root = os.path.join(os.environ["APPDATA"], "Shotgun")
-    elif sys.platform.startswith("linux"):
+    elif sgtk.util.is_linux():
         pc_root = os.path.expanduser("~/.shotgun")
 
     # add on site specific postfix
@@ -141,5 +138,5 @@ def __get_site_from_connection(connection):
     """ return the site from the information in the connection """
     # grab just the non-port part of the netloc of the url
     # eg site.shotgunstudio.com
-    site = urlparse.urlparse(connection.base_url)[1].split(":")[0]
+    site = parse.urlparse(connection.base_url)[1].split(":")[0]
     return site

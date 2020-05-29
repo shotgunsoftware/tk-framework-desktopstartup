@@ -14,6 +14,7 @@ Shotgun Desktop Errors
 
 import os
 import sys
+import sgtk
 
 
 # This exception is handled on its own and doesn't have an error message associated to it, compared to other
@@ -92,13 +93,13 @@ class UpgradeCoreError(ShotgunDesktopError):
             % (
                 reason,
                 os.path.join(
-                    toolkit_path, "tank.bat" if sys.platform == "win32" else "tank"
+                    toolkit_path, "tank.bat" if sgtk.util.is_windows() else "tank",
                 ),
             ),
         )
 
 
-class UpgradeEngineError(ShotgunDesktopError):
+class UpgradeEngine200Error(ShotgunDesktopError):
     """
     This exception notifies the catcher that the site's desktop engine needs to be upgraded in order
     to use this version of the Desktop installer.
@@ -112,9 +113,27 @@ class UpgradeEngineError(ShotgunDesktopError):
             % (
                 reason,
                 os.path.join(
-                    toolkit_path, "tank.bat" if sys.platform == "win32" else "tank"
+                    toolkit_path, "tank.bat" if sgtk.util.is_windows() else "tank"
                 ),
             ),
+        )
+
+
+class UpgradeEngine253Error(ShotgunDesktopError):
+    """
+    This exception notifies the catcher that the site's desktop engine needs to be upgraded in order
+    to use this version of the Desktop installer.
+    """
+
+    def __init__(self):
+        """Constructor"""
+        ShotgunDesktopError.__init__(
+            self,
+            "It appears your site configuration is running a tk-desktop engine meant "
+            "for Shotgun Desktop 1.5.7.\n"
+            "\n"
+            "You need to upgrade the tk-desktop engine to v2.5.3+ in your site configuration or "
+            "install Shotgun Desktop 1.5.7.",
         )
 
 
@@ -128,4 +147,16 @@ class ToolkitDisabledError(ShotgunDesktopError):
         ShotgunDesktopError.__init__(
             self,
             "Toolkit has not been activated on your site. Please activate Toolkit before relaunching Shotgun Desktop.",
+        )
+
+
+class MissingPython3SupportError(ShotgunDesktopError):
+    def __init__(self):
+        """
+        """
+        super(MissingPython3SupportError, self).__init__(
+            "The tk-desktop engine in your site configuration may not support Python 3.\n"
+            "\n"
+            "You need to upgrade the tk-desktop engine to v2.5.1+ in your site configuration or "
+            "launch the Shotgun Desktop in Python 2 mode."
         )
