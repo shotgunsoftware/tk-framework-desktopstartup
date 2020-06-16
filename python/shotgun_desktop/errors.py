@@ -98,6 +98,7 @@ class UpgradeCoreError(ShotgunDesktopError):
             ),
         )
 
+
 class UpgradeCorePython3Error(ShotgunDesktopError):
     """
     This exception notifies the catcher that the site's core needs to be upgraded in order to
@@ -110,8 +111,9 @@ class UpgradeCorePython3Error(ShotgunDesktopError):
             self,
             "You are running a pre v0.19.x version of tk-core, "
             "which is not compatible with Python 3.\n"
-            "Please upgrade your site configuration to use a version of tk-core higher than v0.19."
+            "Please upgrade your site configuration to use a version of tk-core higher than v0.19.",
         )
+
 
 class UpgradeEngine200Error(ShotgunDesktopError):
     """
@@ -131,6 +133,7 @@ class UpgradeEngine200Error(ShotgunDesktopError):
                 ),
             ),
         )
+
 
 class ToolkitDisabledError(ShotgunDesktopError):
     """
