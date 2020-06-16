@@ -72,9 +72,9 @@ from shotgun_desktop.errors import (
     UpgradeEngine200Error,
     ToolkitDisabledError,
     UpgradeCoreError,
+    UpgradeCorePython3Error,
     InvalidPipelineConfiguration,
     MissingPython3SupportError,
-    UpgradeEngine253Error,
 )
 
 
@@ -353,21 +353,11 @@ def __launch_app(app, splash, user, app_bootstrap, settings):
             raise MissingPython3SupportError()
         raise
     except Exception as e:
-        # We end up here when running a Shotgun Desktop that ships with PySide2 (Shotgun Desktop 1.6.0+)
-        # and the tk-desktop engine was written exclusively for a PySide environment (before 2.5.0).
-        #
-        # In that case, the older tk-desktop can't import PySide2 which raises a TankError saying
-        # it can't find PySide.
-        #
-        # Such a scenario can happen if someone installs the newer Shotgun Desktop but have locked their
-        # site configuration.
-        #
-        # In those cases, raise this error, otherwise re-raised it
-        if (
-            "Looks like you are trying to run an App that uses a QT based UI, however the"
-            in str(e)
-        ):
-            raise UpgradeEngine253Error()
+        # We may end up here when running with an older version of core pre 0.19.
+        # If we are running a pre 0.19 version of core and we are using Python 3
+        # Then we will likely hit an error: ModuleNotFoundError: No module named 'Cookie'
+        if "Cookie" in str(e):
+            raise UpgradeCorePython3Error()
         raise
 
     return __post_bootstrap_engine(splash, app_bootstrap, engine, settings)
