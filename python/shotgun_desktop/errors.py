@@ -111,7 +111,7 @@ class UpgradeCorePython3Error(ShotgunDesktopError):
             self,
             "You are running a pre v0.19.x version of tk-core, "
             "which is not compatible with Python 3.\n"
-            "Please upgrade your site configuration to use a version of tk-core higher than v0.19.",
+            "Please upgrade your site configuration's tk-core to v0.19.5 or greater.",
         )
 
 
@@ -155,6 +155,6 @@ class MissingPython3SupportError(ShotgunDesktopError):
         super(MissingPython3SupportError, self).__init__(
             "The tk-desktop engine in your site configuration may not support Python 3.\n"
             "\n"
-            "You need to upgrade the tk-desktop engine to v2.5.1+ in your site configuration or "
+            "You need to upgrade the tk-desktop engine to v2.5.3+ in your site configuration or "
             "launch the Shotgun Desktop in Python 2 mode."
         )
