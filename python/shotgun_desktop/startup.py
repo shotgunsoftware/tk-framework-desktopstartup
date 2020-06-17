@@ -356,7 +356,7 @@ def __launch_app(app, splash, user, app_bootstrap, settings):
         # We may end up here when running with an older version of core pre 0.19.
         # If we are running a pre 0.19 version of core and we are using Python 3
         # Then we will likely hit an error: ModuleNotFoundError: No module named 'Cookie'
-        if "Cookie" in str(e):
+        if "No module named 'Cookie'" in e.args:
             raise UpgradeCorePython3Error()
         raise
 
