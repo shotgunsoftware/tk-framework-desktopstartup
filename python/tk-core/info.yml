@@ -12,7 +12,7 @@
 # This is automatically replaced with appropriate values
 # as the core bundle is uploaded to the app store.
 
-version: "ticket/SG-17810_fix_issue_with_SimpleCookie"
+version: "v0.19.11"
 documentation_url: "https://support.shotgunsoftware.com/hc/en-us/articles/219039808"
 requires_shotgun_version: "v5.0.0"
 
