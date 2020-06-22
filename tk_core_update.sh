@@ -56,7 +56,7 @@ cp -R $DEST_REPO/* $DEST
 rm -rf $DEST/tests
 rm -rf $DEST/docs
 
-sed -i "" -e "s/version: \"HEAD\"/version: \"$1\"/" $DEST/info.yml
+sed -i "" -e "s@version: \"HEAD\"@version: \"$1\"@" $DEST/info.yml
 
 # Put files in the staging area.
 git add -A $DEST
