@@ -22,13 +22,34 @@ import logging
 
 
 def _enumerate_per_line(items):
+    """
+    Enumerate all items from an array, one line at a time.
+
+    For example,
+        - one
+        - two
+        - three
+
+    :returns: The formatted output.
+    """
     return "\n".join("- {}".format(item) for item in items)
 
 
 def _env_not_set_or_split(var_name):
+    """
+    Format a PATH-like environment variable for output.
+
+    :param str var_name: Name of the env var.
+    :returns: "Not Set" if variable is not set, a bullet list otherwise.
+    """
     if var_name not in os.environ:
         return "Not Set"
     else:
+        # Add a \n before the first item so each item in the output start from the
+        # beginning of the time. Otherwise you'd get.
+        # varname: - one
+        # - two
+        # - three.
         return "\n" + _enumerate_per_line(os.environ[var_name].split(os.path.pathsep))
 
 
