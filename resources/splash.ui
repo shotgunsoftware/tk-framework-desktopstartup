@@ -91,10 +91,29 @@ QWidget
     </rect>
    </property>
    <property name="text">
-    <string/>
+    <string>Downloading tk-framework-desktopserver v1.4.5 (10 of 15)</string>
    </property>
    <property name="alignment">
     <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+   </property>
+  </widget>
+  <widget class="QLabel" name="version">
+   <property name="geometry">
+    <rect>
+     <x>390</x>
+     <y>40</y>
+     <width>101</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">color: rgb(104, 123, 135);</string>
+   </property>
+   <property name="text">
+    <string>v1.6.0 - Python 2</string>
+   </property>
+   <property name="alignment">
+    <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
    </property>
   </widget>
  </widget>

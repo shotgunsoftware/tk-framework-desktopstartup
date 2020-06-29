@@ -45,14 +45,20 @@ class Ui_Splash(object):
         self.icon.setObjectName("icon")
         self.message = QtGui.QLabel(Splash)
         self.message.setGeometry(QtCore.QRect(182, 146, 316, 31))
-        self.message.setText("")
         self.message.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignTop)
         self.message.setObjectName("message")
+        self.version = QtGui.QLabel(Splash)
+        self.version.setGeometry(QtCore.QRect(390, 40, 101, 20))
+        self.version.setStyleSheet("color: rgb(104, 123, 135);")
+        self.version.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
+        self.version.setObjectName("version")
 
         self.retranslateUi(Splash)
         QtCore.QMetaObject.connectSlotsByName(Splash)
 
     def retranslateUi(self, Splash):
         Splash.setWindowTitle(QtGui.QApplication.translate("Splash", "Dialog", None, QtGui.QApplication.UnicodeUTF8))
+        self.message.setText(QtGui.QApplication.translate("Splash", "Downloading tk-framework-desktopserver v1.4.5 (10 of 15)", None, QtGui.QApplication.UnicodeUTF8))
+        self.version.setText(QtGui.QApplication.translate("Splash", "v1.6.0 - Python 2", None, QtGui.QApplication.UnicodeUTF8))
 
 from . import resources_rc
