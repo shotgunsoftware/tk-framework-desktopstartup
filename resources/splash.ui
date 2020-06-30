@@ -91,7 +91,7 @@ QWidget
     </rect>
    </property>
    <property name="text">
-    <string>Downloading tk-framework-desktopserver v1.4.5 (10 of 15)</string>
+    <string/>
    </property>
    <property name="alignment">
     <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
@@ -110,7 +110,7 @@ QWidget
     <string notr="true">color: rgb(104, 123, 135);</string>
    </property>
    <property name="text">
-    <string>v1.6.0 - Python 2</string>
+    <string/>
    </property>
    <property name="alignment">
     <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>

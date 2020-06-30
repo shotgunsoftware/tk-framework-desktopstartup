@@ -39,6 +39,11 @@ class Splash(QtGui.QDialog):
         QtGui.QApplication.instance().processEvents()
 
     def set_version(self, version):
+        """
+        Set the version of the Shotgun Desktop on the widget.
+
+        :param str version: Version of the app.
+        """
         self.ui.version.setText(version)
 
     def show(self):
