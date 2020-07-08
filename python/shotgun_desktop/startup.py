@@ -19,19 +19,72 @@ import traceback
 # initialize logging
 import logging
 
+
+def _enumerate_per_line(items):
+    """
+    Enumerate all items from an array, one line at a time.
+
+    For example,
+        - one
+        - two
+        - three
+
+    :returns: The formatted output.
+    """
+    return "\n".join("- {}".format(item) for item in items)
+
+
+def _env_not_set_or_split(var_name):
+    """
+    Format a PATH-like environment variable for output.
+
+    :param str var_name: Name of the env var.
+    :returns: "Not Set" if variable is not set, a bullet list otherwise.
+    """
+    if var_name not in os.environ:
+        return "Not Set"
+    else:
+        # Add a \n before the first item so each item in the output start from the
+        # beginning of the line. Otherwise you'd get
+        # varname: - one
+        # - two
+        # - three.
+        return "\n" + _enumerate_per_line(os.environ[var_name].split(os.path.pathsep))
+
+
 logger = logging.getLogger("tk-desktop.startup")
-logger.info("------------------ Desktop Engine Startup ------------------")
-logger.info("Logging PYTHON state:")
-logger.info("sys.path=%s", sys.path)
-# Log a few environment variables to help with support.
-for var_name in [
-    "PYTHONHOME",
-    "PYTHONPATH",
-    "SGTK_DESKTOP_ORIGINAL_PYTHONPATH",
-    "SGTK_DESKTOP_ORIGINAL_PYTHONHOME",
-    "PATH",
-]:
-    logger.info("%s=%s", var_name, os.environ.get(var_name))
+logger.info("------------------ Desktop Startup Framework Startup ------------------")
+logger.info(
+    """
+Python
+======
+Executable: {executable}
+Version: {major}.{minor}.{micro}
+sys.path:
+{sys_path}
+
+Environment variables
+=====================
+PATH: {path}
+PYTHONHOME: {python_home}
+PYTHONPATH: {python_path}
+SGTK_DESKTOP_ORIGINAL_PYTHONHOME: {original_python_home}
+SGTK_DESKTOP_ORIGINAL_PYTHONPATH: {original_python_path}
+""".format(
+        executable=sys.executable,
+        major=sys.version_info.major,
+        minor=sys.version_info.minor,
+        micro=sys.version_info.micro,
+        sys_path=_enumerate_per_line(sys.path),
+        path=_env_not_set_or_split("PATH"),
+        python_home=os.environ.get("PYTHONHOME", "Not Set"),
+        python_path=_env_not_set_or_split("PYTHONPATH"),
+        original_python_home=os.environ.get(
+            "SGTK_DESKTOP_ORIGINAL_PYTHONHOME", "Not Set"
+        ),
+        original_python_path=_env_not_set_or_split("SGTK_DESKTOP_ORIGINAL_PYTHONPATH"),
+    )
+)
 
 
 def add_to_python_path(bundled_path, env_var_override, module_name):
@@ -740,6 +793,13 @@ def main(**kwargs):
 
     # Create some ui related objects
     app, splash = __init_app()
+
+    if app_bootstrap.get_version() >= LooseVersion("v1.6.0"):
+        splash.set_version(
+            "{} - Python {}".format(app_bootstrap.get_version(), sys.version_info[0])
+        )
+    else:
+        splash.set_version(app_bootstrap.get_version())
 
     # We might crash before even initializing the authenticator, so instantiate
     # it right away.

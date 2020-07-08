@@ -48,6 +48,12 @@ class Ui_Splash(object):
         self.message.setText("")
         self.message.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignTop)
         self.message.setObjectName("message")
+        self.version = QtGui.QLabel(Splash)
+        self.version.setGeometry(QtCore.QRect(390, 40, 101, 20))
+        self.version.setStyleSheet("color: rgb(104, 123, 135);")
+        self.version.setText("")
+        self.version.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
+        self.version.setObjectName("version")
 
         self.retranslateUi(Splash)
         QtCore.QMetaObject.connectSlotsByName(Splash)
