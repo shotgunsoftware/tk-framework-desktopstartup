@@ -22,7 +22,15 @@ display_name: "Desktop Startup Framework"
 description: "Startup logic for the Shotgun Desktop"
 
 # Required minimum versions for this item to run
-requires_core_version: "v0.19.3"
+# Do not update this core version, or the upgrade of the Shotgun Desktop
+# startup code will fail.
+# When Shotgun Desktop starts, it uses the core that is packaged with
+# Shotgun Desktop to bootstrap and do an auto-update. After the update
+# has been pulled down, we compare the version of the core used to download
+# the update with this number here. If we dump this version here to something
+# more recent, then the update will fail to install since the descriptor
+# will complain that the current core is older than "requires_core_version".
+requires_core_version: "v0.16.0"
 requires_desktop_version: "v1.1.0"
 
 # the frameworks this framework requires
