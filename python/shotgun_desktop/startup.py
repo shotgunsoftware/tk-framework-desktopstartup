@@ -130,8 +130,7 @@ from shotgun_desktop.errors import (
 )
 
 from tank.util.version import (
-    is_version_older,
-    is_version_newer,
+    is_version_older_or_equal,
     is_version_newer_or_equal,
 )
 
