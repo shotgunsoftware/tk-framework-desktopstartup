@@ -117,7 +117,6 @@ import shotgun_desktop.splash
 from shotgun_desktop.desktop_message_box import DesktopMessageBox
 from shotgun_desktop.upgrade_startup import upgrade_startup
 from shotgun_desktop.location import get_startup_descriptor
-from distutils.version import LooseVersion
 
 from shotgun_desktop.errors import (
     ShotgunDesktopError,
@@ -128,6 +127,11 @@ from shotgun_desktop.errors import (
     UpgradeCorePython3Error,
     InvalidPipelineConfiguration,
     MissingPython3SupportError,
+)
+
+from tank.util.version import (
+    is_version_older_or_equal,
+    is_version_newer_or_equal,
 )
 
 
@@ -171,12 +175,12 @@ def __desktop_engine_supports_authentication_module(engine):
             "Assuming engine it supports sgtk.authentication module."
         )
         return True
-    return LooseVersion(engine.version) >= "v2.0.0"
+    return is_version_newer_or_equal(engine.version, "v2.0.0")
 
 
 def __desktop_engine_supports_websocket(engine):
     """
-    Tests if the engine supports the login based authentication. All versions above 2.0.0 supports
+    Tests if the engine implements the browser integration. All versions above 2.1.0 supports
     login based authentication.
 
     :param engine: The desktop engine to test.
@@ -189,7 +193,7 @@ def __desktop_engine_supports_websocket(engine):
             "Assuming it has built-in browser integration support."
         )
         return True
-    return LooseVersion(engine.version) >= "v2.1.0"
+    return is_version_newer_or_equal(engine.version, "v2.1.0")
 
 
 def __supports_pipeline_configuration_upgrade(pipeline_configuration):
@@ -772,7 +776,9 @@ def main(**kwargs):
 
     # Older versions of the desktop on Windows logged at %APPDATA%\Shotgun\tk-desktop.log. Notify the user that
     # this logging location is deprecated and the logs are now at %APPDATA%\Shotgun\Logs\tk-desktop.log
-    if sgtk.util.is_windows() and LooseVersion(app_bootstrap.get_version()) <= "v1.3.6":
+    if sgtk.util.is_windows() and is_version_older_or_equal(
+        app_bootstrap.get_version(), "v1.3.6"
+    ):
         logger.info(
             "Logging at this location will now stop and resume at {0}\\tk-desktop.log".format(
                 sgtk.LogManager().log_folder
@@ -794,7 +800,7 @@ def main(**kwargs):
     # Create some ui related objects
     app, splash = __init_app()
 
-    if app_bootstrap.get_version() >= LooseVersion("v1.6.0"):
+    if is_version_newer_or_equal(app_bootstrap.get_version(), "v1.6.0"):
         splash.set_version(
             "{} - Python {}".format(app_bootstrap.get_version(), sys.version_info[0])
         )

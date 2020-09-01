@@ -16,23 +16,6 @@ from sgtk import LogManager
 
 logger = LogManager.get_logger(__name__)
 
-from distutils.version import LooseVersion
-
-
-def _get_server_version(connection):
-    """
-    Retrieves the server version from the connection.
-
-    :param connection: Connection we want the server version from.
-
-    :returns: Tuple of (major, minor) versions.
-    """
-    sg_major_ver = connection.server_info["version"][0]
-    sg_minor_ver = connection.server_info["version"][1]
-    sg_patch_ver = connection.server_info["version"][2]
-
-    return LooseVersion("%d.%d.%d" % (sg_major_ver, sg_minor_ver, sg_patch_ver))
-
 
 def _supports_get_from_location_and_paths(sgtk):
     """
