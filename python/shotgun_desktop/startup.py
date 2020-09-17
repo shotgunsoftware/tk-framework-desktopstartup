@@ -772,8 +772,6 @@ def main(**kwargs):
     # the right config.
     import sgtk
 
-    sgtk.authentication.set_shotgun_authenticator_support_web_login(True)
-
     global logger
 
     # Older versions of the desktop on Windows logged at %APPDATA%\Shotgun\tk-desktop.log. Notify the user that
