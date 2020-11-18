@@ -122,11 +122,10 @@ from shotgun_desktop.errors import (
     ShotgunDesktopError,
     RequestRestartException,
     UpgradeEngine200Error,
-    EngineIncompatibleWithDesktop160,
+    EngineNotCompatibleWithDesktop16,
     UpgradeCoreError,
     UpgradeCorePython3Error,
     InvalidPipelineConfiguration,
-    MissingPython3SupportError,
 )
 
 from tank.util.version import (
@@ -407,7 +406,7 @@ def __launch_app(app, splash, user, app_bootstrap, settings):
             "python/tk_desktop/".replace("/", os.path.sep)
             in deepest.tb_frame.f_code.co_filename
         ):
-            raise MissingPython3SupportError()
+            raise EngineNotCompatibleWithDesktop16(app_bootstrap.get_version())
         raise
     except Exception as e:
         # We may end up here when running with an older version of core pre 0.19.
@@ -587,7 +586,7 @@ def __post_bootstrap_engine(splash, app_bootstrap, engine, settings):
             "PySide2.QtCore.qRegisterResourceData' called with wrong argument types"
             in str(e)
         ):
-            raise MissingPython3SupportError()
+            raise EngineNotCompatibleWithDesktop16(app_bootstrap.get_version())
         raise
 
 
@@ -615,7 +614,7 @@ def __ensure_engine_compatible_with_qt_version(engine, app_version):
 
     # Versions of desktop older than v2.5.0 have issues with desktop 1.6.1+, so raise an error.
     if is_version_newer_or_equal(app_version, "v1.6.1"):
-        raise EngineIncompatibleWithDesktop160(engine, app_version)
+        raise EngineNotCompatibleWithDesktop16(app_version)
 
 
 def _run_engine(engine, splash, startup_version, app_bootstrap, startup_desc, settings):

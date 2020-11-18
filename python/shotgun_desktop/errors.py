@@ -135,26 +135,13 @@ class UpgradeEngine200Error(ShotgunDesktopError):
         )
 
 
-class MissingPython3SupportError(ShotgunDesktopError):
-    def __init__(self):
-        """
-        """
-        super(MissingPython3SupportError, self).__init__(
-            "The tk-desktop engine in your site configuration may not support Python 3.\n"
-            "\n"
-            "You need to upgrade the tk-desktop engine to v2.5.9+ in your site configuration or "
-            "launch the Shotgun Desktop in Python 2 mode."
-        )
-
-
-class EngineIncompatibleWithDesktop160(ShotgunDesktopError):
-    def __init__(self, engine, app_version):
-        super(EngineIncompatibleWithDesktop160, self).__init__(
-            "tk-desktop {0} is not compatible with Shotgun Desktop {1}.\n"
+class EngineNotCompatibleWithDesktop16(ShotgunDesktopError):
+    def __init__(self, app_version):
+        super(EngineNotCompatibleWithDesktop16, self).__init__(
+            "Your version of tk-desktop is not compatible with Shotgun Desktop {0}.\n"
             "\n"
             "Please upgrade your site configuration's tk-desktop to v2.5.9+ or "
-            "download Shotgun Desktop 1.5.9 or earlier <a href='{2}'>here</a>".format(
-                engine.version,
+            "download Shotgun Desktop 1.5.9 or earlier <a style='color: rgb(35,165,225)' href='{1}'>here</a>".format(
                 app_version,
                 "https://support.shotgunsoftware.com/hc/en-us/articles/219039888-Shotgun-Desktop-Release-Notes",
             )
