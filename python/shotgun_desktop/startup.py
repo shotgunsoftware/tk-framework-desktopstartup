@@ -122,11 +122,10 @@ from shotgun_desktop.errors import (
     ShotgunDesktopError,
     RequestRestartException,
     UpgradeEngine200Error,
-    ToolkitDisabledError,
+    EngineNotCompatibleWithDesktop16,
     UpgradeCoreError,
     UpgradeCorePython3Error,
     InvalidPipelineConfiguration,
-    MissingPython3SupportError,
 )
 
 from tank.util.version import (
@@ -407,7 +406,7 @@ def __launch_app(app, splash, user, app_bootstrap, settings):
             "python/tk_desktop/".replace("/", os.path.sep)
             in deepest.tb_frame.f_code.co_filename
         ):
-            raise MissingPython3SupportError()
+            raise EngineNotCompatibleWithDesktop16(app_bootstrap.get_version())
         raise
     except Exception as e:
         # We may end up here when running with an older version of core pre 0.19.
@@ -587,11 +586,40 @@ def __post_bootstrap_engine(splash, app_bootstrap, engine, settings):
             "PySide2.QtCore.qRegisterResourceData' called with wrong argument types"
             in str(e)
         ):
-            raise MissingPython3SupportError()
+            raise EngineNotCompatibleWithDesktop16(app_bootstrap.get_version())
         raise
 
 
+def __ensure_engine_compatible_with_qt_version(engine, app_version):
+    """
+    Make sure the tk-desktop engine is compatible with the PySide version we distribute
+    with Desktop.
+
+    When using tk-desktop versions before v2.5.0, PySide2 builds of desktop can't launch
+    DCCs because a QAction's signal emit an unexpected boolean that crashes older tk-desktop
+    builds.
+    """
+    # If we can't find the version, we assume it's good.
+    if engine.version.lower() == "undefined":
+        logger.warning(
+            "The version of the tk-desktop engine is undefined. "
+            "Assuming the engine is compatible with the builtin Qt."
+        )
+        return
+
+    # Shotgun Desktop 2.5.0 introduced Python 3 and PySide2 support while being backward
+    # compatible with PySide, so it can't be a problem.
+    if is_version_newer_or_equal(engine.version, "v2.5.0"):
+        return
+
+    # Versions of desktop older than v2.5.0 have issues with desktop 1.6.1+, so raise an error.
+    if is_version_newer_or_equal(app_version, "v1.6.1"):
+        raise EngineNotCompatibleWithDesktop16(app_version)
+
+
 def _run_engine(engine, splash, startup_version, app_bootstrap, startup_desc, settings):
+    __ensure_engine_compatible_with_qt_version(engine, app_bootstrap.get_version())
+
     if __desktop_engine_supports_websocket(engine):
         return engine.run(
             splash,
