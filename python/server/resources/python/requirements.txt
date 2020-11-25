@@ -1,0 +1,22 @@
+# Copyright (c) 2020 Shotgun Software Inc.
+#
+# CONFIDENTIAL AND PROPRIETARY
+#
+# This work is provided "AS IS" and subject to the Shotgun Pipeline Toolkit
+# Source Code License included in this distribution package. See LICENSE.
+# By accessing, using, copying or modifying this work you indicate your
+# agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
+# not expressly granted therein are reserved by Shotgun Software Inc.
+
+autobahn==0.9.3
+cffi==0.8.6
+characteristics==14.2.0
+cryptography==0.6.1
+PyOpenSSL==0.14
+pyasn1==0.1.7
+pyasn1_modules==0.0.5
+pycparser==2.10
+service_identity==14.0.0
+six==1.8.0
+twisted==14.0.2
+zope.interface==4.1.0
