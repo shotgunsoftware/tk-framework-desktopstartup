@@ -12,7 +12,7 @@ autobahn==0.9.3
 cffi==0.8.6
 characteristics==14.2.0
 cryptography==0.6.1
-PyOpenSSL==0.14
+PyOpenSSL==17.5.0
 pyasn1==0.1.7
 pyasn1_modules==0.0.5
 pycparser==2.10
