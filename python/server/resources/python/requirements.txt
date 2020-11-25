@@ -18,5 +18,5 @@ pyasn1_modules==0.0.5
 pycparser==2.10
 service_identity==14.0.0
 six==1.8.0
-twisted==14.0.2
+twisted==20.3.0
 zope.interface==4.1.0
