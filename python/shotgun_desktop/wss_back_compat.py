@@ -15,7 +15,7 @@ import traceback
 
 try:
     from sgtk import support_url
-except:
+except ImportError:
     support_url = "support@shotgunsoftware.com"
 
 from .desktop_message_box import DesktopMessageBox
@@ -290,7 +290,8 @@ def __query_quit_or_continue_launching(msg, app_bootstrap):
         "If you contact us through %s, we'll help you diagnose "
         "the issue.\n\n"
         "For more information, see the log file at %s.\n\n"
-        "%s" % (support_url, app_bootstrap.get_logfile_location(), traceback.format_exc()),
+        "%s"
+        % (support_url, app_bootstrap.get_logfile_location(), traceback.format_exc()),
     )
     warning_box.button(DesktopMessageBox.Yes).setText("Continue")
     warning_box.button(DesktopMessageBox.No).setText("Quit")
