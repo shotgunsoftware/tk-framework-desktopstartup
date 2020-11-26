@@ -849,7 +849,6 @@ def main(**kwargs):
     from sgtk.authentication import ShotgunSamlUser
 
     try:
-        raise Exception("TEST")
         # Reading user settings from disk.
         settings = sgtk.util.UserSettings()
 
@@ -893,8 +892,5 @@ def main(**kwargs):
         __handle_exception(splash, shotgun_authenticator, str(e))
         return -1
     except Exception as e:
-        import pydevd_pycharm
-        pydevd_pycharm.settrace('localhost', port=1234, stdoutToServer=True, stderrToServer=True)
-
         __handle_unexpected_exception(splash, shotgun_authenticator, e, app_bootstrap)
         return -1

@@ -30,7 +30,7 @@ description: "Startup logic for the Shotgun Desktop"
 # the update with this number here. If we dump this version here to something
 # more recent, then the update will fail to install since the descriptor
 # will complain that the current core is older than "requires_core_version".
-requires_core_version: "v0.16.0" # SHOULD WE UPDATE THIS?
+requires_core_version: "v0.16.0"
 requires_desktop_version: "v1.1.0"
 
 # the frameworks this framework requires
