@@ -709,11 +709,11 @@ def __handle_unexpected_exception(
     logger.exception("Fatal error, user will be logged out.")
     DesktopMessageBox.critical(
         "Shotgun Desktop Error",
-        "Something went wrong in the Shotgun Desktop! If you drop us an email at "
-        "support@shotgunsoftware.com, we'll help you diagnose the issue.\n"
+        "Something went wrong in the Shotgun Desktop! If you <a href='%s'>contact us</a>, "
+        "we'll help you diagnose the issue.\n"
         "Error: %s\n"
         "For more information, see the log file at %s."
-        % (str(error_message), log_location),
+        % (sgtk.support_url, str(error_message), log_location),
         detailed_text="".join(
             traceback.format_exception(exc_type, exc_value, exc_traceback)
         ),
@@ -849,6 +849,7 @@ def main(**kwargs):
     from sgtk.authentication import ShotgunSamlUser
 
     try:
+        raise Exception("TEST")
         # Reading user settings from disk.
         settings = sgtk.util.UserSettings()
 
@@ -892,5 +893,8 @@ def main(**kwargs):
         __handle_exception(splash, shotgun_authenticator, str(e))
         return -1
     except Exception as e:
+        import pydevd_pycharm
+        pydevd_pycharm.settrace('localhost', port=1234, stdoutToServer=True, stderrToServer=True)
+
         __handle_unexpected_exception(splash, shotgun_authenticator, e, app_bootstrap)
         return -1

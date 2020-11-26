@@ -13,6 +13,11 @@ import os
 import sys
 import traceback
 
+try:
+    from sgtk import support_url
+except:
+    support_url = "support@shotgunsoftware.com"
+
 from .desktop_message_box import DesktopMessageBox
 
 logger = None
@@ -282,10 +287,10 @@ def __query_quit_or_continue_launching(msg, app_bootstrap):
         "%s\n" "Do you want to continue launching the Shotgun Desktop?" % msg,
         DesktopMessageBox.Yes,
         DesktopMessageBox.Yes | DesktopMessageBox.No,
-        "If you drop us an email at support@shotgunsoftware.com, we'll help you diagnose "
+        "If you contact us through %s, we'll help you diagnose "
         "the issue.\n\n"
         "For more information, see the log file at %s.\n\n"
-        "%s" % (app_bootstrap.get_logfile_location(), traceback.format_exc()),
+        "%s" % (support_url, app_bootstrap.get_logfile_location(), traceback.format_exc()),
     )
     warning_box.button(DesktopMessageBox.Yes).setText("Continue")
     warning_box.button(DesktopMessageBox.No).setText("Quit")

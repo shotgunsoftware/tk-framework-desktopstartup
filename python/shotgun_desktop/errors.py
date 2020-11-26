@@ -33,8 +33,6 @@ class ShotgunDesktopError(Exception):
     Common base class for Shotgun Desktop errors.
     """
 
-    _SUPPORT_EMAIL = "support@shotgunsoftware.com"
-
     def __init__(self, message, support_required=False):
         """
         :param message: Error message to display.
@@ -43,13 +41,13 @@ class ShotgunDesktopError(Exception):
         """
 
         if support_required:
-            support_message = "Please contact {0} to resolve this issue.".format(
-                self._SUPPORT_EMAIL
+            support_message = "Please contact support at {0} to resolve this issue.".format(
+                sgtk.support_url
             )
         else:
             support_message = (
                 "If you need help with this issue, please contact {0}."
-            ).format(self._SUPPORT_EMAIL)
+            ).format(sgtk.support_url)
         Exception.__init__(self, "%s\n\n%s" % (message, support_message))
 
 
