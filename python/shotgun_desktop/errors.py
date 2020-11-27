@@ -33,6 +33,9 @@ class ShotgunDesktopError(Exception):
     Common base class for Shotgun Desktop errors.
     """
 
+    # The CSS style used for hyperlinks inside error messages
+    link_style = "'color: rgb(35,165,225)'"
+
     def __init__(self, message, support_required=False):
         """
         :param message: Error message to display.
@@ -41,13 +44,13 @@ class ShotgunDesktopError(Exception):
         """
 
         if support_required:
-            support_message = "Please contact support at {0} to resolve this issue.".format(
-                sgtk.support_url
+            support_message = "Please <a style={} href={}>contact support</a> to resolve this issue.".format(
+                self.link_style, sgtk.support_url
             )
         else:
             support_message = (
-                "If you need help with this issue, please contact {0}."
-            ).format(sgtk.support_url)
+                "If you need help with this issue, please <a style={} href={}>contact support</a>."
+            ).format(self.link_style, sgtk.support_url)
         Exception.__init__(self, "%s\n\n%s" % (message, support_message))
 
 
@@ -136,11 +139,12 @@ class UpgradeEngine200Error(ShotgunDesktopError):
 class EngineNotCompatibleWithDesktop16(ShotgunDesktopError):
     def __init__(self, app_version):
         super(EngineNotCompatibleWithDesktop16, self).__init__(
-            "Your version of tk-desktop is not compatible with Shotgun Desktop {0}.\n"
+            "Your version of tk-desktop is not compatible with Shotgun Desktop {}.\n"
             "\n"
             "Please upgrade your site configuration's tk-desktop to v2.5.9+ or "
-            "download Shotgun Desktop 1.5.9 or earlier <a style='color: rgb(35,165,225)' href='{1}'>here</a>".format(
+            "download Shotgun Desktop 1.5.9 or earlier <a style={} href='{}'>here</a>".format(
                 app_version,
+                self.link_style,
                 "https://support.shotgunsoftware.com/hc/en-us/articles/219039888-Shotgun-Desktop-Release-Notes",
             )
         )
