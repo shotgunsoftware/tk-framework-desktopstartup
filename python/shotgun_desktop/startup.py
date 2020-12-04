@@ -620,47 +620,12 @@ def __ensure_engine_compatible_with_qt_version(engine, app_version):
 def _run_engine(engine, splash, startup_version, app_bootstrap, startup_desc, settings):
     __ensure_engine_compatible_with_qt_version(engine, app_bootstrap.get_version())
 
-    if __desktop_engine_supports_websocket(engine):
-        return engine.run(
-            splash,
-            version=app_bootstrap.get_version(),
-            startup_version=startup_version,
-            startup_descriptor=startup_desc,
-        )
-    else:
-        logger.info(
-            "tk-desktop version %s does not have built-in browser integration "
-            "launching legacy browser integration.",
-            engine.version,
-        )
-        # We can't assume the tk-core post bootstrap has tank_vendor.six,
-        # so use sys.version_info.
-        if sys.version_info[0] > 2:
-            logger.warning(
-                "Legacy browser integration is only supported under Python 2."
-            )
-            return
-
-        from . import wss_back_compat
-
-        server, should_run = wss_back_compat.init_websockets(
-            splash, app_bootstrap, settings, logger
-        )
-        if not should_run:
-            return False
-
-        if server:
-            QtGui.QApplication.instance().aboutToQuit.connect(
-                lambda: server.tear_down()
-            )
-
-        # This is how the old desktop engine used to be invoked.
-        return engine.run(
-            splash,
-            version=app_bootstrap.get_version(),
-            server=server,
-            startup_version=startup_version,
-        )
+    return engine.run(
+        splash,
+        version=app_bootstrap.get_version(),
+        startup_version=startup_version,
+        startup_descriptor=startup_desc,
+    )
 
 
 def __handle_exception(splash, shotgun_authenticator, error_message):
