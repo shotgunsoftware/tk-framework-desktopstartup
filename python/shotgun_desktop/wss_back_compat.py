@@ -16,7 +16,7 @@ import traceback
 try:
     from sgtk import support_url
 except ImportError:
-    support_url = "support@shotgunsoftware.com"
+    support_url = "https://support.shotgunsoftware.com"
 
 from .desktop_message_box import DesktopMessageBox
 
