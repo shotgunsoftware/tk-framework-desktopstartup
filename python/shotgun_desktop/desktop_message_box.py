@@ -196,7 +196,18 @@ class DesktopMessageBox(QtGui.QMessageBox):
                 for para in message.split("\n")
             ]
         )
-        self.setText("<html><head/><body>%s</body></html>" % message)
+        self.setText(
+            """
+            <html>
+                <head>
+                    <style>
+                        a {color: rgb(35,165,225)}
+                    </style>
+                </head>
+                <body>%s</body>
+            </html>"""
+            % message
+        )
 
     def exec_(self):
         """

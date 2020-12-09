@@ -709,11 +709,12 @@ def __handle_unexpected_exception(
     logger.exception("Fatal error, user will be logged out.")
     DesktopMessageBox.critical(
         "Shotgun Desktop Error",
-        "Something went wrong in the Shotgun Desktop! If you drop us an email at "
-        "support@shotgunsoftware.com, we'll help you diagnose the issue.\n"
-        "Error: %s\n"
-        "For more information, see the log file at %s."
-        % (str(error_message), log_location),
+        "Something went wrong in the Shotgun Desktop! If you <a href={link}>contact us</a> "
+        "we'll help you diagnose the issue.\n"
+        "Error: {error}\n"
+        "For more information, see the log file at {log}.".format(
+            link=sgtk.support_url, error=str(error_message), log=log_location,
+        ),
         detailed_text="".join(
             traceback.format_exception(exc_type, exc_value, exc_traceback)
         ),
