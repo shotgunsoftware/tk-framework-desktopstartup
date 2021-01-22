@@ -33,8 +33,6 @@ class ShotgunDesktopError(Exception):
     Common base class for Shotgun Desktop errors.
     """
 
-    _SUPPORT_EMAIL = "support@shotgunsoftware.com"
-
     def __init__(self, message, support_required=False):
         """
         :param message: Error message to display.
@@ -43,13 +41,13 @@ class ShotgunDesktopError(Exception):
         """
 
         if support_required:
-            support_message = "Please contact {0} to resolve this issue.".format(
-                self._SUPPORT_EMAIL
+            support_message = "Please <a href={}>contact support</a> to resolve this issue.".format(
+                sgtk.support_url
             )
         else:
             support_message = (
-                "If you need help with this issue, please contact {0}."
-            ).format(self._SUPPORT_EMAIL)
+                "If you need help with this issue, please <a href={}>contact support</a>."
+            ).format(sgtk.support_url)
         Exception.__init__(self, "%s\n\n%s" % (message, support_message))
 
 
@@ -138,10 +136,10 @@ class UpgradeEngine200Error(ShotgunDesktopError):
 class EngineNotCompatibleWithDesktop16(ShotgunDesktopError):
     def __init__(self, app_version):
         super(EngineNotCompatibleWithDesktop16, self).__init__(
-            "Your version of tk-desktop is not compatible with Shotgun Desktop {0}.\n"
+            "Your version of tk-desktop is not compatible with Shotgun Desktop {}.\n"
             "\n"
             "Please upgrade your site configuration's tk-desktop to v2.5.9+ or "
-            "download Shotgun Desktop 1.5.9 or earlier <a style='color: rgb(35,165,225)' href='{1}'>here</a>".format(
+            "download Shotgun Desktop 1.5.9 or earlier <a href='{}'>here</a>".format(
                 app_version,
                 "https://support.shotgunsoftware.com/hc/en-us/articles/219039888-Shotgun-Desktop-Release-Notes",
             )
