@@ -58,6 +58,9 @@ rm -rf $DEST/docs
 
 sed -i "" -e "s/version: \"HEAD\"/version: \"$1\"/" $DEST/info.yml
 
+cp python/tk-core/software_credits software_credits
+git add software_credits
+
 # Put files in the staging area.
 git add -A $DEST
 # Cleanup!
