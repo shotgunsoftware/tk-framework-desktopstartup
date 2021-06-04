@@ -62,9 +62,9 @@ class InvalidPipelineConfiguration(ShotgunDesktopError):
         pc_project_id = pc_entity["project"]["id"] if pc_entity["project"] else None
         ShotgunDesktopError.__init__(
             self,
-            "The pipeline configuration retrieved from ShotGrid (named \"%s\" "
+            'The pipeline configuration retrieved from ShotGrid (named "%s" '
             "with id %d and project id %s) does not match the site configuration found on disk "
-            "(named "%s" with id %d and project id %s). Please contact your ShotGrid "
+            '(named "%s" with id %d and project id %s). Please contact your ShotGrid '
             "Administrator."
             % (
                 pc_entity["code"],
