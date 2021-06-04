@@ -342,7 +342,7 @@ def __launch_app(app, splash, user, app_bootstrap, settings):
         # debug logging until core swap, when the original launch setting is
         # restored.
         __restore_global_debug_flag()
-        __restart_app_with_countdown(splash, "Shotgun Desktop updated.")
+        __restart_app_with_countdown(splash, "ShotGrid Desktop updated.")
 
     splash.set_message("Looking up site configuration.")
 
@@ -495,7 +495,7 @@ def __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path):
 
     if not __desktop_engine_supports_authentication_module(engine):
         raise UpgradeEngine200Error(
-            "This version of the Shotgun Desktop only supports tk-desktop engine 2.0.0 and higher.",
+            "This version of the ShotGrid Desktop only supports tk-desktop engine 2.0.0 and higher.",
             pc_path,
         )
 
@@ -640,7 +640,7 @@ def __handle_exception(splash, shotgun_authenticator, error_message):
     if splash:
         splash.hide()
     logger.exception("Fatal error, user will be logged out.")
-    DesktopMessageBox.critical("Shotgun Desktop Error", error_message)
+    DesktopMessageBox.critical("ShotGrid Desktop Error", error_message)
     # If we are logged in, we should log out so the user is not stuck in a loop of always
     # automatically logging in each time the app is launched again
     if shotgun_authenticator:
@@ -673,8 +673,8 @@ def __handle_unexpected_exception(
 
     logger.exception("Fatal error, user will be logged out.")
     DesktopMessageBox.critical(
-        "Shotgun Desktop Error",
-        "Something went wrong in the Shotgun Desktop! If you <a href={link}>contact us</a> "
+        "ShotGrid Desktop Error",
+        "Something went wrong in the ShotGrid Desktop! If you <a href={link}>contact us</a> "
         "we'll help you diagnose the issue.\n"
         "Error: {error}\n"
         "For more information, see the log file at {log}.".format(

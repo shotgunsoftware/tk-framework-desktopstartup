@@ -62,9 +62,9 @@ class InvalidPipelineConfiguration(ShotgunDesktopError):
         pc_project_id = pc_entity["project"]["id"] if pc_entity["project"] else None
         ShotgunDesktopError.__init__(
             self,
-            'The pipeline configuration retrieved from Shotgun (named "%s" '
+            'The pipeline configuration retrieved from ShotGrid (named "%s" '
             "with id %d and project id %s) does not match the site configuration found on disk "
-            '(named "%s" with id %d and project id %s). Please contact your Shotgun '
+            '(named "%s" with id %d and project id %s). Please contact your ShotGrid '
             "Administrator."
             % (
                 pc_entity["code"],
@@ -136,10 +136,10 @@ class UpgradeEngine200Error(ShotgunDesktopError):
 class EngineNotCompatibleWithDesktop16(ShotgunDesktopError):
     def __init__(self, app_version):
         super(EngineNotCompatibleWithDesktop16, self).__init__(
-            "Your version of tk-desktop is not compatible with Shotgun Desktop {}.\n"
+            "Your version of tk-desktop is not compatible with ShotGrid Desktop {}.\n"
             "\n"
             "Please upgrade your site configuration's tk-desktop to v2.5.9+ or "
-            "download Shotgun Desktop 1.5.9 or earlier <a href='{}'>here</a>".format(
+            "download ShotGrid Desktop 1.5.9 or earlier <a href='{}'>here</a>".format(
                 app_version,
                 "https://support.shotgunsoftware.com/hc/en-us/articles/219039888-Shotgun-Desktop-Release-Notes",
             )

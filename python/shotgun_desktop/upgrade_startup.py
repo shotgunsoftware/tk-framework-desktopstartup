@@ -63,8 +63,8 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
         logger.info("Desktop startup using a dev descriptor, skipping update...")
         return False
     else:
-        splash.set_message("Getting Shotgun Desktop updates...")
-        logger.info("Getting Shotgun Desktop updates...")
+        splash.set_message("Getting ShotGrid Desktop updates...")
+        logger.info("Getting ShotGrid Desktop updates...")
 
     try:
         latest_descriptor = current_desc.find_latest_version()
@@ -127,12 +127,12 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
         # know something wrong is going on.
         logger.exception("Unexpected error when updating startup code.")
         DesktopMessageBox.critical(
-            "Shotgun Desktop update failed",
-            "There is a new update of the Shotgun Desktop, but it couldn't be installed. Shotgun "
+            "ShotGrid Desktop update failed",
+            "There is a new update of the ShotGrid Desktop, but it couldn't be installed. ShotGrid "
             "Desktop will be launched with the currently installed version of the code.\n"
-            "If this problem persists, please contact Shotgun support at "
-            "support@shotgunsoftware.com.\n"
-            "Error: %s" % str(e),
+            "If this problem persists, please <a href='%s'>contact</a> ShotGrid support.\n"
+            "\n"
+            "Error: %s" % (sgtk.support_url, str(e)),
         )
         splash.show()
         return False

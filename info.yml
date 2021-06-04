@@ -19,7 +19,7 @@ requires_shotgun_fields:
 
 # More verbose description of this item
 display_name: "Desktop Startup Framework"
-description: "Startup logic for the Shotgun Desktop"
+description: "Startup logic for the ShotGrid Desktop"
 
 # Required minimum versions for this item to run
 # Do not update this core version, or the upgrade of the Shotgun Desktop
