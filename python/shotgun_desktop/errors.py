@@ -136,10 +136,10 @@ class UpgradeEngine200Error(ShotgunDesktopError):
 class EngineNotCompatibleWithDesktop16(ShotgunDesktopError):
     def __init__(self, app_version):
         super(EngineNotCompatibleWithDesktop16, self).__init__(
-            "Your version of tk-desktop is not compatible with Shotgun Desktop {}.\n"
+            "Your version of tk-desktop is not compatible with ShotGrid Desktop {}.\n"
             "\n"
             "Please upgrade your site configuration's tk-desktop to v2.5.9+ or "
-            "download Shotgun Desktop 1.5.9 or earlier <a href='{}'>here</a>".format(
+            "download ShotGrid Desktop 1.5.9 or earlier <a href='{}'>here</a>".format(
                 app_version,
                 "https://support.shotgunsoftware.com/hc/en-us/articles/219039888-Shotgun-Desktop-Release-Notes",
             )
