@@ -132,7 +132,7 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
             "Desktop will be launched with the currently installed version of the code.\n"
             "If this problem persists, please <a href='%s'>contact</a> ShotGrid support.\n"
             "\n"
-            "Error: %s" % (sgtk.support_url, str(e))
+            "Error: %s" % (sgtk.support_url, str(e)),
         )
         splash.show()
         return False
