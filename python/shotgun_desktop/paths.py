@@ -121,9 +121,9 @@ def get_pipeline_configuration_info(connection):
 
     # get operating system specific root
     if sgtk.util.is_macos():
-        pc_root = os.path.expanduser("~/Library/Application Support/Shotgun")
+        pc_root = os.path.expanduser("~/Library/Application Support/ShotGrid")
     elif sgtk.util.is_windows():
-        pc_root = os.path.join(os.environ["APPDATA"], "Shotgun")
+        pc_root = os.path.join(os.environ["APPDATA"], "ShotGrid")
     elif sgtk.util.is_linux():
         pc_root = os.path.expanduser("~/.shotgun")
 
