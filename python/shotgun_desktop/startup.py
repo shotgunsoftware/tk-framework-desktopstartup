@@ -19,6 +19,15 @@ import traceback
 # initialize logging
 import logging
 
+# On Shotgun Desktop 1.7.0 on Linux, sys.executable is not properly set.
+# The Python 3 version reports /opt/Shotgun/Python3/bin/python3
+# The Python 2 version reports an empty string.
+# Instead, we'll use sys.prefix which is properly set and backtrack to the executable.
+# When the executable is fixed we should come back here and put a check for the version
+# number so we stop updating sys.prefix
+if sys.platform.startswith("linux"):
+    sys.executable = os.path.normpath(os.path.join(sys.prefix, "..", "Shotgun"))
+
 
 def _enumerate_per_line(items):
     """
