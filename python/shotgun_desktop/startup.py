@@ -19,15 +19,30 @@ import traceback
 # initialize logging
 import logging
 
-# On Shotgun Desktop 1.7.0 on Linux, sys.executable is not properly set.
-# The Python 3 version reports /opt/Shotgun/Python3/bin/python3
-# The Python 2 version reports an empty string.
-# Instead, we'll use sys.prefix which is properly set and backtrack to the executable.
+# The value of sys.executable under multiple platforms and multiple versions
+# of Desktop is unreliable. Therefore, we're patch the value if the executable
+# name is not Shotgun or ShotGrid.
+#
+# So, we'll use sys.prefix which is properly set and backtrack to the executable.
 # When the executable is fixed we should come back here and put a check for the version
-# number so we stop updating sys.prefix
-if sys.platform.startswith("linux"):
-    sys.executable = os.path.normpath(os.path.join(sys.prefix, "..", "Shotgun"))
+# number so we stop updating sys.executable
 
+# Grab the name and the executable
+executable_name, ext = os.path.splitext(os.path.basename(sys.executable or ""))
+
+# If the executable is not named Shotgun or ShotGrid, then we need to patch sys.executable.
+if executable_name.lower() not in ["shotgun", "shotgrid"]:
+    # On macOS, sys.prefix is set to /Applications/Shotgun.app/Contents/Resources/python,
+    # so we need to drill down differently for the executable folder than on other platforms
+    if sys.platform == "darwin":
+        bin_dir = os.path.join(sys.prefix, "..", "..", "MacOS")
+    else:
+        # On Linux and Windows, the sys.prefix points to Shotgun/Python, so we only
+        # need to move up one folder.
+        bin_dir = os.path.join(sys.prefix, "..")
+
+    # Set the executable name and make sure to put back in the extension for Windows.
+    sys.executable = os.path.normpath(os.path.join(bin_dir, "Shotgun%s" % ext))
 
 def _enumerate_per_line(items):
     """
