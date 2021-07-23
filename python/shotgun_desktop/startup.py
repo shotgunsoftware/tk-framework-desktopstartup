@@ -44,6 +44,7 @@ if executable_name.lower() not in ["shotgun", "shotgrid"]:
     # Set the executable name and make sure to put back in the extension for Windows.
     sys.executable = os.path.normpath(os.path.join(bin_dir, "Shotgun%s" % ext))
 
+
 def _enumerate_per_line(items):
     """
     Enumerate all items from an array, one line at a time.
