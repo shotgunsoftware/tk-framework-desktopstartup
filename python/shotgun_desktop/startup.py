@@ -852,7 +852,7 @@ def main(**kwargs):
         shotgun_authenticator = sgtk.authentication.ShotgunAuthenticator()
         if os.environ.get("SGTK_DESKTOP_SUPPORT_WEB_LOGIN_TRUE"):
             logger.info(
-                "Indicating to the Desktop that web loging is supported and to be used."
+                "Indicating to the Desktop that web login is supported and to be used."
             )
             set_shotgun_authenticator_support_web_login(True)
         __optional_state_cleanup(splash, shotgun_authenticator, app_bootstrap)
