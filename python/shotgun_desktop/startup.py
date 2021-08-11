@@ -839,7 +839,7 @@ def main(**kwargs):
     from sgtk.descriptor import InvalidAppStoreCredentialsError
     from sgtk.authentication import (
         set_shotgun_authenticator_support_web_login,
-        ShotgunSamlUser
+        ShotgunSamlUser,
     )
 
     try:
@@ -850,8 +850,10 @@ def main(**kwargs):
         # If there is an error during auto login, for example proxy settings changed and you
         # can't connect anymore, we need to be able to log the user out.
         shotgun_authenticator = sgtk.authentication.ShotgunAuthenticator()
-        if os.environ.get('SGTK_DESKTOP_SUPPORT_WEB_LOGIN_TRUE'):
-            logger.info("Indicating to the Desktop that web loging is supported and to be used.")
+        if os.environ.get("SGTK_DESKTOP_SUPPORT_WEB_LOGIN_TRUE"):
+            logger.info(
+                "Indicating to the Desktop that web loging is supported and to be used."
+            )
             set_shotgun_authenticator_support_web_login(True)
         __optional_state_cleanup(splash, shotgun_authenticator, app_bootstrap)
 
