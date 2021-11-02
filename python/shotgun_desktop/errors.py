@@ -141,6 +141,6 @@ class EngineNotCompatibleWithDesktop16(ShotgunDesktopError):
             "Please upgrade your site configuration's tk-desktop to v2.5.9+ or "
             "download ShotGrid Desktop 1.5.9 or earlier <a href='{}'>here</a>".format(
                 app_version,
-                "https://support.shotgunsoftware.com/hc/en-us/articles/219039888-Shotgun-Desktop-Release-Notes",
+                "https://community.shotgridsoftware.com/t/a-new-version-of-shotgrid-desktop-has-been-released/13877/99999",
             )
         )
