@@ -11,7 +11,11 @@
 from __future__ import with_statement
 import sys
 import os
-import cgi
+
+if sys.version_info >= (3, 2):
+    from html import escape
+else:
+    from cgi import escape
 import logging
 import string
 import tank
@@ -231,7 +235,7 @@ class AltCustomFormatter(logging.Formatter):
                 # before converting, make sure the record is a string, sometimes
                 # people pass in all sorts of crap into the logger
                 message_str = str(record.msg)
-                message = "<b>%s:</b> %s" % (record.levelname, cgi.escape(message_str))
+                message = "<b>%s:</b> %s" % (record.levelname, escape(message_str))
             else:
                 # info logging allows html chars to be passed so no cgi encode
                 message = str(record.msg)
@@ -1259,7 +1263,7 @@ def run_engine_cmd(pipeline_config_root, context_items, command, using_cwd, args
     logger.info("")
 
     logger.info("Welcome to SGTK!")
-    logger.info("For documentation, see https://support.shotgunsoftware.com")
+    logger.info("For documentation, see https://developer.shotgridsoftware.com")
 
     # Now create a tk instance and a context if possible
     ctx = None
