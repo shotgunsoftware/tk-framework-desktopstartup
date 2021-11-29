@@ -16,4 +16,4 @@ Run the script tk_core_update.sh with the version tag of the core you want to us
 
 
 ## Have a Question?
-Don't hesitate to contact us! You can find us on knowledge.autodesk.com/contact-support
+Don't hesitate to contact us! You can find us on https://knowledge.autodesk.com/contact-support
