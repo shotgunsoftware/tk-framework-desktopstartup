@@ -63,8 +63,8 @@
 
 # Port to listen for requests coming from the browser. If not specified,
 # defaults to 9000. Note that you will need to contact support at
-# support@shotgunsoftware.com in order to have your site communicate on a custom
-# port.
+# https://knowledge.autodesk.com/contact-support in order to have your site communicate
+# on a custom port.
 #
 # port=9000
 
