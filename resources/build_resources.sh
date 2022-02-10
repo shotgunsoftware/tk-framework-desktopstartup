@@ -31,8 +31,6 @@ function build_qt {
     sed -i $UI_PYTHON_PATH/$3.py -e "s/QMetaObject/QtCore\.QMetaObject/g"
     sed -i $UI_PYTHON_PATH/$3.py -e "s/QPixmap/QtGui\.QPixmap/g"
     sed -i $UI_PYTHON_PATH/$3.py -e "s/Splash\.setWindowTitle(QCoreApplication\.translate(\"Splash\", u\"Dialog\", None))/Splash\.setWindowTitle(QtGui\.QApplication\.translate(\"Splash\", \"Dialog\", None, QtGui\.QApplication\.UnicodeUTF8))/g"
-
-#    sed -i $UI_PYTHON_PATH/$3.py -e "s/QCoreApplication/QtCore\.QApplication/g"
 }
 
 function build_ui {
