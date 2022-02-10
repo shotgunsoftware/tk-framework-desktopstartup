@@ -18,14 +18,14 @@ class Ui_Splash(object):
     def setupUi(self, Splash):
         if not Splash.objectName():
             Splash.setObjectName(u"Splash")
-        Splash.resize(512, 200)
+        Splash.resize(600, 320)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Fixed, QtGui.QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(Splash.sizePolicy().hasHeightForWidth())
         Splash.setSizePolicy(sizePolicy)
-        Splash.setMinimumSize(QtCore.QSize(512, 200))
-        Splash.setMaximumSize(QtCore.QSize(512, 200))
+        Splash.setMinimumSize(QtCore.QSize(600, 320))
+        Splash.setMaximumSize(QtCore.QSize(600, 320))
         Splash.setStyleSheet(u"QDialog\n"
 "{\n"
 "	border: 2px solid rgb(119, 134, 145)\n"
@@ -39,22 +39,23 @@ class Ui_Splash(object):
 "}")
         self.icon = QtGui.QLabel(Splash)
         self.icon.setObjectName(u"icon")
-        self.icon.setGeometry(QtCore.QRect(16, 30, 480, 142))
+        self.icon.setGeometry(QtCore.QRect(19, 18, 562, 284))
         sizePolicy.setHeightForWidth(self.icon.sizePolicy().hasHeightForWidth())
         self.icon.setSizePolicy(sizePolicy)
-        self.icon.setMinimumSize(QtCore.QSize(480, 142))
-        self.icon.setMaximumSize(QtCore.QSize(480, 142))
+        self.icon.setMinimumSize(QtCore.QSize(562, 284))
+        self.icon.setMaximumSize(QtCore.QSize(562, 284))
         self.icon.setPixmap(QtGui.QPixmap(u":/res/splash.png"))
         self.icon.setScaledContents(True)
         self.message = QtGui.QLabel(Splash)
         self.message.setObjectName(u"message")
-        self.message.setGeometry(QtCore.QRect(182, 146, 316, 31))
+        self.message.setGeometry(QtCore.QRect(30, 260, 191, 31))
+        self.message.setAutoFillBackground(False)
         self.message.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignTop)
         self.version = QtGui.QLabel(Splash)
         self.version.setObjectName(u"version")
-        self.version.setGeometry(QtCore.QRect(390, 40, 101, 20))
+        self.version.setGeometry(QtCore.QRect(467, 30, 101, 20))
         self.version.setStyleSheet(u"color: rgb(104, 123, 135);")
-        self.version.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
+        self.version.setAlignment(QtCore.Qt.AlignCenter)
 
         self.retranslateUi(Splash)
 
