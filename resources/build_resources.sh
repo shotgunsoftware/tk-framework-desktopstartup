@@ -19,16 +19,28 @@ function build_qt {
     # compile ui to python
     $1 $2 > $UI_PYTHON_PATH/$3.py
 
-    # replace PySide imports with sgtk.platform.qt and remove line containing Created by date
-    sed -i "" -e "s/from PySide import/from shotgun_desktop.qt import/g" -e "/# Created:/d" $UI_PYTHON_PATH/$3.py
+    sed -i $UI_PYTHON_PATH/$3.py -e "s/from PySide2 import/from shotgun_desktop.qt import/g"  -e "/# Created:/d"
+    sed -i $UI_PYTHON_PATH/$3.py -e "s/from PySide2\./from shotgun_desktop.qt import /g" -e "/# Created:/d"
+    sed -i $UI_PYTHON_PATH/$3.py -e "s/ import \*/ /g"  -e "/# Created:/d"
+    sed -i $UI_PYTHON_PATH/$3.py -e "s/from shotgun_desktop.qt import QtWidgets //g"  -e "/# Created:/d"
+    sed -i $UI_PYTHON_PATH/$3.py -e "s/QSizePolicy/QtGui\.QSizePolicy/g"
+    sed -i $UI_PYTHON_PATH/$3.py -e "s/QSize(/QtCore.QSize(/g"
+    sed -i $UI_PYTHON_PATH/$3.py -e "s/QLabel(/QtGui.QLabel(/g"
+    sed -i $UI_PYTHON_PATH/$3.py -e "s/QRect(/QtCore.QRect(/g"
+    sed -i $UI_PYTHON_PATH/$3.py -e "s/Qt\.Align/QtCore\.Qt\.Align/g"
+    sed -i $UI_PYTHON_PATH/$3.py -e "s/QMetaObject/QtCore\.QMetaObject/g"
+    sed -i $UI_PYTHON_PATH/$3.py -e "s/QPixmap/QtGui\.QPixmap/g"
+    sed -i $UI_PYTHON_PATH/$3.py -e "s/Splash\.setWindowTitle(QCoreApplication\.translate(\"Splash\", u\"Dialog\", None))/Splash\.setWindowTitle(QtGui\.QApplication\.translate(\"Splash\", \"Dialog\", None, QtGui\.QApplication\.UnicodeUTF8))/g"
+
+#    sed -i $UI_PYTHON_PATH/$3.py -e "s/QCoreApplication/QtCore\.QApplication/g"
 }
 
 function build_ui {
-    build_qt "pyside-uic --from-imports" "$1.ui" "$1"
+    build_qt "pyside2-uic --from-imports" "$1.ui" "$1"
 }
 
 function build_res {
-    build_qt "pyside-rcc -py3" "$1.qrc" "$1_rc"
+    build_qt "pyside2-rcc -g python" "$1.qrc" "$1_rc"
 }
 
 # build UI's:
