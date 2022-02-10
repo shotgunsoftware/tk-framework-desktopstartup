@@ -86,9 +86,13 @@ QWidget
     <rect>
      <x>20</x>
      <y>330</y>
-     <width>316</width>
+     <width>221</width>
      <height>31</height>
     </rect>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">color: rgb(255, 255, 255);
+background-color: rgb(0, 0, 0)</string>
    </property>
    <property name="text">
     <string/>
@@ -107,7 +111,8 @@ QWidget
     </rect>
    </property>
    <property name="styleSheet">
-    <string notr="true">color: rgb(104, 123, 135);</string>
+    <string notr="true">color: rgb(255, 255, 255);
+background-color: rgb(0, 0, 0)</string>
    </property>
    <property name="text">
     <string/>

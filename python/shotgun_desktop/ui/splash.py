@@ -44,13 +44,16 @@ class Ui_Splash(object):
         self.icon.setScaledContents(True)
         self.icon.setObjectName("icon")
         self.message = QtGui.QLabel(Splash)
-        self.message.setGeometry(QtCore.QRect(20, 330, 316, 31))
+        self.message.setGeometry(QtCore.QRect(20, 330, 221, 31))
+        self.message.setStyleSheet("color: rgb(255, 255, 255);\n"
+"background-color: rgb(0, 0, 0)")
         self.message.setText("")
         self.message.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignTop)
         self.message.setObjectName("message")
         self.version = QtGui.QLabel(Splash)
         self.version.setGeometry(QtCore.QRect(480, 20, 101, 20))
-        self.version.setStyleSheet("color: rgb(104, 123, 135);")
+        self.version.setStyleSheet("color: rgb(255, 255, 255);\n"
+"background-color: rgb(0, 0, 0)")
         self.version.setText("")
         self.version.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
         self.version.setObjectName("version")
