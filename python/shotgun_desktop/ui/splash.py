@@ -50,11 +50,12 @@ class Ui_Splash(object):
         self.message.setObjectName(u"message")
         self.message.setGeometry(QtCore.QRect(10, 330, 221, 31))
         self.message.setAutoFillBackground(False)
+        self.message.setStyleSheet(u"color: rgb(255 255, 255); background-color: rgb(0, 0, 0)")
         self.message.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
         self.version = QtGui.QLabel(Splash)
         self.version.setObjectName(u"version")
         self.version.setGeometry(QtCore.QRect(467, 30, 101, 20))
-        self.version.setStyleSheet(u"color: rgb(104, 123, 135);")
+        self.version.setStyleSheet(u"color: rgb(255 255, 255); background-color: rgb(0, 0, 0);")
         self.version.setAlignment(QtCore.Qt.AlignCenter)
 
         self.retranslateUi(Splash)
