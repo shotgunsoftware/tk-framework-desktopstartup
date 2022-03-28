@@ -11,14 +11,14 @@ from shotgun_desktop.qt import QtCore, QtGui
 class Ui_Splash(object):
     def setupUi(self, Splash):
         Splash.setObjectName("Splash")
-        Splash.resize(512, 200)
+        Splash.resize(600, 400)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Fixed, QtGui.QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(Splash.sizePolicy().hasHeightForWidth())
         Splash.setSizePolicy(sizePolicy)
-        Splash.setMinimumSize(QtCore.QSize(512, 200))
-        Splash.setMaximumSize(QtCore.QSize(512, 200))
+        Splash.setMinimumSize(QtCore.QSize(600, 400))
+        Splash.setMaximumSize(QtCore.QSize(600, 400))
         Splash.setStyleSheet("QDialog\n"
 "{\n"
 "    border: 2px solid rgb(119, 134, 145)\n"
@@ -31,26 +31,29 @@ class Ui_Splash(object):
 "    font-size: 12px;\n"
 "}")
         self.icon = QtGui.QLabel(Splash)
-        self.icon.setGeometry(QtCore.QRect(16, 30, 480, 142))
+        self.icon.setGeometry(QtCore.QRect(5, 5, 590, 390))
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Fixed, QtGui.QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.icon.sizePolicy().hasHeightForWidth())
         self.icon.setSizePolicy(sizePolicy)
-        self.icon.setMinimumSize(QtCore.QSize(480, 142))
-        self.icon.setMaximumSize(QtCore.QSize(480, 142))
+        self.icon.setMinimumSize(QtCore.QSize(590, 390))
+        self.icon.setMaximumSize(QtCore.QSize(590, 390))
         self.icon.setText("")
         self.icon.setPixmap(QtGui.QPixmap(":/res/splash.png"))
         self.icon.setScaledContents(True)
         self.icon.setObjectName("icon")
         self.message = QtGui.QLabel(Splash)
-        self.message.setGeometry(QtCore.QRect(182, 146, 316, 31))
+        self.message.setGeometry(QtCore.QRect(20, 330, 221, 31))
+        self.message.setStyleSheet("color: rgb(255, 255, 255);\n"
+"background-color: rgb(0, 0, 0)")
         self.message.setText("")
         self.message.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignTop)
         self.message.setObjectName("message")
         self.version = QtGui.QLabel(Splash)
-        self.version.setGeometry(QtCore.QRect(390, 40, 101, 20))
-        self.version.setStyleSheet("color: rgb(104, 123, 135);")
+        self.version.setGeometry(QtCore.QRect(480, 20, 101, 20))
+        self.version.setStyleSheet("color: rgb(255, 255, 255);\n"
+"background-color: rgb(0, 0, 0)")
         self.version.setText("")
         self.version.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
         self.version.setObjectName("version")
