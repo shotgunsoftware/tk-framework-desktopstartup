@@ -135,7 +135,7 @@ def get_pipeline_configuration_info(connection):
 
 
 def __get_site_from_connection(connection):
-    """ return the site from the information in the connection """
+    """return the site from the information in the connection"""
     # grab just the non-port part of the netloc of the url
     # eg site.shotgunstudio.com
     site = parse.urlparse(connection.base_url)[1].split(":")[0]

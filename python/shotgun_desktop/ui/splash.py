@@ -31,6 +31,7 @@ class Ui_Splash(object):
 "    font-size: 12px;\n"
 "}")
         self.icon = QtGui.QLabel(Splash)
+        self.icon.setEnabled(True)
         self.icon.setGeometry(QtCore.QRect(5, 5, 590, 390))
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Fixed, QtGui.QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(0)
@@ -44,9 +45,10 @@ class Ui_Splash(object):
         self.icon.setScaledContents(True)
         self.icon.setObjectName("icon")
         self.message = QtGui.QLabel(Splash)
-        self.message.setGeometry(QtCore.QRect(20, 330, 221, 31))
+        self.message.setEnabled(False)
+        self.message.setGeometry(QtCore.QRect(20, 330, 561, 31))
         self.message.setStyleSheet("color: rgb(255, 255, 255);\n"
-"background-color: rgb(0, 0, 0)")
+"background-color: transparent")
         self.message.setText("")
         self.message.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignTop)
         self.message.setObjectName("message")

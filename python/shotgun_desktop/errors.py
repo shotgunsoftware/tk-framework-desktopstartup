@@ -41,8 +41,10 @@ class ShotgunDesktopError(Exception):
         """
 
         if support_required:
-            support_message = "Please <a href={}>contact support</a> to resolve this issue.".format(
-                sgtk.support_url
+            support_message = (
+                "Please <a href={}>contact support</a> to resolve this issue.".format(
+                    sgtk.support_url
+                )
             )
         else:
             support_message = (
@@ -91,7 +93,8 @@ class UpgradeCoreError(ShotgunDesktopError):
             % (
                 reason,
                 os.path.join(
-                    toolkit_path, "tank.bat" if sgtk.util.is_windows() else "tank",
+                    toolkit_path,
+                    "tank.bat" if sgtk.util.is_windows() else "tank",
                 ),
             ),
         )

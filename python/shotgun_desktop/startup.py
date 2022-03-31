@@ -132,7 +132,14 @@ def add_to_python_path(bundled_path, env_var_override, module_name):
 
 
 # Add Toolkit to the path.
-add_to_python_path(os.path.join("..", "tk-core",), "SGTK_CORE_LOCATION", "tk-core")
+add_to_python_path(
+    os.path.join(
+        "..",
+        "tk-core",
+    ),
+    "SGTK_CORE_LOCATION",
+    "tk-core",
+)
 
 # now proceed with non builtin imports
 from .qt import QtCore, QtGui
@@ -474,8 +481,10 @@ def __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path):
     mgr = sgtk.bootstrap.ToolkitManager(user)
     # Tell the manager to resolve the config in Shotgun so it can resolve the location on disk.
     mgr.do_shotgun_config_lookup = True
-    mgr.progress_callback = lambda progress_value, message: __bootstrap_progress_callback(
-        splash, app, progress_value, message
+    mgr.progress_callback = (
+        lambda progress_value, message: __bootstrap_progress_callback(
+            splash, app, progress_value, message
+        )
     )
     mgr.pipeline_configuration = pc["id"]
 
@@ -549,8 +558,10 @@ def __start_engine_in_zero_config(app, app_bootstrap, splash, user):
         "SHOTGUN_DESKTOP_CONFIG_FALLBACK_DESCRIPTOR",
         "sgtk:descriptor:app_store?name=tk-config-basic",
     )
-    mgr.progress_callback = lambda progress_value, message: __bootstrap_progress_callback(
-        splash, app, progress_value, message
+    mgr.progress_callback = (
+        lambda progress_value, message: __bootstrap_progress_callback(
+            splash, app, progress_value, message
+        )
     )
     mgr.plugin_id = "basic.desktop"
 
@@ -703,7 +714,9 @@ def __handle_unexpected_exception(
         "we'll help you diagnose the issue.\n"
         "Error: {error}\n"
         "For more information, see the log file at {log}.".format(
-            link=sgtk.support_url, error=str(error_message), log=log_location,
+            link=sgtk.support_url,
+            error=str(error_message),
+            log=log_location,
         ),
         detailed_text="".join(
             traceback.format_exception(exc_type, exc_value, exc_traceback)
