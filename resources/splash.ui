@@ -45,6 +45,9 @@ QWidget
 }</string>
   </property>
   <widget class="QLabel" name="icon">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
    <property name="geometry">
     <rect>
      <x>5</x>
@@ -82,11 +85,14 @@ QWidget
    </property>
   </widget>
   <widget class="QLabel" name="message">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
    <property name="geometry">
     <rect>
      <x>20</x>
-     <y>330</y>
-     <width>221</width>
+     <y>310</y>
+     <width>251</width>
      <height>31</height>
     </rect>
    </property>
