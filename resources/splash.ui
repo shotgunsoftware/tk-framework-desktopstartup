@@ -91,8 +91,8 @@ QWidget
    <property name="geometry">
     <rect>
      <x>20</x>
-     <y>310</y>
-     <width>251</width>
+     <y>280</y>
+     <width>281</width>
      <height>31</height>
     </rect>
    </property>
