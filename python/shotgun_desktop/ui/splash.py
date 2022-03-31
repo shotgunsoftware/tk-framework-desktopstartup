@@ -46,7 +46,7 @@ class Ui_Splash(object):
         self.icon.setObjectName("icon")
         self.message = QtGui.QLabel(Splash)
         self.message.setEnabled(False)
-        self.message.setGeometry(QtCore.QRect(20, 310, 251, 31))
+        self.message.setGeometry(QtCore.QRect(20, 280, 281, 31))
         self.message.setStyleSheet("color: rgb(255, 255, 255);\n"
 "background-color: rgb(0, 0, 0)")
         self.message.setText("")
