@@ -12,7 +12,7 @@
 # This is automatically replaced with appropriate values
 # as the core bundle is uploaded to the app store.
 
-version: "v0.20.12"
+version: "SG-27385_Add_a_check_to_stop_autoupdating_tk-config-basic_in_tk-framework-desktopstartup"
 documentation_url: "https://developer.shotgridsoftware.com/d587be80/?title=Integrations+User+Guide"
 requires_shotgun_version: "v5.0.0"
 
