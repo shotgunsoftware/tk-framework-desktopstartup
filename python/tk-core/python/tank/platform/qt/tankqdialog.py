@@ -195,6 +195,9 @@ class TankQDialog(TankDialogBase):
 
         self._config_items = []
 
+        # Set the WA_DeleteOnClose attribute to be sure the dialog will be fully destroyed on close
+        self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
+
         ########################################################################################
         # set up the main UI and header
         self.ui = ui_tank_dialog.Ui_TankDialog()
@@ -300,8 +303,7 @@ class TankQDialog(TankDialogBase):
                 else:
                     formatted = "%s" % p.get("name")
 
-                if isinstance(formatted, six.text_type):
-                    formatted = formatted.encode("utf-8")
+                formatted = six.ensure_str(formatted)
 
                 return formatted
 
