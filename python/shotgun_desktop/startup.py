@@ -708,20 +708,42 @@ def __handle_unexpected_exception(
         log_location = app_bootstrap.get_logfile_location()
 
     logger.exception("Fatal error, user will be logged out.")
-    DesktopMessageBox.critical(
-        "ShotGrid Desktop Error",
-        "Something went wrong in the ShotGrid Desktop! If you <a href={link}>contact us</a> "
-        "we'll help you diagnose the issue.\n"
-        "Error: {error}\n"
-        "For more information, see the log file at {log}.".format(
-            link=sgtk.support_url,
-            error=str(error_message),
-            log=log_location,
-        ),
-        detailed_text="".join(
-            traceback.format_exception(exc_type, exc_value, exc_traceback)
-        ),
-    )
+
+    if (
+        'API read() invalid/missing string entity \'type\':\n{"type"=>"PipelineConfiguration"'
+        in str(error_message)
+    ):
+        DesktopMessageBox.critical(
+            "ShotGrid Desktop Error",
+            "PipelineConfiguration entities are not enabled for your site. "
+            "Head to your <a href={link}>Site Preferences</a>, enable them and try again.\n"
+            "Error: {error}\n"
+            "For more information, see the log file at {log}.".format(
+                link=(
+                    "https://help.autodesk.com/view/SGSUB/ENU/?"
+                    "guid=SG_Administrator_ar_site_configuration_ar_site_preferences_html"
+                    "#entities"
+                ),
+                error=str(error_message),
+                log=log_location,
+            ),
+        )
+
+    else:
+        DesktopMessageBox.critical(
+            "ShotGrid Desktop Error",
+            "Something went wrong in the ShotGrid Desktop! If you <a href={link}>contact us</a> "
+            "we'll help you diagnose the issue.\n"
+            "Error: {error}\n"
+            "For more information, see the log file at {log}.".format(
+                link=sgtk.support_url,
+                error=str(error_message),
+                log=log_location,
+            ),
+            detailed_text="".join(
+                traceback.format_exception(exc_type, exc_value, exc_traceback)
+            ),
+        )
     # If we are logged in, we should log out so the user is not stuck in a loop of always
     # automatically logging in each time the app is launched again
     if shotgun_authenticator:
