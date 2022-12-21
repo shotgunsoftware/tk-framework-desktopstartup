@@ -734,9 +734,9 @@ def __handle_unexpected_exception(
             "Error: {error}\n"
             "For more information, see the log file at {log}.".format(
                 link=(
-                    "https://help.autodesk.com/view/SGSUB/ENU/?"
-                    "guid=SG_Administrator_ar_site_configuration_ar_site_preferences_html"
-                    "#entities"
+                    "{shotgrid_base_url}/preferences".format(
+                        shotgrid_base_url=shotgun_authenticator.get_default_host()
+                    )
                 ),
                 error=str(error_message),
                 log=log_location,
@@ -894,6 +894,11 @@ def main(**kwargs):
         set_shotgun_authenticator_support_web_login,
         ShotgunSamlUser,
     )
+
+    sys.path.append(r"/Applications/PyCharm.app/Contents/debug-eggs/pydevd-pycharm.egg")
+    import pydevd
+
+    pydevd.settrace("localhost", port=5490, stdoutToServer=True, stderrToServer=True)
 
     try:
         # Reading user settings from disk.
