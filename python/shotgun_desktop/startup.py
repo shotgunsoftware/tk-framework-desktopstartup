@@ -923,14 +923,6 @@ def main(**kwargs):
         else:
             logger.debug("Not using SSO")
 
-        sys.path.append(
-            r"/Applications/PyCharm.app/Contents/debug-eggs/pydevd-pycharm.egg"
-        )
-        import pydevd
-
-        pydevd.settrace(
-            "localhost", port=5490, stdoutToServer=True, stderrToServer=True
-        )
         # Now that we are logged, we can proceed with launching the
         # application.
         exit_code = __launch_app(app, splash, user, app_bootstrap, settings)
