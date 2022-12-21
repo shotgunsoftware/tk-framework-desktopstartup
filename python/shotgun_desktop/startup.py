@@ -895,11 +895,6 @@ def main(**kwargs):
         ShotgunSamlUser,
     )
 
-    sys.path.append(r"/Applications/PyCharm.app/Contents/debug-eggs/pydevd-pycharm.egg")
-    import pydevd
-
-    pydevd.settrace("localhost", port=5490, stdoutToServer=True, stderrToServer=True)
-
     try:
         # Reading user settings from disk.
         settings = sgtk.util.UserSettings()
