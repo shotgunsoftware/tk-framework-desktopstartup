@@ -652,6 +652,7 @@ def __ensure_engine_compatible_with_qt_version(engine, app_version):
     if is_version_newer_or_equal(app_version, "v1.6.1"):
         raise EngineNotCompatibleWithDesktop16(app_version)
 
+
 def _is_pipeline_config_disabled(error_message):
     """
     Check if the PipelineConfiguration entities has been
@@ -663,10 +664,11 @@ def _is_pipeline_config_disabled(error_message):
     # expected message when PipelineConfiguration entities has been
     # disabled from the user site.
     pipeline_config_disabled_message = (
-        'API read() invalid/missing string entity \'type\':\n'
+        "API read() invalid/missing string entity 'type':\n"
         '{"type"=>"PipelineConfiguration"'
     )
     return pipeline_config_disabled_message in str(error_message)
+
 
 def _run_engine(engine, splash, startup_version, app_bootstrap, startup_desc, settings):
     __ensure_engine_compatible_with_qt_version(engine, app_bootstrap.get_version())
@@ -922,10 +924,13 @@ def main(**kwargs):
             logger.debug("Not using SSO")
 
         sys.path.append(
-            r"/Applications/PyCharm.app/Contents/debug-eggs/pydevd-pycharm.egg")
+            r"/Applications/PyCharm.app/Contents/debug-eggs/pydevd-pycharm.egg"
+        )
         import pydevd
-        pydevd.settrace('localhost', port=5490, stdoutToServer=True,
-                        stderrToServer=True)
+
+        pydevd.settrace(
+            "localhost", port=5490, stdoutToServer=True, stderrToServer=True
+        )
         # Now that we are logged, we can proceed with launching the
         # application.
         exit_code = __launch_app(app, splash, user, app_bootstrap, settings)
