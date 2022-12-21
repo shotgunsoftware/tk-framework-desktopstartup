@@ -655,13 +655,14 @@ def __ensure_engine_compatible_with_qt_version(engine, app_version):
 
 def _is_pipeline_config_disabled(error_message):
     """
-    Check if the PipelineConfiguration entities has been
+    Check if the 'PipelineConfiguration' entities has been
     disabled from the user site.
+
     :param error_message: The error string that will be displayed in a message box.
     :returns: True if the error message matches with the expected pipeline config
-              disabled message.
+          disabled message.
     """
-    # expected message when PipelineConfiguration entities has been
+    # expected error message when 'PipelineConfiguration' entities has been
     # disabled from the user site.
     pipeline_config_disabled_message = (
         "API read() invalid/missing string entity 'type':\n"
