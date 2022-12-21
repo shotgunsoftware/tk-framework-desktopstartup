@@ -652,6 +652,21 @@ def __ensure_engine_compatible_with_qt_version(engine, app_version):
     if is_version_newer_or_equal(app_version, "v1.6.1"):
         raise EngineNotCompatibleWithDesktop16(app_version)
 
+def _is_pipeline_config_disabled(error_message):
+    """
+    Check if the PipelineConfiguration entities has been
+    disabled from the user site.
+    :param error_message: The error string that will be displayed in a message box.
+    :returns: True if the error message matches with the expected pipeline config
+              disabled message.
+    """
+    # expected message when PipelineConfiguration entities has been
+    # disabled from the user site.
+    pipeline_config_disabled_message = (
+        'API read() invalid/missing string entity \'type\':\n'
+        '{"type"=>"PipelineConfiguration"'
+    )
+    return pipeline_config_disabled_message in str(error_message)
 
 def _run_engine(engine, splash, startup_version, app_bootstrap, startup_desc, settings):
     __ensure_engine_compatible_with_qt_version(engine, app_bootstrap.get_version())
@@ -709,12 +724,8 @@ def __handle_unexpected_exception(
 
     logger.exception("Fatal error, user will be logged out.")
 
-    if (
-        'API read() invalid/missing string entity \'type\':\n{"type"=>"PipelineConfiguration"'
-        in str(error_message)
-    ):
-        DesktopMessageBox.critical(
-            "ShotGrid Desktop Error",
+    if _is_pipeline_config_disabled(error_message):
+        formatted_error_message = (
             "PipelineConfiguration entities are not enabled for your site. "
             "Head to your <a href={link}>Site Preferences</a>, enable them and try again.\n"
             "Error: {error}\n"
@@ -726,12 +737,11 @@ def __handle_unexpected_exception(
                 ),
                 error=str(error_message),
                 log=log_location,
-            ),
+            )
         )
 
     else:
-        DesktopMessageBox.critical(
-            "ShotGrid Desktop Error",
+        formatted_error_message = (
             "Something went wrong in the ShotGrid Desktop! If you <a href={link}>contact us</a> "
             "we'll help you diagnose the issue.\n"
             "Error: {error}\n"
@@ -739,11 +749,16 @@ def __handle_unexpected_exception(
                 link=sgtk.support_url,
                 error=str(error_message),
                 log=log_location,
-            ),
-            detailed_text="".join(
-                traceback.format_exception(exc_type, exc_value, exc_traceback)
-            ),
+            )
         )
+
+    DesktopMessageBox.critical(
+        "ShotGrid Desktop Error",
+        formatted_error_message,
+        detailed_text="".join(
+            traceback.format_exception(exc_type, exc_value, exc_traceback)
+        ),
+    )
     # If we are logged in, we should log out so the user is not stuck in a loop of always
     # automatically logging in each time the app is launched again
     if shotgun_authenticator:
@@ -906,6 +921,11 @@ def main(**kwargs):
         else:
             logger.debug("Not using SSO")
 
+        sys.path.append(
+            r"/Applications/PyCharm.app/Contents/debug-eggs/pydevd-pycharm.egg")
+        import pydevd
+        pydevd.settrace('localhost', port=5490, stdoutToServer=True,
+                        stderrToServer=True)
         # Now that we are logged, we can proceed with launching the
         # application.
         exit_code = __launch_app(app, splash, user, app_bootstrap, settings)
