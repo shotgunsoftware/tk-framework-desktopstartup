@@ -729,7 +729,7 @@ def __handle_unexpected_exception(
 
     if _is_pipeline_config_disabled(error_message):
         formatted_error_message = (
-            "PipelineConfiguration entities are not enabled for your site. "
+            "PipelineConfiguration entities are disabled for your site. "
             "Head to your <a href={link}>Site Preferences</a>, enable them and try again.\n"
             "Error: {error}\n"
             "For more information, see the log file at {log}.".format(
