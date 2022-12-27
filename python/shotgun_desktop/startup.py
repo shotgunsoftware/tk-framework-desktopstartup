@@ -551,7 +551,7 @@ def __start_engine_in_zero_config(app, app_bootstrap, splash, user):
     import sgtk
 
     mgr = sgtk.bootstrap.ToolkitManager(user)
-    # If we set 'SGTK_CONFIG_LOCK_VERSION' environment variable but
+    # If the 'SGTK_CONFIG_LOCK_VERSION' environment variable has been set but
     # are running a python 3 interpreter, warn the user that this will have no effect.
     if (
         sgtk.bootstrap.constants.SGTK_CONFIG_LOCK_VERSION in os.environ
@@ -563,7 +563,7 @@ def __start_engine_in_zero_config(app, app_bootstrap, splash, user):
                 constant=sgtk.bootstrap.constants.SGTK_CONFIG_LOCK_VERSION
             ),
         )
-    # If we set 'SHOTGUN_PYTHON_VERSION' environment variable, but at this point
+    # If 'SHOTGUN_PYTHON_VERSION' environment variable has been set, but at this point
     # we are running in Python 3 we should warn the user that this will have no
     # effect as there is no Python 2 version available.
     if str(os.environ.get("SHOTGUN_PYTHON_VERSION")) == "2" and sys.version_info[0] > 2:
