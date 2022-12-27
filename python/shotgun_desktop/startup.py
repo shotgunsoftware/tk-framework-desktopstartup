@@ -553,7 +553,6 @@ def __start_engine_in_zero_config(app, app_bootstrap, splash, user):
     mgr = sgtk.bootstrap.ToolkitManager(user)
     # If we set 'SGTK_CONFIG_LOCK_VERSION' environment variable but
     # are running a python 3 interpreter, warn the user that this will have no effect.
-
     if (
         sgtk.bootstrap.constants.SGTK_CONFIG_LOCK_VERSION in os.environ
         and sys.version_info[0] > 2
