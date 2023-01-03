@@ -653,6 +653,24 @@ def __ensure_engine_compatible_with_qt_version(engine, app_version):
         raise EngineNotCompatibleWithDesktop16(app_version)
 
 
+def _is_pipeline_config_disabled(error_message):
+    """
+    Check if the 'PipelineConfiguration' entities has been
+    disabled from the user site.
+
+    :param error_message: The error string that will be displayed in a message box.
+    :returns: True if the error message matches with the expected pipeline config
+          disabled message.
+    """
+    # expected error message when 'PipelineConfiguration' entities has been
+    # disabled from the user site.
+    pipeline_config_disabled_message = (
+        "API read() invalid/missing string entity 'type':\n"
+        '{"type"=>"PipelineConfiguration"'
+    )
+    return pipeline_config_disabled_message in str(error_message)
+
+
 def _run_engine(engine, splash, startup_version, app_bootstrap, startup_desc, settings):
     __ensure_engine_compatible_with_qt_version(engine, app_bootstrap.get_version())
 
@@ -708,16 +726,38 @@ def __handle_unexpected_exception(
         log_location = app_bootstrap.get_logfile_location()
 
     logger.exception("Fatal error, user will be logged out.")
+
+    if _is_pipeline_config_disabled(error_message):
+        formatted_error_message = (
+            "PipelineConfiguration entities are disabled for your site. "
+            "Head to your <a href={link}>Site Preferences</a>, enable them and try again.\n"
+            "Error: {error}\n"
+            "For more information, see the log file at {log}.".format(
+                link=(
+                    "{shotgrid_base_url}/preferences".format(
+                        shotgrid_base_url=shotgun_authenticator.get_default_host()
+                    )
+                ),
+                error=str(error_message),
+                log=log_location,
+            )
+        )
+
+    else:
+        formatted_error_message = (
+            "Something went wrong in the ShotGrid Desktop! If you <a href={link}>contact us</a> "
+            "we'll help you diagnose the issue.\n"
+            "Error: {error}\n"
+            "For more information, see the log file at {log}.".format(
+                link=sgtk.support_url,
+                error=str(error_message),
+                log=log_location,
+            )
+        )
+
     DesktopMessageBox.critical(
         "ShotGrid Desktop Error",
-        "Something went wrong in the ShotGrid Desktop! If you <a href={link}>contact us</a> "
-        "we'll help you diagnose the issue.\n"
-        "Error: {error}\n"
-        "For more information, see the log file at {log}.".format(
-            link=sgtk.support_url,
-            error=str(error_message),
-            log=log_location,
-        ),
+        formatted_error_message,
         detailed_text="".join(
             traceback.format_exception(exc_type, exc_value, exc_traceback)
         ),
