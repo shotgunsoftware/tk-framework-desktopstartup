@@ -551,6 +551,28 @@ def __start_engine_in_zero_config(app, app_bootstrap, splash, user):
     import sgtk
 
     mgr = sgtk.bootstrap.ToolkitManager(user)
+    # If the 'SGTK_CONFIG_LOCK_VERSION' environment variable has been set but
+    # are running a python 3 interpreter, warn the user that this will have no effect.
+    if (
+        sgtk.bootstrap.constants.SGTK_CONFIG_LOCK_VERSION in os.environ
+        and sys.version_info[0] > 2
+    ):
+        DesktopMessageBox.critical(
+            "ShotGrid Desktop Warning",
+            "{constant} will have no effect because there's not Python 2 available version.\n".format(
+                constant=sgtk.bootstrap.constants.SGTK_CONFIG_LOCK_VERSION
+            ),
+        )
+    # If 'SHOTGUN_PYTHON_VERSION' environment variable has been set, but at this point
+    # we are running in Python 3 we should warn the user that this will have no
+    # effect as there is no Python 2 version available.
+    if str(os.environ.get("SHOTGUN_PYTHON_VERSION")) == "2" and sys.version_info[0] > 2:
+        DesktopMessageBox.critical(
+            "ShotGrid Desktop Warning",
+            "{constant} will have no effect because there's not Python 2 available version.\n".format(
+                constant="SHOTGUN_PYTHON_VERSION"
+            ),
+        )
 
     # Allows to take over the site config to use with Desktop without impacting the projects
     # configurations.
