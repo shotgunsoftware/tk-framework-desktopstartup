@@ -37,6 +37,7 @@ from .lib.six.moves import map
 
 from .lib.six.moves import http_cookiejar  # used for attachment upload
 import datetime
+import errno
 import logging
 import uuid                                # used for attachment upload
 import os
@@ -3529,7 +3530,7 @@ class Shotgun(object):
                 # get raised as well.
                 #
                 # For more info see:
-                # https://www.shotgridsoftware.com/blog/important-ssl-certificate-renewal-and-sha-2/
+                # http://blog.shotgunsoftware.com/2016/01/important-ssl-certificate-renewal-and.html
                 #
                 # SHA-2 errors look like this:
                 #   [Errno 1] _ssl.c:480: error:0D0C50A1:asn1 encoding routines:ASN1_item_verify:
@@ -3543,8 +3544,8 @@ class Shotgun(object):
                 if self.config.no_ssl_validation is False:
                     LOG.warning("SSL Error: this Python installation is incompatible with "
                                 "certificates signed with SHA-2. Disabling certificate validation. "
-                                "For more information, see https://www.shotgridsoftware.com/blog/"
-                                "important-ssl-certificate-renewal-and-sha-2/")
+                                "For more information, see http://blog.shotgunsoftware.com/2016/01/"
+                                "important-ssl-certificate-renewal-and.html")
                     self._turn_off_ssl_validation()
                     # reload user agent to reflect that we have turned off ssl validation
                     req_headers["user-agent"] = "; ".join(self._user_agents)
@@ -4090,7 +4091,14 @@ class Shotgun(object):
                     if e.code == 503:
                         raise ShotgunError("Got a 503 response when uploading to %s: %s" % (storage_url, e))
                     raise ShotgunError("Unanticipated error occurred uploading to %s: %s" % (storage_url, e))
-
+            except urllib.error.URLError as e:
+                if e.errno == errno.ETIMEDOUT and attempt != max_attempts:
+                    time.sleep(float(attempt) * backoff)
+                    # If there is a timeout we will only allow one retry
+                    attempt = max_attempts
+                    continue
+                
+                raise ShotgunError("Error when uploading to %s: %s" % (storage_url, e))
             else:
                 break
 
