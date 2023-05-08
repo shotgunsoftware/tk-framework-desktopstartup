@@ -45,6 +45,7 @@ def get_pipeline_configuration_info(connection):
         "project",
         "sg_plugin_ids",
         "plugin_ids",
+        "users",
     ]
 
     # Find the right pipeline configuration. We'll always pick a projectless
@@ -98,11 +99,17 @@ def get_pipeline_configuration_info(connection):
     )
     logger.debug(pprint.pformat(pcs))
 
-    if len(pcs) == 0:
-        pc = None
-    else:
-        # Pick the last result. See the big comment before the Shotgun query to understand.
-        pc = pcs[-1]
+    pc = None
+    if len(pcs) != 0:
+        # Pick the pipeline configuration with user restrictions, if any.
+        for p in pcs:
+            if len(p.get("users")) != 0:
+                pc = p
+
+        # If not, pick the last (lowest id).
+        if not pc:
+            pc = pcs[-1]
+
         # It is possible to get multiple pipeline configurations due to user error.
         # Log a warning if there was more than one pipeline configuration found.
         if len(pcs) > 1:
