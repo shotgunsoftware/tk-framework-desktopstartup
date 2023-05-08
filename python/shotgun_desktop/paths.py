@@ -101,10 +101,12 @@ def get_pipeline_configuration_info(connection):
 
     pc = None
     if len(pcs) != 0:
-        # Pick the pipeline configuration with user restrictions, if any.
+        # Pick the pipeline configuration with restricted to user, if any.
+        logged_user_id = sgtk.get_authenticated_user().resolve_entity().get("id")
         for p in pcs:
-            if len(p.get("users")) != 0:
-                pc = p
+            for restricted_user in p.get("users"):
+                if logged_user_id == restricted_user.get("id"):
+                    pc = p
 
         # If not, pick the last (lowest id).
         if not pc:
