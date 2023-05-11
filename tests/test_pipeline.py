@@ -10,7 +10,6 @@
 
 import sys
 import os
-
 from unittest.mock import patch
 
 sys.path.insert(
