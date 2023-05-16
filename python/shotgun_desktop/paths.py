@@ -108,7 +108,7 @@ def get_pipeline_configuration_info(connection):
         for p in pcs:
             if not p.get("users"):
                 unrestricted_pcs.append(p)
-            elif logged_user_id in [ u.get("id") for u in p.get("users") ]:
+            elif logged_user_id in [u.get("id") for u in p.get("users")]:
                 restricted_pcs.append(p)
 
         if restricted_pcs:
