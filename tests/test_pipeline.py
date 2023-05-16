@@ -149,28 +149,25 @@ def test_no_config_match(*mocks):
     But none of them are matching our user
     """
 
-    with \
-        patch.object(
-            DummyConnection, "resolve_entity", return_value={"type": "HumanUser", "id": 1}
-        ), \
-        patch.object(
-            DummyConnection,
-            "find",
-            return_value=[
-                {
-                    "type": "PipelineConfiguration",
-                    "id": 1,
-                    "code": "pc1",
-                    "users": [{"id": 2, "type": "HumanUser"}],
-                },
-                {
-                    "type": "PipelineConfiguration",
-                    "id": 2,
-                    "code": "pc2",
-                    "users": [{"id": 2, "type": "HumanUser"}],
-                },
-            ],
-        ) \
-    :
+    with patch.object(
+        DummyConnection, "resolve_entity", return_value={"type": "HumanUser", "id": 1}
+    ), patch.object(
+        DummyConnection,
+        "find",
+        return_value=[
+            {
+                "type": "PipelineConfiguration",
+                "id": 1,
+                "code": "pc1",
+                "users": [{"id": 2, "type": "HumanUser"}],
+            },
+            {
+                "type": "PipelineConfiguration",
+                "id": 2,
+                "code": "pc2",
+                "users": [{"id": 2, "type": "HumanUser"}],
+            },
+        ],
+    ):
         _, pc, _ = paths.get_pipeline_configuration_info(DummyConnection())
         assert pc is None
