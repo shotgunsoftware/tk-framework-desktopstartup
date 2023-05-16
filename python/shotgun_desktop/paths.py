@@ -115,7 +115,7 @@ def get_pipeline_configuration_info(connection):
             pcs = restricted_pcs
         elif unrestricted_pcs:
             pcs = unrestricted_pcs
-        else: 
+        else:
             pcs = []
 
         # Pick the last configuration (lowest id), if any.
