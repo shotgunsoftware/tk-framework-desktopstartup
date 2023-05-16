@@ -32,123 +32,103 @@ class DummyConnection:
         pass
 
 
-@patch.object(
-    DummyConnection,
-    "find",
-    return_value=[
-        {
-            "type": "PipelineConfiguration",
-            "id": 3,
-            "code": "restricted2",
-            "project": None,
-            "plugin_ids": None,
-            "users": [{"id": 88, "name": "HumanName", "type": "HumanUser"}],
-        },
-        {
-            "type": "PipelineConfiguration",
-            "id": 2,
-            "code": "restricted1",
-            "project": None,
-            "plugin_ids": None,
-            "users": [{"id": 88, "name": "HumanName", "type": "HumanUser"}],
-        },
-        {
-            "type": "PipelineConfiguration",
-            "id": 1,
-            "code": "non-restricted",
-            "project": None,
-            "plugin_ids": None,
-            "users": [],
-        },
-    ],
-)
 @patch("sgtk.get_authenticated_user", return_value=DummyConnection())
-@patch.object(
-    DummyConnection, "resolve_entity", return_value={"type": "HumanUser", "id": 88}
-)
 def test_select_restricted_config(*mocks):
     """
     Ensure that user-restricted configuration with lowest id is selected over
     non-restricted configuration when that user logs in.
     """
-    _, pc, _ = paths.get_pipeline_configuration_info(DummyConnection())
-    expected_pc = {
-        "type": "PipelineConfiguration",
-        "id": 2,
-        "code": "restricted1",
-        "project": None,
-        "plugin_ids": None,
-        "users": [{"id": 88, "name": "HumanName", "type": "HumanUser"}],
-    }
-    assert pc == expected_pc
-
-
-@patch.object(
-    DummyConnection,
-    "find",
-    return_value=[
-        {
-            "type": "PipelineConfiguration",
-            "id": 3,
-            "code": "non-restricted2",
-            "project": None,
-            "plugin_ids": None,
-            "users": [],
-        },
-        {
+    with patch.object(
+        DummyConnection, "resolve_entity", return_value={"type": "HumanUser", "id": 1}
+    ), patch.object(
+        DummyConnection,
+        "find",
+        return_value=[
+            {
+                "type": "PipelineConfiguration",
+                "id": 3,
+                "code": "restricted2",
+                "users": [{"id": 1, "name": "HumanName", "type": "HumanUser"}],
+            },
+            {
+                "type": "PipelineConfiguration",
+                "id": 2,
+                "code": "restricted1",
+                "users": [{"id": 1, "name": "HumanName", "type": "HumanUser"}],
+            },
+            {
+                "type": "PipelineConfiguration",
+                "id": 1,
+                "code": "non-restricted",
+                "users": [],
+            },
+        ],
+    ):
+        _, pc, _ = paths.get_pipeline_configuration_info(DummyConnection())
+        expected_pc = {
             "type": "PipelineConfiguration",
             "id": 2,
-            "code": "non-restricted1",
-            "project": None,
-            "plugin_ids": None,
-            "users": [],
-        },
-        {
-            "type": "PipelineConfiguration",
-            "id": 1,
-            "code": "restricted",
-            "project": None,
-            "plugin_ids": None,
-            "users": [{"id": 80, "name": "HumanName", "type": "HumanUser"}],
-        },
-    ],
-)
+            "code": "restricted1",
+            "users": [{"id": 1, "name": "HumanName", "type": "HumanUser"}],
+        }
+        assert pc == expected_pc
+
+
 @patch("sgtk.get_authenticated_user", return_value=DummyConnection())
-@patch.object(
-    DummyConnection, "resolve_entity", return_value={"type": "HumanUser", "id": 88}
-)
 def test_no_restricted_config(*mocks):
     """
     Ensure that the configuration with the lowest id and without any user
     restrictions is selected if there are no configurations restricting the user.
     """
-    _, pc, _ = paths.get_pipeline_configuration_info(DummyConnection())
-    expected_pc = {
-        "type": "PipelineConfiguration",
-        "id": 2,
-        "code": "non-restricted1",
-        "project": None,
-        "plugin_ids": None,
-        "users": [],
-    }
-    assert pc == expected_pc
+    with patch.object(
+        DummyConnection, "resolve_entity", return_value={"type": "HumanUser", "id": 1}
+    ), patch.object(
+        DummyConnection,
+        "find",
+        return_value=[
+            {
+                "type": "PipelineConfiguration",
+                "id": 3,
+                "code": "non-restricted2",
+                "users": [],
+            },
+            {
+                "type": "PipelineConfiguration",
+                "id": 2,
+                "code": "non-restricted1",
+                "users": [],
+            },
+            {
+                "type": "PipelineConfiguration",
+                "id": 1,
+                "code": "restricted",
+                "users": [{"id": 2, "name": "HumanName", "type": "HumanUser"}],
+            },
+        ],
+    ):
+        _, pc, _ = paths.get_pipeline_configuration_info(DummyConnection())
+        expected_pc = {
+            "type": "PipelineConfiguration",
+            "id": 2,
+            "code": "non-restricted1",
+            "users": [],
+        }
+        assert pc == expected_pc
 
 
-@patch.object(DummyConnection, "find", return_value=[])
 def test_no_pipeline_config(*mocks):
     """Ensure that no configuration is returned if there aren't any supplied."""
-    _, pc, _ = paths.get_pipeline_configuration_info(DummyConnection())
-    assert not pc
+    with patch.object(DummyConnection, "find", return_value=[]):
+        _, pc, _ = paths.get_pipeline_configuration_info(DummyConnection())
+        assert not pc
 
 
 @patch("sgtk.get_authenticated_user", return_value=DummyConnection())
 def test_no_config_match(*mocks):
     """
-    The server has multiple Pipeline Configurations.
-    All of them have user restrictions
-    But none of them are matching our user
+    Ensure that no configuration is returned if all have user restrictions,
+    but none match the user.
     """
-
     with patch.object(
         DummyConnection, "resolve_entity", return_value={"type": "HumanUser", "id": 1}
     ), patch.object(

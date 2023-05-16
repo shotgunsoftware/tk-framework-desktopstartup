@@ -108,18 +108,19 @@ def get_pipeline_configuration_info(connection):
         for p in pcs:
             if not p.get("users"):
                 unrestricted_pcs.append(p)
-                continue
-            for restricted_user in p.get("users"):
-                if logged_user_id == restricted_user.get("id"):
-                    restricted_pcs.append(p)
+            elif logged_user_id in [ u.get("id") for u in p.get("users") ]:
+                restricted_pcs.append(p)
 
         if restricted_pcs:
             pcs = restricted_pcs
-        else:
+        elif unrestricted_pcs:
             pcs = unrestricted_pcs
+        else: 
+            pcs = []
 
-        # Pick the last configuration (lowest id).
-        pc = pcs[-1]
+        # Pick the last configuration (lowest id), if any.
+        if pcs:
+            pc = pcs[-1]
 
         # It is possible to get multiple pipeline configurations due to user error.
         # Log a warning if there was more than one pipeline configuration found.
