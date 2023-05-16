@@ -100,17 +100,26 @@ def get_pipeline_configuration_info(connection):
     logger.debug(pprint.pformat(pcs))
 
     pc = None
-    if len(pcs) != 0:
-        # Pick the pipeline configuration with restricted to user, if any.
+    if len(pcs):
+        # Make subsets of pcs with those that restrict the logged user and those with no restrictions.
         logged_user_id = sgtk.get_authenticated_user().resolve_entity().get("id")
+        restricted_pcs = []
+        unrestricted_pcs = []
         for p in pcs:
+            if not p.get("users"):
+                unrestricted_pcs.append(p)
+                continue
             for restricted_user in p.get("users"):
                 if logged_user_id == restricted_user.get("id"):
-                    pc = p
+                    restricted_pcs.append(p)
 
-        # If not, pick the last (lowest id).
-        if not pc:
-            pc = pcs[-1]
+        if restricted_pcs:
+            pcs = restricted_pcs
+        else:
+            pcs = unrestricted_pcs
+
+        # Pick the last configuration (lowest id).
+        pc = pcs[-1]
 
         # It is possible to get multiple pipeline configurations due to user error.
         # Log a warning if there was more than one pipeline configuration found.

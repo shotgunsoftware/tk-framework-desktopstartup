@@ -20,7 +20,7 @@ from shotgun_desktop import paths
 
 
 class DummyConnection:
-    """Simulates the Shotgun class from python_api."""
+    """Simulate the Shotgun class from python_api."""
 
     def __init__(self, **kwargs):
         self.base_url = ""
@@ -38,8 +38,16 @@ class DummyConnection:
     return_value=[
         {
             "type": "PipelineConfiguration",
+            "id": 3,
+            "code": "restricted2",
+            "project": None,
+            "plugin_ids": None,
+            "users": [{"id": 88, "name": "HumanName", "type": "HumanUser"}],
+        },
+        {
+            "type": "PipelineConfiguration",
             "id": 2,
-            "code": "restricted",
+            "code": "restricted1",
             "project": None,
             "plugin_ids": None,
             "users": [{"id": 88, "name": "HumanName", "type": "HumanUser"}],
@@ -60,14 +68,14 @@ class DummyConnection:
 )
 def test_select_restricted_config(*mocks):
     """
-    Ensures that user-restricted configuration is selected over non-restricted
-    configuration if that user logs in.
+    Ensure that user-restricted configuration with lowest id is selected over
+    non-restricted configuration when that user logs in.
     """
     _, pc, _ = paths.get_pipeline_configuration_info(DummyConnection())
     expected_pc = {
         "type": "PipelineConfiguration",
         "id": 2,
-        "code": "restricted",
+        "code": "restricted1",
         "project": None,
         "plugin_ids": None,
         "users": [{"id": 88, "name": "HumanName", "type": "HumanUser"}],
@@ -81,8 +89,16 @@ def test_select_restricted_config(*mocks):
     return_value=[
         {
             "type": "PipelineConfiguration",
+            "id": 3,
+            "code": "non-restricted2",
+            "project": None,
+            "plugin_ids": None,
+            "users": [],
+        },
+        {
+            "type": "PipelineConfiguration",
             "id": 2,
-            "code": "Secondary",
+            "code": "non-restricted1",
             "project": None,
             "plugin_ids": None,
             "users": [],
@@ -90,10 +106,10 @@ def test_select_restricted_config(*mocks):
         {
             "type": "PipelineConfiguration",
             "id": 1,
-            "code": "Primary",
+            "code": "restricted",
             "project": None,
             "plugin_ids": None,
-            "users": [],
+            "users": [{"id": 80, "name": "HumanName", "type": "HumanUser"}],
         },
     ],
 )
@@ -103,14 +119,14 @@ def test_select_restricted_config(*mocks):
 )
 def test_no_restricted_config(*mocks):
     """
-    Ensures that the configuration with the lowest id is selected if there are
-    no user restrictions.
+    Ensure that the configuration with the lowest id and without any user
+    restrictions is selected if there are no configurations restricting the user.
     """
     _, pc, _ = paths.get_pipeline_configuration_info(DummyConnection())
     expected_pc = {
         "type": "PipelineConfiguration",
-        "id": 1,
-        "code": "Primary",
+        "id": 2,
+        "code": "non-restricted1",
         "project": None,
         "plugin_ids": None,
         "users": [],
@@ -120,7 +136,6 @@ def test_no_restricted_config(*mocks):
 
 @patch.object(DummyConnection, "find", return_value=[])
 def test_no_pipeline_config(*mocks):
-    """
-    Ensures that no configuration is returned if there aren't any supplied."""
+    """Ensure that no configuration is returned if there aren't any supplied."""
     _, pc, _ = paths.get_pipeline_configuration_info(DummyConnection())
     assert not pc
