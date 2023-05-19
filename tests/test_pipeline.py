@@ -75,7 +75,7 @@ def test_one_pipeline_configuration(*mocks):
 def test_two_pipeline_configurations(*mocks):
     """
     Two configurations, no user restriction
-    We select the last one
+    We select the one with lowest id
     """
     with patch.object(
         MockConnection,
@@ -83,20 +83,20 @@ def test_two_pipeline_configurations(*mocks):
         return_value=[
             {
                 "type": "PipelineConfiguration",
-                "id": 1,
-                "code": "pc1",
+                "id": 2,
+                "code": "pc2",
                 "users": [],
             },
             {
                 "type": "PipelineConfiguration",
-                "id": 2,
-                "code": "pc2",
+                "id": 1,
+                "code": "pc1",
                 "users": [],
             },
         ],
     ):
         _, pc, _ = paths.get_pipeline_configuration_info(MockConnection())
-        assert pc["id"] == 2 and pc["code"] == "pc2"
+        assert pc["id"] == 1 and pc["code"] == "pc1"
 
 
 @patch("sgtk.get_authenticated_user", return_value=MockUser())
@@ -146,6 +146,12 @@ def test_user_restriction(*mocks):
         return_value=[
             {
                 "type": "PipelineConfiguration",
+                "id": 2,
+                "code": "pc2",
+                "users": [],
+            },
+            {
+                "type": "PipelineConfiguration",
                 "id": 1,
                 "code": "pc1",
                 "users": [
@@ -153,12 +159,6 @@ def test_user_restriction(*mocks):
                     {"id": 2, "type": "HumanUser"},
                     {"id": 3, "type": "HumanUser"},
                 ],
-            },
-            {
-                "type": "PipelineConfiguration",
-                "id": 2,
-                "code": "pc2",
-                "users": [],
             },
         ],
     ):
@@ -201,15 +201,15 @@ def test_user_restriction_no_match_fallback_unrestricted(*mocks):
         return_value=[
             {
                 "type": "PipelineConfiguration",
-                "id": 1,
-                "code": "pc1",
-                "users": [{"id": 2, "type": "HumanUser"}],
-            },
-            {
-                "type": "PipelineConfiguration",
                 "id": 2,
                 "code": "pc2",
                 "users": [],
+            },
+            {
+                "type": "PipelineConfiguration",
+                "id": 1,
+                "code": "pc1",
+                "users": [{"id": 2, "type": "HumanUser"}],
             },
         ],
     ):
