@@ -8,7 +8,8 @@
 # agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
-from shotgun_desktop.location import write_location, get_startup_descriptor
+import sys
+from shotgun_desktop.location import write_location, get_startup_descriptor, get_latest_py2_descriptor
 from shotgun_desktop.desktop_message_box import DesktopMessageBox
 from sgtk.descriptor import CheckVersionConstraintsError
 
@@ -29,6 +30,19 @@ def _supports_get_from_location_and_paths(sgtk):
     """
     return hasattr(sgtk.deploy.descriptor, "get_from_location_and_paths")
 
+def _latest_descriptor(sgtk, sg, app_bootstrap, current_desc):
+    """"""
+    # Check if we're running in Python 2
+    if sys.version_info[0] < 3:
+        # This will create the descriptor for desktopstartup supported
+        # Python 2 version
+        return get_latest_py2_descriptor(sgtk, sg, app_bootstrap)
+    try:
+        latest_descriptor = current_desc.find_latest_version()
+    except Exception as e:
+        logger.exception("Could not access the TK App Store (tank.shotgunstudio.com):")
+        return False
+    return latest_descriptor
 
 def upgrade_startup(splash, sgtk, app_bootstrap):
     """
@@ -66,10 +80,12 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
         splash.set_message("Getting ShotGrid Desktop updates...")
         logger.info("Getting ShotGrid Desktop updates...")
 
-    try:
-        latest_descriptor = current_desc.find_latest_version()
-    except Exception as e:
-        logger.exception("Could not access the TK App Store (tank.shotgunstudio.com):")
+    # Retrieve the latest startup descriptor
+    latest_descriptor = _latest_descriptor(sgtk, sg, app_bootstrap, current_desc)
+    logger.debug("Testing for remote access: %s", latest_descriptor)
+
+    if not latest_descriptor.has_remote_access():
+        logger.info("Could not update %r: remote access not available.", latest_descriptor)
         return False
 
     # check deprecation
@@ -84,7 +100,15 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
 
     # out of date check
     out_of_date = latest_descriptor.get_version() != current_desc.get_version()
-
+    logger.debug("version is out of date: %s", out_of_date)
+    logger.debug(
+        "Desktop startup is Currently running version %s"
+        % current_desc.get_version(),
+    )
+    logger.debug(
+        "And the Python2 supported version of the startup is: %s"
+        % latest_descriptor.get_version(),
+    )
     if not out_of_date:
         logger.debug(
             "Desktop startup is up to date. Currently running version %s"
