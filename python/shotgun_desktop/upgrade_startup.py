@@ -9,7 +9,11 @@
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
 import sys
-from shotgun_desktop.location import write_location, get_startup_descriptor, get_latest_py2_descriptor
+from shotgun_desktop.location import (
+    write_location,
+    get_startup_descriptor,
+    get_latest_py2_descriptor,
+)
 from shotgun_desktop.desktop_message_box import DesktopMessageBox
 from sgtk.descriptor import CheckVersionConstraintsError
 
@@ -30,6 +34,7 @@ def _supports_get_from_location_and_paths(sgtk):
     """
     return hasattr(sgtk.deploy.descriptor, "get_from_location_and_paths")
 
+
 def _latest_descriptor(sgtk, sg, app_bootstrap, current_desc):
     """"""
     # Check if we're running in Python 2
@@ -43,6 +48,7 @@ def _latest_descriptor(sgtk, sg, app_bootstrap, current_desc):
         logger.exception("Could not access the TK App Store (tank.shotgunstudio.com):")
         return False
     return latest_descriptor
+
 
 def upgrade_startup(splash, sgtk, app_bootstrap):
     """
@@ -85,7 +91,9 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
     logger.debug("Testing for remote access: %s", latest_descriptor)
 
     if not latest_descriptor.has_remote_access():
-        logger.info("Could not update %r: remote access not available.", latest_descriptor)
+        logger.info(
+            "Could not update %r: remote access not available.", latest_descriptor
+        )
         return False
 
     # check deprecation
@@ -102,8 +110,7 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
     out_of_date = latest_descriptor.get_version() != current_desc.get_version()
     logger.debug("version is out of date: %s", out_of_date)
     logger.debug(
-        "Desktop startup is Currently running version %s"
-        % current_desc.get_version(),
+        "Desktop startup is Currently running version %s" % current_desc.get_version(),
     )
     logger.debug(
         "And the Python2 supported version of the startup is: %s"

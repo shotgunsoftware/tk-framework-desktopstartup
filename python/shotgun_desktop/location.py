@@ -80,10 +80,11 @@ def get_startup_descriptor(sgtk, sg, app_bootstrap):
     # Use the old API to create the descriptor, as we might be using a 0.16-based core.
     return sgtk.deploy.descriptor.get_from_location_and_paths(
         sgtk.deploy.descriptor.AppDescriptor.FRAMEWORK,
-        app_bootstrap.get_shotgun_desktop_cache_location(), # ~/Library/Caches/Shotgun/desktop
+        app_bootstrap.get_shotgun_desktop_cache_location(),  # ~/Library/Caches/Shotgun/desktop
         os.path.join(app_bootstrap.get_shotgun_desktop_cache_location(), "install"),
         get_location(app_bootstrap),
     )
+
 
 def get_latest_py2_descriptor(sgtk, sg, app_bootstrap):
     """
@@ -100,10 +101,11 @@ def get_latest_py2_descriptor(sgtk, sg, app_bootstrap):
     # Use the old API to create the descriptor, as we might be using a 0.16-based core.
     return sgtk.deploy.descriptor.get_from_location_and_paths(
         sgtk.deploy.descriptor.AppDescriptor.FRAMEWORK,
-        app_bootstrap.get_shotgun_desktop_cache_location(), # ~/Library/Caches/Shotgun/desktop
+        app_bootstrap.get_shotgun_desktop_cache_location(),  # ~/Library/Caches/Shotgun/desktop
         os.path.join(app_bootstrap.get_shotgun_desktop_cache_location(), "install"),
         startup_py2_version,
     )
+
 
 def write_location(descriptor):
     """
