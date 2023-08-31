@@ -42,9 +42,7 @@ def _out_of_date_check(latest_descriptor, current_desc):
             % current_desc.get_version(),
         )
         return False
-    return (
-        not latest_descriptor.get_version() != current_desc.get_version()
-    )
+    return latest_descriptor.get_version() != current_desc.get_version()
 
 
 def upgrade_startup(splash, sgtk, app_bootstrap):
