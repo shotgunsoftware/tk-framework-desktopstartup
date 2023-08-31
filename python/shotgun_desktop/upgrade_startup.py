@@ -31,19 +31,21 @@ def _supports_get_from_location_and_paths(sgtk):
     """
     return hasattr(sgtk.deploy.descriptor, "get_from_location_and_paths")
 
+
 def _out_of_date_check(latest_descriptor, current_desc):
     """Check if the version is out of date."""
     location = current_desc.get_path()
     # Check if we're running in Python 2
-    if (
-            sys.version_info[0] < 3 and
-            os.path.exists(location)
-    ):
+    if sys.version_info[0] < 3 and os.path.exists(location):
         logger.debug(
-            "Desktop startup is Currently running version %s" % current_desc.get_version(),
+            "Desktop startup is Currently running version %s"
+            % current_desc.get_version(),
         )
         return False
-    return not latest_descriptor.get_version() != current_desc.get_version()  # 2.1.12 != 2.1.21 True
+    return (
+        not latest_descriptor.get_version() != current_desc.get_version()
+    )
+
 
 def upgrade_startup(splash, sgtk, app_bootstrap):
     """
