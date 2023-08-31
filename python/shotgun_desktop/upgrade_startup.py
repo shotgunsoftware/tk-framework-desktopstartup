@@ -40,7 +40,8 @@ def _out_of_date_check(latest_descriptor, current_desc):
     :param latest_descriptor:`sgtk.descriptor.FrameworkDescriptor` instance with the latest startup descriptor.
     :param current_desc:`sgtk.descriptor.FrameworkDescriptor` instance with the current startup descriptor.
 
-    :returns: True if the startup version is outdated  update was downloaded and the descriptor updated, False otherwise.
+    :returns: True if the startup version is outdated in comparison with the latest available version on the
+              appstore. False otherwise.
     """
 
     # If we're running in Python 2 and if the bundled framework exists on disk,
