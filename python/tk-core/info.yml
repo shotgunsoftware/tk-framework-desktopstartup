@@ -12,7 +12,7 @@
 # This is automatically replaced with appropriate values
 # as the core bundle is uploaded to the app store.
 
-version: "v0.20.23"
+version: "v0.20.24"
 documentation_url: "https://developer.shotgridsoftware.com/d587be80/?title=Integrations+User+Guide"
 requires_shotgun_version: "v5.0.0"
 
