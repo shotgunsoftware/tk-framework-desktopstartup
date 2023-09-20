@@ -27,9 +27,11 @@ from .ui import resources_rc  # noqa
 from .ui import login_dialog
 from . import constants as auth_constants
 from . import session_cache
+from ..util.metrics import EventMetric
 from ..util.shotgun import connection
 from ..util import login
 from ..util import LocalFileStorageManager
+from ..util import metrics_cache
 from .errors import AuthenticationError
 from .ui.qt_abstraction import QtGui, QtCore, QtNetwork, QtWebKit, QtWebEngineWidgets
 from . import unified_login_flow2
@@ -661,6 +663,17 @@ class LoginDialog(QtGui.QDialog):
         if res != QtGui.QDialog.Accepted:
             return
 
+        metrics_cache.log(
+            EventMetric.GROUP_TOOLKIT,
+            "Logged In",
+            properties={
+                "authentication_method": self.site_info.user_authentication_method,
+                "authentication_experience": auth_constants.method_resolve.get(self.method_selected),
+                "authentication_interface": "qt_dialog",
+                "authentication_renewal": self._is_session_renewal,
+            },
+        )
+
         if self.method_selected == auth_constants.METHOD_ULF2:
             if not self._ulf2_task:
                 logger.error(
@@ -928,9 +941,9 @@ class ULF2_AuthTask(QtCore.QThread):
         try:
             self.session_info = unified_login_flow2.process(
                 self._sg_url,
+                lambda u: QtGui.QDesktopServices.openUrl(u),  # browser_open_callback
                 http_proxy=self._http_proxy,
                 product=self._product,
-                browser_open_callback=lambda u: QtGui.QDesktopServices.openUrl(u),
                 keep_waiting_callback=self.should_continue,
             )
         except AuthenticationError as err:
