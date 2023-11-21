@@ -65,9 +65,7 @@ git clone "$SRC_REPO" "$DEST_REPO" --depth=1 -b "$1"
 echo "Copying TK-CORE to the required location..."
 
 # Move to the git repo to generate the sha and write it to the $DEST
-pushd "$DEST_REPO"
-git rev-parse HEAD > "$DEST/commit_id"
-popd
+git -C "$DEST_REPO" rev-parse HEAD > "$DEST/commit_id"
 
 # Copy the files to the destination, but not the tests
 cp -R "$DEST_REPO"/* "$DEST"
