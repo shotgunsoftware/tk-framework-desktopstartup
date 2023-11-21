@@ -28,7 +28,7 @@ echo ""
 set -e
 
 # Where we'll temporary create some files.
-ROOT=/var/tmp/tmp_dir_$(date +%y.%m.%d.%H.%M.%S)
+ROOT="/var/tmp/tmp_dir_$(date +%y.%m.%d.%H.%M.%S)"
 
 abort()
 {
@@ -38,7 +38,7 @@ abort()
 ***************
 '
     echo "Cleaning up $ROOT..." >&2
-    rm -rf $ROOT
+    rm -rf "$ROOT"
     exit 1
 }
 
@@ -47,44 +47,44 @@ trap 'abort' 0
 # Git repo we'll clone
 SRC_REPO=git@github.com:shotgunsoftware/tk-core.git
 # Where we'll clone the repo
-DEST_REPO=$ROOT/repo
+DEST_REPO="$ROOT/repo"
 # Destination relative to this script for the files
-DEST=$(pwd)/python/tk-core
+DEST="$(pwd)/python/tk-core"
 
 # Recreate the folder structure
-mkdir $ROOT
-mkdir $DEST_REPO
+mkdir "$ROOT"
+mkdir "$DEST_REPO"
 # Strip files from the destination and recreate it.
-rm -rf $DEST
-mkdir -p $DEST
+rm -rf "$DEST"
+mkdir -p "$DEST"
 
 echo "Cloning TK-CORE into a temp location, hang on..."
 # Clone the repo
-git clone $SRC_REPO $DEST_REPO --depth=1 -b $1
+git clone "$SRC_REPO" "$DEST_REPO" --depth=1 -b "$1"
 
 echo "Copying TK-CORE to the required location..."
 
 # Move to the git repo to generate the sha and write it to the $DEST
-pushd $DEST_REPO
-git rev-parse HEAD > $DEST/commit_id
+pushd "$DEST_REPO"
+git rev-parse HEAD > "$DEST/commit_id"
 popd
 
 # Copy the files to the destination, but not the tests
-cp -R $DEST_REPO/* $DEST
-rm -rf $DEST/tests
-rm -rf $DEST/docs
+cp -R "$DEST_REPO"/* "$DEST"
+rm -rf "$DEST/tests"
+rm -rf "$DEST/docs"
 
 echo "Updating tk-core info.yml..."
-sed -i $DEST/info.yml -e "s/version: \"HEAD\"/version: \"$1\"/"
+sed -i "$DEST/info.yml" -e "s/version: \"HEAD\"/version: \"$1\"/"
 
 cp python/tk-core/software_credits software_credits
 git add software_credits
 
 # Put files in the staging area.
 echo "adding new files to git..."
-git add -A $DEST
+git add -A "$DEST"
 # Cleanup!
-rm -rf $ROOT
+rm -rf "$ROOT"
 
 echo ""
 echo "All done! TK-CORE in $DEST has been updated to $1."
