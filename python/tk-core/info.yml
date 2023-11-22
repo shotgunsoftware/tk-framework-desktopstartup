@@ -12,8 +12,8 @@
 # This is automatically replaced with appropriate values
 # as the core bundle is uploaded to the app store.
 
-version: "v0.20.25"
-documentation_url: "https://developer.shotgridsoftware.com/d587be80/?title=Integrations+User+Guide"
+version: "v0.20.27"
+documentation_url: "https://help.autodesk.com/view/SGDEV/ENU/?contextId=SA_INTEGRATIONS_USER_GUIDE"
 requires_shotgun_version: "v5.0.0"
 
 features:
