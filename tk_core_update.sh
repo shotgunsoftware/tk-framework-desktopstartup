@@ -75,7 +75,7 @@ rm -rf $DEST/tests
 rm -rf $DEST/docs
 
 echo "Updating tk-core info.yml..."
-sed -i "" -e "s/version: \"HEAD\"/version: \"$1\"/" $DEST/info.yml
+sed -i $DEST/info.yml -e "s/version: \"HEAD\"/version: \"$1\"/"
 
 cp python/tk-core/software_credits software_credits
 git add software_credits
