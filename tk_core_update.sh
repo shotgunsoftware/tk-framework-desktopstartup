@@ -28,7 +28,7 @@ echo ""
 set -e
 
 # Where we'll temporary create some files.
-ROOT=/var/tmp/tmp_dir_`date +%y.%m.%d.%H.%M.%S`
+ROOT=/var/tmp/tmp_dir_$(date +%y.%m.%d.%H.%M.%S)
 
 abort()
 {
@@ -49,7 +49,7 @@ SRC_REPO=git@github.com:shotgunsoftware/tk-core.git
 # Where we'll clone the repo
 DEST_REPO=$ROOT/repo
 # Destination relative to this script for the files
-DEST=`pwd`/python/tk-core
+DEST=$(pwd)/python/tk-core
 
 # Recreate the folder structure
 mkdir $ROOT
