@@ -240,27 +240,28 @@ class LoginDialog(QtGui.QDialog):
         self.ui.button_options.setVisible(False)
 
         self.menu_action_ulf2 = QtGui.QAction(
-            "Authenticate with your default web browser",
+            "Authenticate with the App Session Launcher",
             menu,
         )
         self.menu_action_ulf2.triggered.connect(self._menu_activated_action_ulf2)
 
         self.menu_action_ulf = QtGui.QAction(
-            "Authenticate with the ShotGrid Desktop browser",
+            "Authenticate with the ShotGrid browser",
             menu,
         )
         self.menu_action_ulf.triggered.connect(self._menu_activated_action_web_legacy)
-        menu.addAction(self.menu_action_ulf)
-        menu.addAction(self.menu_action_ulf2)
 
         self.menu_action_legacy = QtGui.QAction(
-            "Authenticate with your login credentials",
+            "Authenticate with Legacy ShotGrid Login Credentials",
             menu,
         )
         self.menu_action_legacy.triggered.connect(
             self._menu_activated_action_login_creds
         )
+
         menu.addAction(self.menu_action_legacy)
+        menu.addAction(self.menu_action_ulf)
+        menu.addAction(self.menu_action_ulf2)
 
         # hook up signals
         self.ui.sign_in.clicked.connect(self._ok_pressed)
@@ -469,7 +470,6 @@ class LoginDialog(QtGui.QDialog):
 
         # With a SSO site, we have no choice but to use the web to login.
         can_use_web = self.site_info.sso_enabled
-        can_use_ulf2 = self.site_info.unified_login_flow2_enabled
 
         # The user may decide to force the use of the old dialog:
         # - due to graphical issues with Qt and its WebEngine
@@ -486,9 +486,10 @@ class LoginDialog(QtGui.QDialog):
             if get_shotgun_authenticator_support_web_login():
                 can_use_web = can_use_web or self.site_info.unified_login_flow_enabled
 
+        can_use_ulf2 = self.site_info.unified_login_flow2_enabled
         if can_use_ulf2:
             if method_selected:
-                # Selecting requested mode (credentials, web_legacy or unified_login_flow2)
+                # Selecting requested mode (credentials, qt_web_login or app_session_launcher)
                 session_cache.set_preferred_method(site, method_selected)
             elif os.environ.get("SGTK_FORCE_STANDARD_LOGIN_DIALOG"):
                 # Selecting legacy auth by default
@@ -496,14 +497,28 @@ class LoginDialog(QtGui.QDialog):
             else:
                 method_selected = session_cache.get_preferred_method(site)
 
+        # Make sure that the method_selected is currently supported
+        if (
+            method_selected == auth_constants.METHOD_BASIC and can_use_web
+        ) or (
+            method_selected == auth_constants.METHOD_WEB_LOGIN and not can_use_web
+        ) or (
+            method_selected == auth_constants.METHOD_ULF2 and not can_use_ulf2
+        ):
+            method_selected = None
+
         if not method_selected and os.environ.get("SGTK_DEFAULT_AUTH_METHOD"):
             method_selected = auth_constants.method_resolve_reverse(
                 os.environ.get("SGTK_DEFAULT_AUTH_METHOD")
             )
 
+        # Make sure that the method_selected is currently supported
         if (
-            method_selected == auth_constants.METHOD_WEB_LOGIN
-            and not can_use_web
+            method_selected == auth_constants.METHOD_BASIC and can_use_web
+        ) or (
+            method_selected == auth_constants.METHOD_WEB_LOGIN and not can_use_web
+        ) or (
+            method_selected == auth_constants.METHOD_ULF2 and not can_use_ulf2
         ):
             method_selected = None
 
@@ -533,7 +548,7 @@ class LoginDialog(QtGui.QDialog):
             self.ui.login.setVisible(False)
             self.ui.password.setVisible(False)
             self.ui.message.setText(
-                "<p>Continue to sign in using your web browser.</p>"
+                "<p>Authenticate with the App Session Launcher.</p>"
                 "<p>After selecting <b>Sign In</b>, your default web browser will "
                 "prompt you to approve the authentication request from your "
                 "ShotGrid site.</p>"
@@ -550,7 +565,7 @@ class LoginDialog(QtGui.QDialog):
                 self.ui.message.setText("Sign in using the Web.")
             else:
                 self.ui.message.setText(
-                    "<p>Authenticate with the ShotGrid Desktop browser.</p>"
+                    "<p>Authenticate with the ShotGrid browser.</p>"
                     '<p><a style="color:#c0c1c3;" href="{url}">Learn more here</a></p>'.format(
                         url=constants.DOCUMENTATION_URL_LEGACY_AUTHENTICATION,
                     )
@@ -959,7 +974,7 @@ class ULF2_AuthTask(QtCore.QThread):
         except AuthenticationError as err:
             self.exception = err
         except Exception:
-            logger.exception("Unknown error from unified_login_flow2")
+            logger.exception("Unknown error from the App Session Launcher")
             self.exception = AuthenticationError("Unknown authentication error")
 
     def should_continue(self):
