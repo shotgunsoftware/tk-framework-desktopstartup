@@ -86,14 +86,14 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
         return False
 
     # A Dev descriptor means there is nothing to update. Do not print out
-    # "Getting Shotgun Desktop updates...", but keep going nonetheless, as it allows
+    # "Getting Flow Production Tracking Toolkit updates...", but keep going nonetheless, as it allows
     # to stress the code even in dev mode. Calls to download will be noops anyway.
     if current_desc.is_dev():
         logger.info("Desktop startup using a dev descriptor, skipping update...")
         return False
     else:
-        splash.set_message("Getting ShotGrid Desktop updates...")
-        logger.info("Getting ShotGrid Desktop updates...")
+        splash.set_message("Getting Flow Production Tracking Toolkit updates...")
+        logger.info("Getting Flow Production Tracking Toolkit updates...")
 
     try:
         latest_descriptor = current_desc.find_latest_version()
@@ -156,10 +156,10 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
         # know something wrong is going on.
         logger.exception("Unexpected error when updating startup code.")
         DesktopMessageBox.critical(
-            "ShotGrid Desktop update failed",
-            "There is a new update of the ShotGrid Desktop, but it couldn't be installed. ShotGrid "
+            "Flow Production Tracking Toolkit update failed",
+            "There is a new update of the Flow Production Tracking Toolkit, but it couldn't be installed. Flow Production Tracking "
             "Desktop will be launched with the currently installed version of the code.\n"
-            "If this problem persists, please <a href='%s'>contact</a> ShotGrid support.\n"
+            "If this problem persists, please <a href='%s'>contact</a> Flow Production Tracking support.\n"
             "\n"
             "Error: %s" % (sgtk.support_url, str(e)),
         )

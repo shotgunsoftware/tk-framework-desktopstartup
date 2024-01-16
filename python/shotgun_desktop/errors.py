@@ -9,7 +9,7 @@
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
 """
-Shotgun Desktop Errors
+Flow Production Tracking Toolkit Errors
 """
 
 import os
@@ -30,7 +30,7 @@ class RequestRestartException(Exception):
 
 class ShotgunDesktopError(Exception):
     """
-    Common base class for Shotgun Desktop errors.
+    Common base class for Flow Production Tracking Toolkit errors.
     """
 
     def __init__(self, message, support_required=False):
@@ -64,9 +64,9 @@ class InvalidPipelineConfiguration(ShotgunDesktopError):
         pc_project_id = pc_entity["project"]["id"] if pc_entity["project"] else None
         ShotgunDesktopError.__init__(
             self,
-            'The pipeline configuration retrieved from ShotGrid (named "%s" '
+            'The pipeline configuration retrieved from Flow Production Tracking (named "%s" '
             "with id %d and project id %s) does not match the site configuration found on disk "
-            '(named "%s" with id %d and project id %s). Please contact your ShotGrid '
+            '(named "%s" with id %d and project id %s). Please contact your Flow Production Tracking '
             "Administrator."
             % (
                 pc_entity["code"],
@@ -139,10 +139,10 @@ class UpgradeEngine200Error(ShotgunDesktopError):
 class EngineNotCompatibleWithDesktop16(ShotgunDesktopError):
     def __init__(self, app_version):
         super(EngineNotCompatibleWithDesktop16, self).__init__(
-            "Your version of tk-desktop is not compatible with ShotGrid Desktop {}.\n"
+            "Your version of tk-desktop is not compatible with Flow Production Tracking Toolkit {}.\n"
             "\n"
             "Please upgrade your site configuration's tk-desktop to v2.5.9+ or "
-            "download ShotGrid Desktop 1.5.9 or earlier <a href='{}'>here</a>".format(
+            "download Flow Production Tracking Toolkit 1.5.9 or earlier <a href='{}'>here</a>".format(
                 app_version,
                 "https://community.shotgridsoftware.com/t/a-new-version-of-shotgrid-desktop-has-been-released/13877/99999",
             )

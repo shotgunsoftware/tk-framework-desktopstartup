@@ -181,7 +181,7 @@ class CoreUpdateAction(Action):
         elif status == TankCoreUpdater.UPDATE_BLOCKED_BY_SG:
             req_sg = installer.get_required_sg_version_for_update()
             msg = (
-                "%s version of core requires a more recent version (%s) of ShotGrid!"
+                "%s version of core requires a more recent version (%s) of Flow Production Tracking!"
                 % ("The newest" if core_version is None else "The requested", req_sg)
             )
             log.error(msg)

@@ -9,7 +9,7 @@
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
 """
-This script allows to launch the Shotgun Desktop from any Python interpreter.
+This script allows to launch the Flow Production Tracking Toolkit from any Python interpreter.
 """
 
 import sys
@@ -27,7 +27,7 @@ class AppBoostrap(object):
         pass
 
     def get_shotgun_desktop_cache_location(self):
-        # Compute the Shotgun Desktop cache folder.
+        # Compute the Flow Production Tracking Toolkit cache folder.
         if "SHOTGUN_HOME" in os.environ:
             shotgun_desktop_user_folder = os.path.expanduser(
                 os.path.expandvars(os.environ["SHOTGUN_HOME"])

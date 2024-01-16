@@ -26,7 +26,7 @@ _MESSAGE = (
 
 class DesktopMigration(Action):
     """
-    Action that migrates the Shotgun Desktop away from the Template Project.
+    Action that migrates the Flow Production Tracking Toolkit away from the Template Project.
     """
 
     def __init__(self):
@@ -50,14 +50,14 @@ class DesktopMigration(Action):
         :param log: std python logger
         :param args: command line args
         """
-        log.info("Retrieving pipeline configuration from ShotGrid...")
+        log.info("Retrieving pipeline configuration from Flow Production Tracking...")
         log.info("")
 
         pc = self.tk.pipeline_configuration
 
         if pc.is_unmanaged():
             log.error(
-                "Cannot migrate a setup which does not have a pipeline configuration in ShotGrid!"
+                "Cannot migrate a setup which does not have a pipeline configuration in Flow Production Tracking!"
             )
             return
 
@@ -112,10 +112,10 @@ class DesktopMigration(Action):
                 pc.get_shotgun_id(),
                 {"project": None},
             )
-            log.debug("Pipeline configuration updated in ShotGrid.")
+            log.debug("Pipeline configuration updated in Flow Production Tracking.")
         else:
             log.warning(
-                "Pipeline configuration isn't assigned to a project in ShotGrid."
+                "Pipeline configuration isn't assigned to a project in Flow Production Tracking."
             )
 
         # Upgrade site configuration on disk.
