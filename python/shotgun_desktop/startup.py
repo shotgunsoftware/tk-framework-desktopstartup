@@ -21,7 +21,7 @@ import logging
 
 # The value of sys.executable under multiple platforms and multiple versions
 # of Desktop is unreliable. Therefore, we're patch the value if the executable
-# name is not Shotgun or Flow Production Tracking.
+# name is not Shotgun or ShotGrid.
 #
 # So, we'll use sys.prefix which is properly set and backtrack to the executable.
 # When the executable is fixed we should come back here and put a check for the version
@@ -30,7 +30,7 @@ import logging
 # Grab the name and the executable
 executable_name, ext = os.path.splitext(os.path.basename(sys.executable or ""))
 
-# If the executable is not named Shotgun or Flow Production Tracking, then we need to patch sys.executable.
+# If the executable is not named Shotgun or ShotGrid, then we need to patch sys.executable.
 if executable_name.lower() not in ["shotgun", "shotgrid"]:
     # On macOS, sys.prefix is set to /Applications/Shotgun.app/Contents/Resources/python,
     # so we need to drill down differently for the executable folder than on other platforms
