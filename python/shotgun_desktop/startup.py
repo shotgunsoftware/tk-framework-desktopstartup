@@ -374,7 +374,9 @@ def __launch_app(app, splash, user, app_bootstrap, settings):
         # debug logging until core swap, when the original launch setting is
         # restored.
         __restore_global_debug_flag()
-        __restart_app_with_countdown(splash, "Flow Production Tracking Toolkit updated.")
+        __restart_app_with_countdown(
+            splash, "Flow Production Tracking Toolkit updated."
+        )
 
     splash.set_message("Looking up site configuration.")
 
