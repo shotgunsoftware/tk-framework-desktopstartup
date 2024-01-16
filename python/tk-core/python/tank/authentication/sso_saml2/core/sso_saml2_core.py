@@ -132,7 +132,7 @@ def get_renew_path(session):
     # When this variable is set for a SSO domain, skip the initial login page.
     tk_shotgun_sso_domain = os.getenv("TK_SHOTGRID_SSO_DOMAIN")
 
-    # Flow Production Tracking's renew endpoint supports some useful
+    # ShotGrid's renew endpoint supports some useful
     # Autodesk Identity params.
     if tk_shotgun_default_login:
         renew_params["email"] = tk_shotgun_default_login
@@ -888,7 +888,7 @@ class SsoSaml2Core(object):
         if sys.platform != "win32" and UsernamePasswordDialog is not None:
             message = (
                 "<p>Your company has configured Single Sign-On (SSO) for the SG site %s"
-                "<p>Please authenticate with your computer login and password to log into Flow Production Tracking."
+                "<p>Please authenticate with your computer login and password to log into ShotGrid."
                 "<p>"
             )
             auth_dialog = UsernamePasswordDialog(message=message % self._session.host)

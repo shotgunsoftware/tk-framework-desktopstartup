@@ -212,7 +212,7 @@ class TankQDialog(TankDialogBase):
         else:
             self.ui.label.setText(title)
 
-        self.setWindowTitle("Flow Production Tracking: %s" % title)
+        self.setWindowTitle("ShotGrid: %s" % title)
         if os.path.exists(bundle.icon_256):
             self._window_icon = QtGui.QIcon(bundle.icon_256)
             self.setWindowIcon(self._window_icon)

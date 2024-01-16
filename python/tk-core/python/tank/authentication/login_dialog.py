@@ -50,7 +50,7 @@ logger = LogManager.get_logger(__name__)
 PRODUCT_IDENTIFIER = "toolkit"
 
 # Requesting the site's information (including SSO support) takes a few moments.
-# When the user enters a Flow Production Tracking site URL, we check for authentication methods
+# When the user enters a ShotGrid site URL, we check for authentication methods
 # (and update the GUI) only after the user has stopped for longer than the delay
 # (in ms).
 USER_INPUT_DELAY_BEFORE_SITE_INFO_REQUEST = 300
@@ -62,9 +62,9 @@ THREAD_WAIT_TIMEOUT_MS = 5000
 
 def _is_running_in_desktop():
     """
-    Indicate if we are in the context of the Flow Production Tracking Toolkit.
+    Indicate if we are in the context of the ShotGrid Desktop.
 
-    When the Flow Production Tracking Toolkit is used, we want to disregard the value returned
+    When the ShotGrid Desktop is used, we want to disregard the value returned
     by the call to `get_shotgun_authenticator_support_web_login()` when the
     target site is using Autodesk Identity.
     """
@@ -145,7 +145,7 @@ class LoginDialog(QtGui.QDialog):
         }
         try:
             self._sso_saml2 = SsoSaml2Toolkit(
-                "Flow Production Tracking Web Login", qt_modules=qt_modules
+                "ShotGrid Web Login", qt_modules=qt_modules
             )
         except SsoSaml2MissingQtModuleError as e:
             logger.warning("Web login not supported due to missing Qt module: %s" % e)
@@ -205,7 +205,7 @@ class LoginDialog(QtGui.QDialog):
         if fixed_host:
             self._disable_text_widget(
                 self.ui.site,
-                "The Flow Production Tracking site has been predefined and cannot be modified.",
+                "The ShotGrid site has been predefined and cannot be modified.",
             )
 
         # Disable keyboard input in the site and login boxes if we are simply renewing the session.
@@ -246,13 +246,13 @@ class LoginDialog(QtGui.QDialog):
         self.menu_action_ulf2.triggered.connect(self._menu_activated_action_ulf2)
 
         self.menu_action_ulf = QtGui.QAction(
-            "Authenticate with the Flow Production Tracking browser",
+            "Authenticate with the ShotGrid browser",
             menu,
         )
         self.menu_action_ulf.triggered.connect(self._menu_activated_action_web_legacy)
 
         self.menu_action_legacy = QtGui.QAction(
-            "Authenticate with Legacy Flow Production Tracking Login Credentials",
+            "Authenticate with Legacy ShotGrid Login Credentials",
             menu,
         )
         self.menu_action_legacy.triggered.connect(
@@ -313,7 +313,7 @@ class LoginDialog(QtGui.QDialog):
         # Initialize exit confirm message box
         self.confirm_box = QtGui.QMessageBox(
             QtGui.QMessageBox.Question,
-            "Flow Production Tracking Login",  # title
+            "ShotGrid Login",  # title
             "Would you like to cancel your request?",  # text
             buttons=QtGui.QMessageBox.Yes | QtGui.QMessageBox.No,
             # parent=self,
@@ -476,7 +476,7 @@ class LoginDialog(QtGui.QDialog):
         # - they need to use the legacy login / passphrase to use a PAT with
         #   Autodesk Identity authentication
         if os.environ.get("SGTK_FORCE_STANDARD_LOGIN_DIALOG"):
-            logger.info("Using the standard login dialog with the Flow Production Tracking Toolkit")
+            logger.info("Using the standard login dialog with the ShotGrid Desktop")
         else:
             if _is_running_in_desktop():
                 can_use_web = can_use_web or self.site_info.autodesk_identity_enabled
@@ -551,10 +551,10 @@ class LoginDialog(QtGui.QDialog):
                 "<p>Authenticate with the App Session Launcher.</p>"
                 "<p>After selecting <b>Sign In</b>, your default web browser will "
                 "prompt you to approve the authentication request from your "
-                "Flow Production Tracking site.</p>"
+                "ShotGrid site.</p>"
             )
         elif self.method_selected == auth_constants.METHOD_WEB_LOGIN:
-            logger.info("Using the Web Login with the Flow Production Tracking Toolkit")
+            logger.info("Using the Web Login with the ShotGrid Desktop")
 
             self.ui.site.setFocus(QtCore.Qt.OtherFocusReason)
             self.ui.login.setVisible(False)
@@ -565,7 +565,7 @@ class LoginDialog(QtGui.QDialog):
                 self.ui.message.setText("Sign in using the Web.")
             else:
                 self.ui.message.setText(
-                    "<p>Authenticate with the Flow Production Tracking browser.</p>"
+                    "<p>Authenticate with the ShotGrid browser.</p>"
                     '<p><a style="color:#c0c1c3;" href="{url}">Learn more here</a></p>'.format(
                         url=constants.DOCUMENTATION_URL_LEGACY_AUTHENTICATION,
                     )

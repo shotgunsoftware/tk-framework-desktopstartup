@@ -1,4 +1,4 @@
-# Flow Production Tracking Toolkit Core API
+# Shotgun Pipeline Toolkit Core API
 
 ## How to upgrade pyyaml
 

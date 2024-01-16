@@ -341,7 +341,7 @@ class ConfigurationResolver(object):
         # get the pipeline configs for the current project which are
         # either the primary or is associated with the currently logged in user.
         # also get the pipeline configs for the site level (project=None)
-        log.debug("Requesting pipeline configurations from Flow Production Tracking...")
+        log.debug("Requesting pipeline configurations from ShotGrid...")
 
         if pipeline_config_name is None:
             # If nothing was specified, we need to pick pipeline configurations...
@@ -891,7 +891,7 @@ class ConfigurationResolver(object):
                 "Will use pipeline configuration id '%s'" % pipeline_config_identifier
             )
 
-            log.debug("Requesting pipeline configuration data from Flow Production Tracking...")
+            log.debug("Requesting pipeline configuration data from ShotGrid...")
 
             # Fetch the one and only config that matches this id.
             pipeline_config = sg_connection.find_one(
@@ -903,7 +903,7 @@ class ConfigurationResolver(object):
             # If it doesn't exist, we're in trouble.
             if pipeline_config is None:
                 raise TankBootstrapError(
-                    "Pipeline configuration with id '%d' doesn't exist for project id '%d' in Flow Production Tracking."
+                    "Pipeline configuration with id '%d' doesn't exist for project id '%d' in ShotGrid."
                     % (pipeline_config_identifier, self._proj_entity_dict["id"])
                 )
 

@@ -654,7 +654,7 @@ def __ensure_engine_compatible_with_qt_version(engine, app_version):
         )
         return
 
-    # Flow Production Tracking Toolkit 2.5.0 introduced Python 3 and PySide2 support while being backward
+    # tk-desktop 2.5.0 introduced Python 3 and PySide2 support while being backward
     # compatible with PySide, so it can't be a problem.
     if is_version_newer_or_equal(engine.version, "v2.5.0"):
         return

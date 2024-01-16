@@ -141,7 +141,7 @@ class SetupProjectAction(Action):
             "type": "str",
         }
 
-        # Special setting used by older versins of flow production tracking toolkit app
+        # Special setting used by older versins of shotgun desktop app
         # to handle auto-installing the site configuration at startup.
         self.parameters["auto_path"] = {
             "description": "Deprecated. Do not use this! --- "
@@ -361,7 +361,7 @@ class SetupProjectAction(Action):
 
         # now connect to shotgun
         try:
-            log.info("Connecting to Flow Production Tracking...")
+            log.info("Connecting to ShotGrid...")
             sg = shotgun.create_sg_connection()
             sg_version = ".".join([str(x) for x in sg.server_info["version"]])
             log.debug("Connected to target SG server! (v%s)" % sg_version)
@@ -749,7 +749,7 @@ class SetupProjectAction(Action):
         if pipelineconfig_utils.is_localized(curr_core_path):
             # the API we are using to run the setup from was localized. This means
             # that the API will not be shared between projects and with something
-            # like the flow production tracking toolkit workflow, the core API is installed in a
+            # like the shotgun desktop workflow, the core API is installed in a
             # system location like %APPDATA% or ~/Library.
             # So we cannot use that as a default. In this case, simply don't provide
             # a default parameter.
@@ -934,7 +934,7 @@ class SetupProjectAction(Action):
 
         # present a summary of storages that exist in SG
         log.info("")
-        log.info("The following local storages exist in Flow Production Tracking:")
+        log.info("The following local storages exist in ShotGrid:")
         log.info("")
         for storage in sorted(storages, key=lambda s: s["code"]):
             self._print_storage_info(storage, log)
