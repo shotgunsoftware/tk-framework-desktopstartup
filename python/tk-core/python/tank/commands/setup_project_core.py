@@ -113,7 +113,7 @@ def _run_distributed_project_setup(log, sg, setup_params):
         sg_project_link = None
 
     if project_id:
-        log.info("Registering Toolkit project with SG Project...")
+        log.info("Registering Toolkit project with PTR Project...")
         project_name = setup_params.get_project_disk_name()
         log.debug("ShotGrid: Setting Project.tank_name to %s" % project_name)
         sg.update("Project", project_id, {"tank_name": project_name})
@@ -248,7 +248,7 @@ def _run_centralized_project_setup(log, sg, setup_params):
         os.chmod(sg_code_location, 0o666)
 
     fh = open(sg_code_location, "wt")
-    fh.write("# SG Pipeline Toolkit configuration file\n")
+    fh.write("# Flow Production Tracking Toolkit configuration file\n")
     fh.write("# This file was automatically created by setup_project\n")
     fh.write("# This file reflects the paths in the primary pipeline\n")
     fh.write("# configuration defined for this project.\n")
@@ -276,9 +276,9 @@ def _run_centralized_project_setup(log, sg, setup_params):
         if default_storage_name and storage_name == default_storage_name:
             roots_data[storage_name]["default"] = True
 
-        # if there is a SG local storage associated with this root, make sure
+        # if there is a PTR local storage associated with this root, make sure
         # it is explicit in the the roots file. this allows roots to exist that
-        # are not named the same as the storage in SG
+        # are not named the same as the storage in PTR
         sg_storage_id = setup_params.get_storage_shotgun_id(storage_name)
         if sg_storage_id is not None:
             roots_data[storage_name]["shotgun_storage_id"] = sg_storage_id
@@ -323,7 +323,7 @@ def _run_centralized_project_setup(log, sg, setup_params):
                 if data["tank_name"] != project_name:
                     log.warning(
                         "You have supplied the project disk name '%s' as part of the project setup "
-                        "parameters, however the name '%s' has already been registered in SG for "
+                        "parameters, however the name '%s' has already been registered in PTR for "
                         "this project. This name will be used instead of the suggested disk "
                         "name." % (project_name, data["tank_name"])
                     )
@@ -522,7 +522,7 @@ def _get_published_file_entity_type(log, sg):
               been enabled, otherwise returns 'TankPublishedFile'
     """
     log.debug(
-        "Retrieving schema from SG to determine entity type "
+        "Retrieving schema from PTR to determine entity type "
         "to use for published files"
     )
 
@@ -536,7 +536,7 @@ def _get_published_file_entity_type(log, sg):
         ):
             pf_entity_type = "PublishedFile"
     except Exception as e:
-        raise TankError("Could not retrieve the SG schema: %s" % e)
+        raise TankError("Could not retrieve the PTR schema: %s" % e)
 
     log.debug(" > Using %s entity type for published files" % pf_entity_type)
 

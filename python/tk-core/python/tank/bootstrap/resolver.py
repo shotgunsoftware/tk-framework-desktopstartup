@@ -214,7 +214,7 @@ class ConfigurationResolver(object):
             # latest available version when running Python 2.
             # This cover the following case:
             #
-            # * SG Desktop is launched using Python 2 by setting 'SHOTGUN_PYTHON_VERSION'
+            # * Flow Production Tracking Toolkit is launched using Python 2 by setting 'SHOTGUN_PYTHON_VERSION'
             #   environment variable to '2'and it will startup the tk-desktop engine for
             #   the Site configuration.
             #
@@ -842,7 +842,7 @@ class ConfigurationResolver(object):
         :return: :class:`Configuration` instance
         """
         log.debug(
-            "%s resolving configuration from SG Pipeline Configuration %s"
+            "%s resolving configuration from PTR Pipeline Configuration %s"
             % (self, pipeline_config_identifier)
         )
 
@@ -941,7 +941,7 @@ class ConfigurationResolver(object):
                     pipeline_config["id"],
                 )
                 raise TankBootstrapError(
-                    "The SG pipeline configuration with id %s has no source location specified for "
+                    "The PTR pipeline configuration with id %s has no source location specified for "
                     "your operating system." % pipeline_config["id"]
                 )
             config_descriptor = pipeline_config["config_descriptor"]

@@ -179,7 +179,7 @@ class BundleDescriptor(Descriptor):
                     )
 
         self._test_version_constraint(
-            "min_desktop", desktop_version, "SG Desktop", reasons
+            "min_desktop", desktop_version, "Flow Production Tracking Toolkit", reasons
         )
 
         if len(reasons) > 0:
