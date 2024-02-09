@@ -175,7 +175,7 @@ class PCBreakdownAction(Action):
                 log.info(
                     "This is a private configuration. In ShotGrid, only %s will see the actions "
                     "defined in this config. If you want to add additional members to this "
-                    "configuration, navigate to the PTR Pipeline Configuration Page "
+                    "configuration, navigate to the SG Pipeline Configuration Page "
                     "and add them to the Users field." % d.get("users")[0]["name"]
                 )
 
@@ -184,7 +184,7 @@ class PCBreakdownAction(Action):
                 log.info(
                     "This is a private configuration. In ShotGrid, the following users will see "
                     "the actions defined in this config: %s. If you want to add additional "
-                    "members to this configuration, navigate to the PTR Pipeline "
+                    "members to this configuration, navigate to the SG Pipeline "
                     "Configuration Page and add them to the Users field." % users
                 )
 
