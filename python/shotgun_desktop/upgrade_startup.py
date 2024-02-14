@@ -35,7 +35,7 @@ def _supports_get_from_location_and_paths(sgtk):
 def _out_of_date_check(latest_descriptor, current_desc):
     """
     Check if the version is out of date, this prevents an upgrade of the startup logic
-    in the event that it detects Flow Production Tracking Toolkit is running on Python 2.
+    in the event that it detects Flow Production Tracking is running on Python 2.
 
     :param latest_descriptor:`sgtk.descriptor.FrameworkDescriptor` instance with the latest startup descriptor.
     :param current_desc:`sgtk.descriptor.FrameworkDescriptor` instance with the current startup descriptor.
@@ -86,14 +86,14 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
         return False
 
     # A Dev descriptor means there is nothing to update. Do not print out
-    # "Getting Flow Production Tracking Toolkit updates...", but keep going nonetheless, as it allows
+    # "Getting Flow Production Tracking updates...", but keep going nonetheless, as it allows
     # to stress the code even in dev mode. Calls to download will be noops anyway.
     if current_desc.is_dev():
         logger.info("Desktop startup using a dev descriptor, skipping update...")
         return False
     else:
-        splash.set_message("Getting Flow Production Tracking Toolkit updates...")
-        logger.info("Getting Flow Production Tracking Toolkit updates...")
+        splash.set_message("Getting Flow Production Tracking updates...")
+        logger.info("Getting Flow Production Tracking updates...")
 
     try:
         latest_descriptor = current_desc.find_latest_version()
@@ -156,8 +156,8 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
         # know something wrong is going on.
         logger.exception("Unexpected error when updating startup code.")
         DesktopMessageBox.critical(
-            "Flow Production Tracking Toolkit update failed",
-            "There is a new update of the Flow Production Tracking Toolkit, but it couldn't be installed. Flow Production Tracking "
+            "Flow Production Tracking update failed",
+            "There is a new update of the Flow Production Tracking, but it couldn't be installed. Flow Production Tracking "
             "Desktop will be launched with the currently installed version of the code.\n"
             "If this problem persists, please <a href='%s'>contact</a> Flow Production Tracking support.\n"
             "\n"

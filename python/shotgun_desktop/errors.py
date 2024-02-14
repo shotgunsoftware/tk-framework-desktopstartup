@@ -9,7 +9,7 @@
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
 """
-Flow Production Tracking Toolkit Errors
+Flow Production Tracking Errors
 """
 
 import os
@@ -30,7 +30,7 @@ class RequestRestartException(Exception):
 
 class ShotgunDesktopError(Exception):
     """
-    Common base class for Flow Production Tracking Toolkit errors.
+    Common base class for Flow Production Tracking errors.
     """
 
     def __init__(self, message, support_required=False):
@@ -139,10 +139,10 @@ class UpgradeEngine200Error(ShotgunDesktopError):
 class EngineNotCompatibleWithDesktop16(ShotgunDesktopError):
     def __init__(self, app_version):
         super(EngineNotCompatibleWithDesktop16, self).__init__(
-            "Your version of tk-desktop is not compatible with Flow Production Tracking Toolkit {}.\n"
+            "Your version of tk-desktop is not compatible with Flow Production Tracking {}.\n"
             "\n"
             "Please upgrade your site configuration's tk-desktop to v2.5.9+ or "
-            "download Flow Production Tracking Toolkit 1.5.9 or earlier <a href='{}'>here</a>".format(
+            "download Flow Production Tracking 1.5.9 or earlier <a href='{}'>here</a>".format(
                 app_version,
                 "https://community.shotgridsoftware.com/t/a-new-version-of-shotgrid-desktop-has-been-released/13877/99999",
             )
