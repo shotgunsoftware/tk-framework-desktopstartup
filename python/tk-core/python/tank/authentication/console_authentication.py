@@ -30,7 +30,7 @@ from .errors import (
 )
 from tank_vendor.shotgun_api3 import MissingTwoFactorAuthenticationFault
 from . import site_info
-from . import unified_login_flow2
+from . import app_session_launcher
 from ..util import metrics_cache
 from ..util.metrics import EventMetric
 from ..util.shotgun.connection import sanitize_url
@@ -63,9 +63,9 @@ class ConsoleAuthenticationHandlerBase(object):
         """
 
         logger.debug("Requesting password on command line.")
-        print("[ShotGrid Authentication]\n")
+        print("[Flow Production Tracking Authentication]\n")
         while True:
-            # Get the SG URL from the user or from the given hostname
+            # Get the PTR URL from the user or from the given hostname
             try:
                 hostname = self._get_sg_url(hostname, http_proxy)
             except EOFError:
@@ -78,9 +78,9 @@ class ConsoleAuthenticationHandlerBase(object):
             site_i = site_info.SiteInfo()
             site_i.reload(hostname, http_proxy)
 
-            if not site_i.unified_login_flow2_enabled:
+            if not site_i.app_session_launcher_enabled:
                 # Will raise an exception if using a username/password pair is
-                # not supported by the ShotGrid server.
+                # not supported by the Flow Production Tracking server.
                 # Which is the case when using SSO or Autodesk Identity.
 
                 if site_i.sso_enabled:
@@ -89,8 +89,8 @@ class ConsoleAuthenticationHandlerBase(object):
                     raise ConsoleLoginNotSupportedError(hostname, "Autodesk Identity")
 
             method_selected = self._get_auth_method(hostname, site_i)
-            if method_selected == constants.METHOD_ULF2:
-                auth_fn = self._authenticate_unified_login_flow2
+            if method_selected == constants.METHOD_ASL:
+                auth_fn = self._authenticate_app_session_launcher
             else:  # basic
                 auth_fn = self._authenticate_legacy
 
@@ -155,7 +155,7 @@ class ConsoleAuthenticationHandlerBase(object):
                 None,
             )
 
-    def _authenticate_unified_login_flow2(self, hostname, login, http_proxy):
+    def _authenticate_app_session_launcher(self, hostname, login, http_proxy):
         print()
         print(
             "Authenticating to {sg_url} requires your web browser.\n"
@@ -181,7 +181,7 @@ class ConsoleAuthenticationHandlerBase(object):
             "application."
         )
         print()
-        session_info = unified_login_flow2.process(
+        session_info = app_session_launcher.process(
             hostname,
             webbrowser.open,  # browser_open_callback
             http_proxy=http_proxy,
@@ -198,16 +198,16 @@ class ConsoleAuthenticationHandlerBase(object):
         return session_info
 
     def _get_auth_method(self, hostname, site_i):
-        if not site_i.unified_login_flow2_enabled:
+        if not site_i.app_session_launcher_enabled:
             return constants.METHOD_BASIC
 
         if site_i.autodesk_identity_enabled or site_i.sso_enabled:
-            return constants.METHOD_ULF2
+            return constants.METHOD_ASL
 
         # We have 2 choices here
         methods = {
             "1": constants.METHOD_BASIC,
-            "2": constants.METHOD_ULF2,
+            "2": constants.METHOD_ASL,
         }
 
         # Let's see which method the user chose previously for this site
@@ -221,8 +221,8 @@ class ConsoleAuthenticationHandlerBase(object):
         # Then prompt them to chose
         print(
             "\n"
-            "The ShotGrid site support two authentication methods:\n"
-            " 1. Authenticate with Legacy ShotGrid Login Credentials\n"
+            "The Flow Production Tracking site support two authentication methods:\n"
+            " 1. Authenticate with Legacy Flow Production Tracking Login Credentials\n"
             " 2. Authenticate with the App Session Launcher using your default web browser\n"
         )
 
@@ -242,7 +242,7 @@ class ConsoleAuthenticationHandlerBase(object):
 
     def _get_sg_url(self, hostname, http_proxy):
         """
-        Prompts the user for the SG host.
+        Prompts the user for the PTR host.
         :param host Host to authenticate for.
         :param http_proxy: Proxy to connect to when authenticating.
         :returns: The hostname.
@@ -370,13 +370,13 @@ class ConsoleLoginHandler(ConsoleAuthenticationHandlerBase):
             recent_hosts.insert(0, hostname)
 
         if len(recent_hosts) > 1:
-            print("Recent ShotGrid sites:")
+            print("Recent Flow Production Tracking sites:")
             for sg_url in recent_hosts:
                 print("  *", sg_url)
             print()
 
         return self._get_keyboard_input(
-            "Enter the ShotGrid site URL for authentication",
+            "Enter the Flow Production Tracking site URL for authentication",
             hostname,
         )
 
