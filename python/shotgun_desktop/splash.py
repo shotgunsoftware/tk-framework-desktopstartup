@@ -40,7 +40,7 @@ class Splash(QtGui.QDialog):
 
     def set_version(self, version):
         """
-        Set the version of the Flow Production Tracking on the widget.
+        Set the version of the PTR desktop app on the widget.
 
         :param str version: Version of the app.
         """

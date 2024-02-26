@@ -19,13 +19,13 @@ requires_shotgun_fields:
 
 # More verbose description of this item
 display_name: "Desktop Startup Framework"
-description: "Startup logic for the Flow Production Tracking"
+description: "Startup logic for the PTR desktop app"
 
 # Required minimum versions for this item to run
-# Do not update this core version, or the upgrade of the Flow Production Tracking
+# Do not update this core version, or the upgrade of the PTR desktop app
 # startup code will fail.
-# When Flow Production Tracking starts, it uses the core that is packaged with
-# Flow Production Tracking to bootstrap and do an auto-update. After the update
+# When the PTR desktop app starts, it uses the core that is packaged with
+# the desktop app to bootstrap and do an auto-update. After the update
 # has been pulled down, we compare the version of the core used to download
 # the update with this number here. If we dump this version here to something
 # more recent, then the update will fail to install since the descriptor
