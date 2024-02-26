@@ -529,7 +529,7 @@ def __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path):
 
     if not __desktop_engine_supports_authentication_module(engine):
         raise UpgradeEngine200Error(
-            "This version of the Flow Production Tracking only supports tk-desktop engine 2.0.0 and higher.",
+            "This version of the PTR desktop app only supports tk-desktop engine 2.0.0 and higher.",
             pc_path,
         )
 
@@ -756,7 +756,7 @@ def __handle_unexpected_exception(
 
     else:
         formatted_error_message = (
-            "Something went wrong in the Flow Production Tracking! If you <a href={link}>contact us</a> "
+            "Something went wrong in the PTR desktop app! If you <a href={link}>contact us</a> "
             "we'll help you diagnose the issue.\n"
             "Error: {error}\n"
             "For more information, see the log file at {log}.".format(
@@ -823,7 +823,7 @@ class _BootstrapProxy(object):
 
     def get_bundle_cache_location(self):
         """
-        Retrieves the bundle cache that is distributed with the Flow Production Tracking.
+        Retrieves the bundle cache that is distributed with the PTR desktop app.
 
         We're implementing this method on the proxy because Desktop versions 1.3.6 and earlier didn't
         have a bundle cache.
@@ -893,7 +893,7 @@ def main(**kwargs):
     # We might crash before even initializing the authenticator, so instantiate
     # it right away.
     shotgun_authenticator = None
-    # Flow Production Tracking startup has always been logging every debug string to disk since the new authentication from 0.16
+    # PTR desktop app startup has always been logging every debug string to disk since the new authentication from 0.16
     # was released and the startup has been difficult to work with and debug, so keep that logic in place during the
     # startup sequence. It will be restored during the ToolkitManager's pre_engine_start_callback.
     __backup_global_debug_flag()
