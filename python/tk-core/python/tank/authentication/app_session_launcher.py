@@ -32,11 +32,32 @@ PRODUCT_DESKTOP = "ShotGrid Desktop"
 
 
 class AuthenticationError(errors.AuthenticationError):
-    def __init__(self, msg, ulf2_errno=None, payload=None, parent_exception=None):
+    def __init__(self, msg, asl_errno=None, payload=None, parent_exception=None):
         errors.AuthenticationError.__init__(self, msg)
-        self.ulf2_errno = ulf2_errno
+        self.asl_errno = asl_errno
         self.payload = payload
         self.parent_exception = parent_exception
+
+    def format(self):
+        """
+        Provide a STR format of all given parameters
+        """
+
+        info = []
+        if self.asl_errno:
+            info.append("errno: {}".format(self.asl_errno))
+
+        if self.payload:
+            info.append("payload: {}".format(self.payload))
+
+        if self.parent_exception:
+            info.append("parent: {}".format(self.parent_exception))
+
+        message = str(self)
+        if info:
+            message += " ({})".format("; ".join(info))
+
+        return message
 
 
 def process(
@@ -61,6 +82,13 @@ def process(
         proxy_addr = _build_proxy_addr(http_proxy)
         sg_url_parsed = urllib.parse.urlparse(sg_url)
 
+        logger.debug(
+            "Set HTTP Proxy handler for {scheme} to {url}".format(
+                url=proxy_addr,
+                scheme=sg_url_parsed.scheme,
+            )
+        )
+
         url_handlers.append(
             urllib.request.ProxyHandler(
                 {
@@ -75,7 +103,7 @@ def process(
 
     request = urllib.request.Request(
         urllib.parse.urljoin(sg_url, "/internal_api/app_session_request"),
-        # method="POST", # see bellow
+        # method="POST", # see below
         data=urllib.parse.urlencode(
             {
                 "appName": product,
@@ -162,21 +190,12 @@ def process(
 
     sleep_time = 2
     request_timeout = 180  # 5 minutes
-    request = urllib.request.Request(
-        urllib.parse.urljoin(
-            sg_url,
-            "/internal_api/app_session_request/{session_id}".format(
-                session_id=session_id,
-            ),
+    request_url = urllib.parse.urljoin(
+        sg_url,
+        "/internal_api/app_session_request/{session_id}".format(
+            session_id=session_id,
         ),
-        # method="PUT", # see bellow
-        headers={
-            "User-Agent": user_agent,
-        },
     )
-
-    # Hook for Python 2
-    request.get_method = lambda: "PUT"
 
     approved = False
     t0 = time.time()
@@ -186,6 +205,17 @@ def process(
         and time.time() - t0 < request_timeout
     ):
         time.sleep(sleep_time)
+
+        request = urllib.request.Request(
+            request_url,
+            # method="PUT", # see below
+            headers={
+                "User-Agent": user_agent,
+            },
+        )
+
+        # Hook for Python 2
+        request.get_method = lambda: "PUT"
 
         response = http_request(url_opener, request)
 
@@ -202,6 +232,20 @@ def process(
             raise AuthenticationError(
                 "Unable to establish a stable communication with the ShotGrid site",
                 payload=getattr(response, "json", response),
+                parent_exception=getattr(response, "exception", None),
+            )
+
+        elif response_code_major == 3:
+            location = response.headers.get("location", None)
+
+            logger.debug("Request redirected: http code: {code}; redirect to: {location}".format(
+                code=response.code,
+                location=location,
+            ))
+
+            raise AuthenticationError(
+                "Request redirected",
+                payload="HTTP Redirect to {}".format(location),
                 parent_exception=getattr(response, "exception", None),
             )
 
@@ -225,6 +269,9 @@ def process(
             )
 
         elif response.code != http_client.OK:
+            logger.debug("Request denied: http code is: {code}".format(
+                code=response.code,
+            ))
             raise AuthenticationError(
                 "Request denied",
                 payload=getattr(response, "json", response),
@@ -438,16 +485,28 @@ def build_user_agent():
 
 if __name__ == "__main__":
     import argparse
+    import logging
     import webbrowser
+
+    lh = logging.StreamHandler()
+    lh.setLevel(logging.DEBUG)
+    lh.setFormatter(logging.Formatter(
+        "%(asctime)s - %(levelname)s - %(message)s",
+    ))
+
+    logger.addHandler(lh)
+    print()
 
     parser = argparse.ArgumentParser()
     parser.add_argument("sg_url", help="Provide a ShotGrid URL")
+    parser.add_argument("--http-proxy", "-p", help="Set a proxy URL")
     args = parser.parse_args()
 
     result = process(
         args.sg_url,
         product="Test Script",
         browser_open_callback=lambda u: webbrowser.open(u),
+        http_proxy=args.http_proxy,
     )
     if not result:
         print("The web authentication failed. Please try again.")
