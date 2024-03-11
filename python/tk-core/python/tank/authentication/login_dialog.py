@@ -62,9 +62,9 @@ THREAD_WAIT_TIMEOUT_MS = 5000
 
 def _is_running_in_desktop():
     """
-    Indicate if we are in the context of the Flow Production Tracking.
+    Indicate if we are in the context of the PTR desktop app.
 
-    When the Flow Production Tracking is used, we want to disregard the value returned
+    When the PTR desktop app is used, we want to disregard the value returned
     by the call to `get_shotgun_authenticator_support_web_login()` when the
     target site is using Autodesk Identity.
     """
@@ -260,9 +260,9 @@ class LoginDialog(QtGui.QDialog):
             self._menu_activated_action_login_creds
         )
 
-        menu.addAction(self.menu_action_legacy)
-        menu.addAction(self.menu_action_ulf)
         menu.addAction(self.menu_action_asl)
+        menu.addAction(self.menu_action_ulf)
+        menu.addAction(self.menu_action_legacy)
 
         # hook up signals
         self.ui.sign_in.clicked.connect(self._ok_pressed)
@@ -472,6 +472,7 @@ class LoginDialog(QtGui.QDialog):
 
         # With a SSO site, we have no choice but to use the web to login.
         can_use_web = self.site_info.sso_enabled
+        can_use_asl = self.site_info.app_session_launcher_enabled
 
         # The user may decide to force the use of the old dialog:
         # - due to graphical issues with Qt and its WebEngine
@@ -488,21 +489,17 @@ class LoginDialog(QtGui.QDialog):
             if get_shotgun_authenticator_support_web_login():
                 can_use_web = can_use_web or self.site_info.unified_login_flow_enabled
 
-        can_use_asl = self.site_info.app_session_launcher_enabled
-        if can_use_asl:
-            if method_selected:
-                # Selecting requested mode (credentials, qt_web_login or app_session_launcher)
-                self.method_selected_user = method_selected
-            elif os.environ.get("SGTK_FORCE_STANDARD_LOGIN_DIALOG"):
-                # Selecting legacy auth by default
-                method_selected = auth_constants.METHOD_BASIC
-            else:
-                method_selected = session_cache.get_preferred_method(site)
+        if method_selected:
+            # Selecting requested mode (credentials, qt_web_login or app_session_launcher)
+            self.method_selected_user = method_selected
+        elif os.environ.get("SGTK_FORCE_STANDARD_LOGIN_DIALOG"):
+            # Selecting legacy auth by default
+            method_selected = auth_constants.METHOD_BASIC
+        else:
+            method_selected = session_cache.get_preferred_method(site)
 
         # Make sure that the method_selected is currently supported
         if (
-            method_selected == auth_constants.METHOD_BASIC and can_use_web
-        ) or (
             method_selected == auth_constants.METHOD_WEB_LOGIN and not can_use_web
         ) or (
             method_selected == auth_constants.METHOD_ASL and not can_use_asl
@@ -517,8 +514,6 @@ class LoginDialog(QtGui.QDialog):
 
         # Make sure that the method_selected is currently supported
         if (
-            method_selected == auth_constants.METHOD_BASIC and can_use_web
-        ) or (
             method_selected == auth_constants.METHOD_WEB_LOGIN and not can_use_web
         ) or (
             method_selected == auth_constants.METHOD_ASL and not can_use_asl
@@ -526,7 +521,9 @@ class LoginDialog(QtGui.QDialog):
             method_selected = None
 
         if not method_selected:
-            if can_use_web:
+            if can_use_asl:
+                method_selected = auth_constants.METHOD_ASL
+            elif can_use_web:
                 method_selected = auth_constants.METHOD_WEB_LOGIN
             else:
                 method_selected = auth_constants.METHOD_BASIC
@@ -563,16 +560,12 @@ class LoginDialog(QtGui.QDialog):
             self.ui.login.setVisible(False)
             self.ui.password.setVisible(False)
 
-            if not can_use_asl:
-                # Old text
-                self.ui.message.setText("Sign in using the Web.")
-            else:
-                self.ui.message.setText(
-                    "<p>Authenticate with the Flow Production Tracking browser.</p>"
-                    '<p><a style="color:#c0c1c3;" href="{url}">Learn more here</a></p>'.format(
-                        url=constants.DOCUMENTATION_URL_LEGACY_AUTHENTICATION,
-                    )
+            self.ui.message.setText(
+                "<p>Authenticate with the Flow Production Tracking browser.</p>"
+                '<p><a style="color:#c0c1c3;" href="{url}">Learn more here</a></p>'.format(
+                    url=constants.DOCUMENTATION_URL_LEGACY_AUTHENTICATION,
                 )
+            )
         else:  # auth_constants.METHOD_BASIC
             self.ui.login.setVisible(True)
             self.ui.password.setVisible(True)
@@ -588,9 +581,9 @@ class LoginDialog(QtGui.QDialog):
             method_selected == auth_constants.METHOD_BASIC
         )
 
-        self.ui.button_options.setVisible(can_use_asl)
+        self.ui.button_options.setVisible(can_use_web or can_use_asl)
+        self.menu_action_asl.setVisible(can_use_asl)
         self.menu_action_ulf.setVisible(can_use_web)
-        self.menu_action_legacy.setVisible(not can_use_web)
 
         self.menu_action_asl.setEnabled(
             self.method_selected != auth_constants.METHOD_ASL
@@ -765,7 +758,7 @@ class LoginDialog(QtGui.QDialog):
 
         # Cleanup the URL and update the GUI.
         if self.method_selected != auth_constants.METHOD_BASIC:
-            if site.startswith("http://"):
+            if site.startswith("http://") and "SGTK_AUTH_ALLOW_NO_HTTPS" not in os.environ:
                 site = "https" + site[4:]
             self.ui.site.setEditText(site)
 
@@ -933,10 +926,7 @@ class LoginDialog(QtGui.QDialog):
                 self.ui.message,
                 "Authentication error - %s" % self._asl_task.exception,
             )
-            logger.debug(
-                "App Session Launcher authentication issue",
-                exc_info=self._asl_task.exception,
-            )
+
             self._asl_task = None
             return
 
@@ -979,6 +969,11 @@ class ASL_AuthTask(QtCore.QThread):
                 keep_waiting_callback=self.should_continue,
             )
         except AuthenticationError as err:
+            logger.error("Authentication error - {}".format(err))
+            logger.debug(
+                "App Session Launcher authentication issue: {}".format(err.format()),
+                exc_info=err,
+            )
             self.exception = err
         except Exception:
             logger.exception("Unknown error from the App Session Launcher")
