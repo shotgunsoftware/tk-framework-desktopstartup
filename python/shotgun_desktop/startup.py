@@ -374,7 +374,7 @@ def __launch_app(app, splash, user, app_bootstrap, settings):
         # debug logging until core swap, when the original launch setting is
         # restored.
         __restore_global_debug_flag()
-        __restart_app_with_countdown(splash, "ShotGrid Desktop updated.")
+        __restart_app_with_countdown(splash, "Flow Production Tracking updated.")
 
     splash.set_message("Looking up site configuration.")
 
@@ -529,7 +529,7 @@ def __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path):
 
     if not __desktop_engine_supports_authentication_module(engine):
         raise UpgradeEngine200Error(
-            "This version of the ShotGrid Desktop only supports tk-desktop engine 2.0.0 and higher.",
+            "This version of the PTR desktop app only supports tk-desktop engine 2.0.0 and higher.",
             pc_path,
         )
 
@@ -557,7 +557,7 @@ def __start_engine_in_zero_config(app, app_bootstrap, splash, user):
     # effect as there is no Python 2 version available.
     if str(os.environ.get("SHOTGUN_PYTHON_VERSION")) == "2" and sys.version_info[0] > 2:
         DesktopMessageBox.critical(
-            "ShotGrid Desktop Warning",
+            "Flow Production Tracking Warning",
             "{constant} will have no effect because there's not Python 2 available version.\n".format(
                 constant="SHOTGUN_PYTHON_VERSION"
             ),
@@ -654,7 +654,7 @@ def __ensure_engine_compatible_with_qt_version(engine, app_version):
         )
         return
 
-    # Shotgun Desktop 2.5.0 introduced Python 3 and PySide2 support while being backward
+    # tk-desktop 2.5.0 introduced Python 3 and PySide2 support while being backward
     # compatible with PySide, so it can't be a problem.
     if is_version_newer_or_equal(engine.version, "v2.5.0"):
         return
@@ -705,7 +705,7 @@ def __handle_exception(splash, shotgun_authenticator, error_message):
     if splash:
         splash.hide()
     logger.exception("Fatal error, user will be logged out.")
-    DesktopMessageBox.critical("ShotGrid Desktop Error", error_message)
+    DesktopMessageBox.critical("Flow Production Tracking Error", error_message)
     # If we are logged in, we should log out so the user is not stuck in a loop of always
     # automatically logging in each time the app is launched again
     if shotgun_authenticator:
@@ -756,7 +756,7 @@ def __handle_unexpected_exception(
 
     else:
         formatted_error_message = (
-            "Something went wrong in the ShotGrid Desktop! If you <a href={link}>contact us</a> "
+            "Something went wrong in the PTR desktop app! If you <a href={link}>contact us</a> "
             "we'll help you diagnose the issue.\n"
             "Error: {error}\n"
             "For more information, see the log file at {log}.".format(
@@ -767,7 +767,7 @@ def __handle_unexpected_exception(
         )
 
     DesktopMessageBox.critical(
-        "ShotGrid Desktop Error",
+        "Flow Production Tracking Error",
         formatted_error_message,
         detailed_text="".join(
             traceback.format_exception(exc_type, exc_value, exc_traceback)
@@ -823,7 +823,7 @@ class _BootstrapProxy(object):
 
     def get_bundle_cache_location(self):
         """
-        Retrieves the bundle cache that is distributed with the Shotgun Desktop.
+        Retrieves the bundle cache that is distributed with the PTR desktop app.
 
         We're implementing this method on the proxy because Desktop versions 1.3.6 and earlier didn't
         have a bundle cache.
@@ -893,7 +893,7 @@ def main(**kwargs):
     # We might crash before even initializing the authenticator, so instantiate
     # it right away.
     shotgun_authenticator = None
-    # Shotgun Desktop startup has always been logging every debug string to disk since the new authentication from 0.16
+    # PTR desktop app startup has always been logging every debug string to disk since the new authentication from 0.16
     # was released and the startup has been difficult to work with and debug, so keep that logic in place during the
     # startup sequence. It will be restored during the ToolkitManager's pre_engine_start_callback.
     __backup_global_debug_flag()

@@ -6,18 +6,18 @@
 [Login]
 
 # If specified, the username text input on the login screen will be populated
-# with this value when logging into the Shotgun Desktop for the very first time.
+# with this value when logging into the PTR desktop app for the very first time.
 # Defaults to the user's OS login.
 #
 # default_login=$USERNAME
 
 # If specified, the site text input on the login screen will be populated with
-# this value when logging into the Shotgun Desktop for the very first time.
+# this value when logging into the PTR desktop app for the very first time.
 # Empty by default.
 #
 # default_site=https://your-site-here.shotgunstudio.com
 
-# If specified, the Shotgun Desktop will use these proxy settings to connect to
+# If specified, the PTR desktop app will use these proxy settings to connect to
 # the Shotgun site and the Toolkit App Store. The proxy string should be of the
 # forms 123.123.123.123, 123.123.123.123:8888 or
 # username:pass@123.123.123.123:8888.
@@ -46,7 +46,7 @@
 # Location where the certificate will be stored. If not specified, defaults to
 # ../resources/keys.
 #
-# For reference, here are the paths that the Shotgun Desktop uses.
+# For reference, here are the paths that the PTR desktop app uses.
 # MacOS:
 # certificate_folder=~/Library/Caches/Shotgun/desktop/config/certificates
 # Windows

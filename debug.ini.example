@@ -2,7 +2,7 @@
 
 # Note that those environment variable are meant for debugging purprose by the
 # Toolkit team and therefore are subject to change. We advise that you not use
-# these to run the Shotgun Desktop at any time.
+# these to run the PTR desktop app at any time.
 
 # Controls where this file is located. Obviously can't be set inside this file.
 SGTK_DESKTOP_ENVVARS_LOCATION=~/Library/Caches/Shotgun/desktop/config/envvars.ini
@@ -22,7 +22,7 @@ SGTK_DESKTOP_BUNDLED_DESCRIPTOR={type: app_store, name: tk-framework-desktopstar
 SGTK_DESKTOP_BUNDLED_DESCRIPTOR={"type": "git", "path": "git@github.com:shotgunsoftware/tk-framework-desktopstartup.git", "version": "v0.0.12"}
 SGTK_DESKTOP_BUNDLED_DESCRIPTOR={name: tk-framework-qtwidgets, type: app_store, version: v1.0.1}
 
-# Allows to override the Shotgun Desktop's tk-framework-desktopstartup and use any one you
+# Allows to override the PTR desktop app's tk-framework-desktopstartup and use any one you
 # want. This disables updates.
 SGTK_DESKTOP_STARTUP_LOCATION=~/gitlocal/tk-framework-desktopstartup
 
