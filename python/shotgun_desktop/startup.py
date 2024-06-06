@@ -883,12 +883,7 @@ def main(**kwargs):
     # Create some ui related objects
     app, splash = __init_app()
 
-    if is_version_newer_or_equal(app_bootstrap.get_version(), "v1.6.0"):
-        splash.set_version(
-            "{} - Python {}".format(app_bootstrap.get_version(), sys.version_info[0])
-        )
-    else:
-        splash.set_version(app_bootstrap.get_version())
+    splash.set_version(app_bootstrap.get_version())
 
     # We might crash before even initializing the authenticator, so instantiate
     # it right away.
