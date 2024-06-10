@@ -111,6 +111,10 @@ SGTK_DESKTOP_ORIGINAL_PYTHONPATH: {original_python_path}
     )
 )
 
+if sys.version_info[0] < 3:
+    logger.error("Using Python unsuppoerted version")
+    sys.exit(1)
+
 
 def add_to_python_path(bundled_path, env_var_override, module_name):
     """
