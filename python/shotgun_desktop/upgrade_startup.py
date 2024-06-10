@@ -8,8 +8,6 @@
 # agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
-import sys
-import os
 from shotgun_desktop.location import write_location, get_startup_descriptor
 from shotgun_desktop.desktop_message_box import DesktopMessageBox
 from sgtk.descriptor import CheckVersionConstraintsError
@@ -30,33 +28,6 @@ def _supports_get_from_location_and_paths(sgtk):
         False otherwise.
     """
     return hasattr(sgtk.deploy.descriptor, "get_from_location_and_paths")
-
-
-def _out_of_date_check(latest_descriptor, current_desc):
-    """
-    Check if the version is out of date, this prevents an upgrade of the startup logic
-    in the event that it detects PTR desktop app is running on Python 2.
-
-    :param latest_descriptor:`sgtk.descriptor.FrameworkDescriptor` instance with the latest startup descriptor.
-    :param current_desc:`sgtk.descriptor.FrameworkDescriptor` instance with the current startup descriptor.
-
-    :returns: True if the startup version is outdated in comparison with the latest available version on the
-              appstore. False otherwise.
-    """
-
-    # If we're running in Python 2 and if the bundled framework exists on disk,
-    # returns False to avoid upgrade the startup logic.
-    if sys.version_info[0] < 3 and os.path.exists(current_desc.get_path()):
-        logger.debug(
-            "Using Python version '%s'"
-            % ".".join(str(i) for i in sys.version_info[0:3])
-        )
-        logger.debug(
-            "Desktop startup is Currently running version %s"
-            % current_desc.get_version(),
-        )
-        return False
-    return latest_descriptor.get_version() != current_desc.get_version()
 
 
 def upgrade_startup(splash, sgtk, app_bootstrap):
@@ -112,8 +83,8 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
         return False
 
     # out of date check
-    out_of_date = _out_of_date_check(latest_descriptor, current_desc)
-    logger.debug("version is out of date: %s", out_of_date)
+    out_of_date = latest_descriptor.get_version() != current_desc.get_version()
+
     if not out_of_date:
         logger.debug(
             "Desktop startup is up to date. Currently running version %s"
