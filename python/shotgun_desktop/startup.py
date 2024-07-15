@@ -254,6 +254,11 @@ def __init_app():
     # QApplication in this same environment will not have problems.
     if os.environ.get("QT_PLUGIN_PATH"):
         del os.environ["QT_PLUGIN_PATH"]
+
+    # Enable High DPI support in Qt5 (default enabled in Qt6)
+    if QtCore.qVersion()[0] == "5":
+        QtCore.QCoreApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling)
+
     # start up our QApp now
     return QtGui.QApplication(sys.argv), shotgun_desktop.splash.Splash()
 
