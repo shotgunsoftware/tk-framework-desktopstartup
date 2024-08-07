@@ -885,7 +885,7 @@ def main(**kwargs):
 
     if is_version_newer_or_equal(app_bootstrap.get_version(), "v1.6.0"):
         splash.set_version(
-            "{} - Python {}".format(app_bootstrap.get_version(), sys.version_info[0])
+            f"{app_bootstrap.get_version()} - Python {sys.version_info[0]}.{sys.version_info[1]}"
         )
     else:
         splash.set_version(app_bootstrap.get_version())
