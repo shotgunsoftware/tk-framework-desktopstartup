@@ -110,10 +110,10 @@ background-color: transparent</string>
   <widget class="QLabel" name="version">
    <property name="geometry">
     <rect>
-     <x>480</x>
-     <y>20</y>
-     <width>101</width>
-     <height>20</height>
+     <x>460</x>
+     <y>30</y>
+     <width>121</width>
+     <height>30</height>
     </rect>
    </property>
    <property name="styleSheet">
