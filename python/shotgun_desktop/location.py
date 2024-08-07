@@ -68,7 +68,7 @@ def get_location(app_bootstrap):
     # Read the location.yml file.
     with open(location, "r") as location_file:
         # If the file is empty, we're in dev mode.
-        return yaml.load(location_file) or dev_descriptor
+        return yaml.load(location_file, Loader=yaml.FullLoader) or dev_descriptor
 
 
 def get_startup_descriptor(sgtk, sg, app_bootstrap):
