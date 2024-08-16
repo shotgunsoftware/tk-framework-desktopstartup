@@ -863,6 +863,11 @@ def main(**kwargs):
     # the right config.
     import sgtk
 
+    # TODO
+    # sgtk.__version__
+    #     if manifest.get("requires_core_version") is not None:
+    #         constraints["min_core"] = manifest.get("requires_core_version")
+
     global logger
 
     # Older versions of the desktop on Windows logged at %APPDATA%\Shotgun\tk-desktop.log. Notify the user that
