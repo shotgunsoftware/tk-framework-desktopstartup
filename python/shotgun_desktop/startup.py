@@ -122,10 +122,19 @@ def add_to_python_path(bundled_path, env_var_override, module_name):
     :param module_name: Friendly name of the module.
     """
     if env_var_override in os.environ:
-        path = os.path.join(os.environ[env_var_override])
-        path = os.path.expanduser(os.path.expandvars(path))
+        path = os.path.expanduser(
+            os.path.expandvars(
+                os.environ[env_var_override],
+            ),
+        )
     else:
-        path = os.path.normpath(os.path.join(os.path.split(__file__)[0], bundled_path))
+        path = os.path.normpath(
+            os.path.join(
+                os.path.dirname(__file__),
+                bundled_path,
+            ),
+        )
+
     path = os.path.join(path, "python")
     sys.path.insert(0, path)
     logger.info("Using %s from '%s'", module_name, path)
