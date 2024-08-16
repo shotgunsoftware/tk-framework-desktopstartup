@@ -139,17 +139,6 @@ def add_to_python_path(bundled_path, env_var_override, module_name):
     sys.path.insert(0, path)
     logger.info("Using %s from '%s'", module_name, path)
 
-
-# Add Toolkit to the path.
-add_to_python_path(
-    os.path.join(
-        "..",
-        "tk-core",
-    ),
-    "SGTK_CORE_LOCATION",
-    "tk-core",
-)
-
 # now proceed with non builtin imports
 from .qt import QtCore, QtGui
 
@@ -859,6 +848,16 @@ def main(**kwargs):
     """
 
     app_bootstrap = _BootstrapProxy(kwargs["app_bootstrap"])
+
+    # Add Toolkit to the path.
+    add_to_python_path(
+        os.path.join(
+            "..",
+            "tk-core",
+        ),
+        "SGTK_CORE_LOCATION",
+        "tk-core",
+    )
 
     # Do not import sgtk globally to avoid using the wrong sgtk once we bootstrap in
     # the right config.
