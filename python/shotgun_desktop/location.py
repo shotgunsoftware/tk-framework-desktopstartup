@@ -68,7 +68,12 @@ def get_location(app_bootstrap):
     # Read the location.yml file.
     with open(location, "r") as location_file:
         # If the file is empty, we're in dev mode.
-        return yaml.load(location_file, Loader=yaml.FullLoader) or dev_descriptor
+        try:
+            return yaml.load(location_file, Loader=yaml.FullLoader) or dev_descriptor
+        except AttributeError:
+            # Prevent re-creating SG-32890 incident due to v2.1.13
+            # https://community.shotgridsoftware.com/t/shotgrid-desktop-app-wont-load-after-jan-10-update/16568/7
+            return yaml.load(location_file) or dev_descriptor
 
 
 def get_startup_descriptor(sgtk, sg, app_bootstrap):
