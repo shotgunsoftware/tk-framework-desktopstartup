@@ -261,6 +261,12 @@ def __init_app():
         # Only enable it if none of the Qt environment variables related to
         # High-DPI are set
 
+        # import ctypes
+        # import ctypes.wintypes
+        # ctypes.windll.shcore.SetProcessDpiAwareness(
+        #     ctypes.wintypes.HANDLE(-4)
+        # )
+
         if "QT_AUTO_SCREEN_SCALE_FACTOR" in os.environ:
             pass
         elif "QT_SCALE_FACTOR" in os.environ:
@@ -269,6 +275,9 @@ def __init_app():
             pass
         else:
             QtCore.QCoreApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling)
+            QtCore.QCoreApplication.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps)
+            if True: # TODO if Qt>5.14 and <6
+                QtGui.QGuiApplication.setHighDpiScaleFactorRoundingPolicy(QtCore.Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
 
     # start up our QApp now
     return QtGui.QApplication(sys.argv), shotgun_desktop.splash.Splash()
