@@ -22,6 +22,10 @@ copyright = """# Copyright (c) 2017 Shotgun Software Inc.
 
 import os
 
+from sgtk import LogManager
+
+logger = LogManager.get_logger(__name__)
+
 
 def _get_location_yaml_location(root):
     """
@@ -67,13 +71,19 @@ def get_location(app_bootstrap):
 
     # Read the location.yml file.
     with open(location, "r") as location_file:
-        # If the file is empty, we're in dev mode.
-        try:
-            return yaml.load(location_file, Loader=yaml.FullLoader) or dev_descriptor
-        except AttributeError:
+        if not hasattr(yaml, "FullLoader"):
             # Prevent re-creating SG-32890 incident due to v2.1.13
             # https://community.shotgridsoftware.com/t/shotgrid-desktop-app-wont-load-after-jan-10-update/16568/7
-            return yaml.load(location_file) or dev_descriptor
+            logger.warning(
+                "using an old version of the yaml library where FullLoader does not exists (%s)",
+                yaml.__file__,
+            )
+            loaded_data = yaml.load(location_file)
+        else:
+            loaded_data = yaml.load(location_file, Loader=yaml.FullLoader)
+
+        # If the file is empty, we're in dev mode.
+        return loaded_data or dev_descriptor
 
 
 def get_startup_descriptor(sgtk, sg, app_bootstrap):
