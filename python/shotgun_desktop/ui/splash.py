@@ -61,7 +61,7 @@ class Ui_Splash(object):
         self.message.setAlignment(Qt.AlignLeading|Qt.AlignLeft|Qt.AlignTop)
         self.version = QLabel(Splash)
         self.version.setObjectName(u"version")
-        self.version.setGeometry(QRect(480, 20, 101, 20))
+        self.version.setGeometry(QRect(460, 30, 121, 30))
         self.version.setStyleSheet(u"color: rgb(255, 255, 255);\n"
 "background-color: rgb(0, 0, 0)")
         self.version.setAlignment(Qt.AlignRight|Qt.AlignTrailing|Qt.AlignVCenter)
