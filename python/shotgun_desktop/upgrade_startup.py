@@ -8,6 +8,7 @@
 # agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
+import distutils.version
 import sys
 import os
 from shotgun_desktop.location import write_location, get_startup_descriptor
@@ -131,6 +132,18 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
             "Cannot upgrade to the latest Desktop Startup %s. %s",
             latest_descriptor.version,
             e,
+        )
+        return False
+
+    if distutils.version.LooseVersion(
+        latest_descriptor.version
+    ) <= distutils.version.LooseVersion(
+        current_desc.get_version()
+    ):
+        logger.warning(
+            "Ignore app_store version %s since current version is newer %s",
+            latest_descriptor.version,
+            current_desc.get_version(),
         )
         return False
 
