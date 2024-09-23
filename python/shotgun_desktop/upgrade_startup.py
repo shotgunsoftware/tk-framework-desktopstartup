@@ -72,7 +72,11 @@ def _out_of_date_check(latest_descriptor, current_desc):
             latest_descriptor.get_version(),
         )
     else:
-        if current_version > app_store_version:
+        if current_version <= app_store_version:
+            pass
+        elif os.environ.get("SGTK_STARTUP_ALLOW_OLDER_VERSION"):
+            pass
+        else:
             logger.warning(
                 "Ignore app_store version %s since current version is newer %s",
                 latest_descriptor.version,
