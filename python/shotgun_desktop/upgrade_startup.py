@@ -134,6 +134,14 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
         )
         return False
 
+
+    # IF we update - do not loop
+    if os.environ.get("BEEN_THERE_DONE_THAT"):
+        return False
+
+
+    os.environ["BEEN_THERE_DONE_THAT"] = "1"
+
     try:
         # Download the update
         latest_descriptor.download_local()
