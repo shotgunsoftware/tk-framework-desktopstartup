@@ -138,7 +138,7 @@ class UpgradeEngine200Error(ShotgunDesktopError):
 
 class EngineNotCompatibleWithDesktop16(ShotgunDesktopError):
     def __init__(self, app_version):
-        super(EngineNotCompatibleWithDesktop16, self).__init__(
+        super().__init__(
             "Your version of tk-desktop is not compatible with this PTR desktop app {}.\n"
             "\n"
             "Please upgrade your site configuration's tk-desktop to v2.5.9+ or "

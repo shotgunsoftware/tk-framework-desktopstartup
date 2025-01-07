@@ -10,7 +10,7 @@
 
 import os
 import sys
-from tank_vendor.six.moves.urllib import parse
+from urllib import parse
 import pprint
 import sgtk
 

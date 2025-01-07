@@ -34,8 +34,7 @@ def _supports_get_from_location_and_paths(sgtk):
 
 def _out_of_date_check(latest_descriptor, current_desc):
     """
-    Check if the version is out of date, this prevents an upgrade of the startup logic
-    in the event that it detects PTR desktop app is running on Python 2.
+    Check if the version is out of date.
 
     :param latest_descriptor:`sgtk.descriptor.FrameworkDescriptor` instance with the latest startup descriptor.
     :param current_desc:`sgtk.descriptor.FrameworkDescriptor` instance with the current startup descriptor.
@@ -44,18 +43,6 @@ def _out_of_date_check(latest_descriptor, current_desc):
               appstore. False otherwise.
     """
 
-    # If we're running in Python 2 and if the bundled framework exists on disk,
-    # returns False to avoid upgrade the startup logic.
-    if sys.version_info[0] < 3 and os.path.exists(current_desc.get_path()):
-        logger.debug(
-            "Using Python version '%s'"
-            % ".".join(str(i) for i in sys.version_info[0:3])
-        )
-        logger.debug(
-            "Desktop startup is Currently running version %s"
-            % current_desc.get_version(),
-        )
-        return False
     return latest_descriptor.get_version() != current_desc.get_version()
 
 

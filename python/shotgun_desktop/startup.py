@@ -8,8 +8,6 @@
 # agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
-from __future__ import absolute_import
-
 import os
 import sys
 import time
@@ -551,17 +549,6 @@ def __start_engine_in_zero_config(app, app_bootstrap, splash, user):
     import sgtk
 
     mgr = sgtk.bootstrap.ToolkitManager(user)
-
-    # If 'SHOTGUN_PYTHON_VERSION' environment variable has been set, but at this point
-    # we are running in Python 3 we should warn the user that this will have no
-    # effect as there is no Python 2 version available.
-    if str(os.environ.get("SHOTGUN_PYTHON_VERSION")) == "2" and sys.version_info[0] > 2:
-        DesktopMessageBox.critical(
-            "Flow Production Tracking Warning",
-            "{constant} will have no effect because there's not Python 2 available version.\n".format(
-                constant="SHOTGUN_PYTHON_VERSION"
-            ),
-        )
 
     # Allows to take over the site config to use with Desktop without impacting the projects
     # configurations.
