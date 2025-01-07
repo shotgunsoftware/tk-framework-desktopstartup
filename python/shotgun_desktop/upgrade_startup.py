@@ -34,7 +34,8 @@ def _supports_get_from_location_and_paths(sgtk):
 
 def _out_of_date_check(latest_descriptor, current_desc):
     """
-    Check if the version is out of date.
+    Check if the version is out of date, this prevents an upgrade of the startup logic
+    in the event that it detects PTR desktop app is running on Python 2.
 
     :param latest_descriptor:`sgtk.descriptor.FrameworkDescriptor` instance with the latest startup descriptor.
     :param current_desc:`sgtk.descriptor.FrameworkDescriptor` instance with the current startup descriptor.
