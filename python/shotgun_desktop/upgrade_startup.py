@@ -43,6 +43,18 @@ def _out_of_date_check(latest_descriptor, current_desc):
               appstore. False otherwise.
     """
 
+    # If we're running in Python 2 and if the bundled framework exists on disk,
+    # returns False to avoid upgrade the startup logic.
+    if sys.version_info[0] < 3 and os.path.exists(current_desc.get_path()):
+        logger.debug(
+            "Using Python version '%s'"
+            % ".".join(str(i) for i in sys.version_info[0:3])
+        )
+        logger.debug(
+            "Desktop startup is Currently running version %s"
+            % current_desc.get_version(),
+        )
+        return False
     return latest_descriptor.get_version() != current_desc.get_version()
 
 
