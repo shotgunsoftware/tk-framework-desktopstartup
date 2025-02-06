@@ -10,6 +10,8 @@
 
 from .qt import QtGui, QtCore
 
+print("qt.QtCore:", QtCore)
+
 from .ui import splash
 
 

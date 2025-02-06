@@ -438,14 +438,22 @@ class PySide6Patcher(PySide2Patcher):
         """
 
         import PySide6
-        from PySide6 import (
-            QtCore,
-            QtGui,
-            QtWidgets,
-            QtOpenGL,
-            QtWebEngineWidgets,
-            QtWebEngineCore,
-        )
+        from PySide6 import QtCore
+        from PySide6 import QtGui
+        from PySide6 import QtWidgets
+        from PySide6 import QtOpenGL
+        from PySide6 import QtWebEngineWidgets
+        from PySide6 import QtWebEngineCore
+
+
+        # from PySide6 import (
+        #     QtCore,
+        #     QtGui,
+        #     QtWidgets,
+        #     QtOpenGL,
+        #     QtWebEngineWidgets,
+        #     QtWebEngineCore,
+        # )
 
         # First create new modules to act as the PySide modules
         qt_core_shim = imp.new_module("PySide.QtCore")

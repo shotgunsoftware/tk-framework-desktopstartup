@@ -17,8 +17,19 @@ import pkgutil
 
 from ..log import LogManager
 
+
 logger = LogManager.get_logger(__name__)
 
+
+import logging
+import sys
+handler = logging.StreamHandler(sys.stdout)
+handler.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+
+logger.info("Hello log!")
 
 class QtImporter(object):
     """
@@ -364,6 +375,9 @@ class QtImporter(object):
             no binding is avaialble.
         """
 
+
+        logger.info("--_import_modules")
+
         interface = {
             self.QT4: "Qt4",
             self.QT5: "Qt5",
@@ -378,7 +392,8 @@ class QtImporter(object):
                 logger.debug("Imported PySide2 as PySide.")
                 return pyside2
             except ImportError:
-                pass
+                logger.exception("Unable to import pyside2")
+                # pass
 
             # Last attempt, try PySide6. PySide6 is not yet fully supported but allow DCCs that
             # require PySide6 to run with the current support
@@ -387,7 +402,8 @@ class QtImporter(object):
                 logger.debug("Imported PySide6 as PySide.")
                 return pyside6
             except ImportError:
-                pass
+                logger.exception("Unable to import pyside6")
+                # pass
 
         elif interface_version_requested == self.QT5:
             try:
