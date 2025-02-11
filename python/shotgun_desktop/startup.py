@@ -875,6 +875,9 @@ def main(**kwargs):
     else:
         splash.set_version(app_bootstrap.get_version())
 
+    splash.set_message("Loading the application...")
+    splash.show()
+
     # We might crash before even initializing the authenticator, so instantiate
     # it right away.
     shotgun_authenticator = None
