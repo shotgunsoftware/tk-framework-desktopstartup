@@ -129,6 +129,16 @@ def add_to_python_path(bundled_path, env_var_override, module_name):
     logger.info("Using %s from '%s'", module_name, path)
 
 
+def init_sgtk_logger():
+    """
+    Do not import sgtk globally to avoid using the wrong sgtk once we bootstrap
+    in the right config.
+    """
+
+    import sgtk
+    sgtk.LogManager().initialize_base_file_handler("tk-desktop")
+
+
 # Add Toolkit to the path.
 add_to_python_path(
     os.path.join(
@@ -138,6 +148,8 @@ add_to_python_path(
     "SGTK_CORE_LOCATION",
     "tk-core",
 )
+
+init_sgtk_logger()
 
 # now proceed with non builtin imports
 from .qt import QtCore, QtGui
@@ -861,8 +873,6 @@ def main(**kwargs):
 
     # Core will take over logging
     app_bootstrap.tear_down_logging()
-
-    sgtk.LogManager().initialize_base_file_handler("tk-desktop")
 
     logger = sgtk.LogManager.get_logger(__name__)
     logger.debug("Running main from %s" % __file__)
