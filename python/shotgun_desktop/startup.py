@@ -131,11 +131,16 @@ def add_to_python_path(bundled_path, env_var_override, module_name):
 
 def init_sgtk_logger():
     """
-    Do not import sgtk globally to avoid using the wrong sgtk once we bootstrap
-    in the right config.
+    Initialize the SGTK logger now and not later (main) so we don't miss logs
+    comming from sgtk. For instance, before this change, we were missing any
+    logs coming from the QtImporter because the logger was not initialized
+    already.
     """
 
+    # Do not import sgtk globally to avoid using the wrong sgtk once we
+    # bootstrap in the right config.
     import sgtk
+
     sgtk.LogManager().initialize_base_file_handler("tk-desktop")
 
 
