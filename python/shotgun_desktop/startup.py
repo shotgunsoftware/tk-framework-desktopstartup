@@ -17,6 +17,7 @@ import traceback
 # initialize logging
 import logging
 
+
 def _enumerate_per_line(items):
     """
     Enumerate all items from an array, one line at a time.
