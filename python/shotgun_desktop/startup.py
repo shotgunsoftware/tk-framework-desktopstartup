@@ -338,8 +338,6 @@ def __restart_app_with_countdown(splash, reason):
     # splash screen that from the user point of view looks like the app is redoing work
     # it already did by mistake. This makes the behavior explicit.
     splash.show()
-    splash.raise_()
-    splash.activateWindow()
     for i in range(3, 0, -1):
         splash.set_message("%s Restarting in %d seconds..." % (reason, i))
         time.sleep(1)
@@ -873,6 +871,9 @@ def main(**kwargs):
     splash.set_version(
         f"{app_bootstrap.get_version()} - Python {sys.version_info[0]}.{sys.version_info[1]}"
     )
+
+    splash.set_message("Loading the application...")
+    splash.show()
 
     # We might crash before even initializing the authenticator, so instantiate
     # it right away.
