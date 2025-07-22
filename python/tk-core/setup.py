@@ -10,7 +10,6 @@
 
 # Basic setup.py so tk-core could be installed as
 # a standard Python package
-from __future__ import absolute_import
 from setuptools import setup, find_packages
 import subprocess
 
@@ -77,7 +76,7 @@ setup(
     # Additional data which must sit in packages folders
     package_data={
         # If any package contains data files, include them:
-        "": ["resources/*", ".txt", "*.*", "hooks/*.py"]
+        "": ["resources/*", ".txt", "*.*"]
     },
     # Everything can be found under the python folder, but installed without it
     package_dir={"": "python"},
