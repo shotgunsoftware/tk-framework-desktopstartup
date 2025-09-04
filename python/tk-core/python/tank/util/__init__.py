@@ -41,8 +41,8 @@ from .metrics import EventMetric
 from .shotgun_path import ShotgunPath
 
 from . import filesystem
-from . import json
 from . import pickle
+from . import json
 
 from .local_file_storage import LocalFileStorageManager
 

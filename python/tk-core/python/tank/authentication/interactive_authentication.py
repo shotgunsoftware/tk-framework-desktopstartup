@@ -24,8 +24,6 @@ at any point.
 
 # Using "with" with the lock to make sure it is always released.
 
-from __future__ import with_statement
-
 from .errors import AuthenticationCancelled
 from .console_authentication import ConsoleLoginHandler, ConsoleRenewSessionHandler
 from .ui_authentication import UiAuthenticationHandler
@@ -75,7 +73,7 @@ def _get_current_os_user():
 def _get_ui_state():
     """
     Returns the state of UI: do we have a ui or not.
-    :returns: True or False)
+    :returns: True or False
     """
     if QtGui and QtGui.QApplication.instance() is not None:
         return True
