@@ -403,7 +403,9 @@ def __launch_app(app, splash, user, app_bootstrap, settings):
         pc,
         toolkit_classic_required,
     ) = shotgun_desktop.paths.get_pipeline_configuration_info(connection)
-
+    logger.debug(f"pc_path: {pc_path}")
+    logger.debug(f"pc: {pc}")
+    logger.debug(f"toolkit_classic_required: {toolkit_classic_required}")
     # We need to toggle the global debug logging setting back prior to swapping
     # core. Cores older than v0.18.117 do not manage the TK_DEBUG environment
     # variable when global debug is toggled, so we can end up in a situation
