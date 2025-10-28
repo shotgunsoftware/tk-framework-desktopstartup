@@ -11,19 +11,14 @@
 import os
 import sys
 
-from distutils.version import StrictVersion
-
-from .action_base import Action
-from . import core_localize
-from ..util import shotgun
-from ..util import ShotgunPath
-from ..util import is_linux, is_macos, is_windows
-from ..errors import TankError
 from .. import pipelineconfig_utils
-
+from ..errors import TankError
+from ..util import ShotgunPath, is_linux, is_macos, is_windows, shotgun, version_parse
+from . import core_localize
+from .action_base import Action
+from .interaction import YesToEverythingInteraction
 from .setup_project_core import run_project_setup
 from .setup_project_params import ProjectSetupParameters
-from .interaction import YesToEverythingInteraction
 
 
 class SetupProjectFactoryAction(Action):
@@ -352,6 +347,8 @@ class SetupProjectWizard(object):
             return_data[s]["linux"] = self._params.preview_project_path(
                 s, project_disk_name, "linux"
             )
+            # Compat with tk-framework-adminui prior to v0.8.1
+            return_data[s]["linux2"] = return_data[s]["linux"]
 
         return return_data
 
@@ -506,6 +503,9 @@ class SetupProjectWizard(object):
                 suggested_defaults["win32"] = data["windows_path"].replace(
                     old_project_disk_name_win, new_proj_disk_name_win
                 )
+
+        # Compat with tk-framework-adminui prior to v0.8.1
+        suggested_defaults["linux2"] = suggested_defaults["linux"]
 
         return suggested_defaults
 
@@ -716,7 +716,7 @@ class SetupProjectWizard(object):
         sg_minor_ver = connection.server_info["version"][1]
         sg_patch_ver = connection.server_info["version"][2]
 
-        return StrictVersion("%d.%d.%d" % (sg_major_ver, sg_minor_ver, sg_patch_ver))
+        return version_parse(f"{sg_major_ver}.{sg_minor_ver}.{sg_patch_ver}")
 
     def _is_session_based_authentication_supported(self):
         """
@@ -728,7 +728,7 @@ class SetupProjectWizard(object):
         """
         # First version to support human based authentication for all operations was
         # 6.0.2.
-        if self._get_server_version(self._sg) >= StrictVersion("6.0.2"):
+        if self._get_server_version(self._sg) >= version_parse("6.0.2"):
             return True
         else:
             return False
