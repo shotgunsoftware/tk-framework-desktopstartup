@@ -180,7 +180,6 @@ from tank.util.version import (
     is_version_newer_or_equal,
 )
 
-
 global_debug_flag_at_startup = None
 
 
