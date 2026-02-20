@@ -102,7 +102,7 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
         return False
 
     # check deprecation
-    (is_dep, dep_msg) = latest_descriptor.get_deprecation_status()
+    is_dep, dep_msg = latest_descriptor.get_deprecation_status()
 
     if is_dep:
         logger.warning(
