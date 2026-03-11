@@ -159,6 +159,12 @@ init_sgtk_logger()
 # now proceed with non builtin imports
 from .qt import QtCore, QtGui
 
+logger.info(
+    "Qt/PySide6 version: {pyside_version}".format(
+        pyside_version=QtCore.__version__
+    )
+)
+
 import shotgun_desktop.paths
 import shotgun_desktop.splash
 from shotgun_desktop.desktop_message_box import DesktopMessageBox
