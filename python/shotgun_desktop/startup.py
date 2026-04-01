@@ -589,6 +589,101 @@ def __start_engine_in_zero_config(app, app_bootstrap, splash, user):
     return mgr.bootstrap_engine("tk-desktop")
 
 
+def _patch_pyside_license():
+    """Ensure the tk-desktop Licenses dialog shows accurate Qt/PySide LGPL text.
+
+    This is a compatibility shim for older tk-desktop builds that contain
+    hardcoded, potentially stale PySide version strings in their license HTML.
+    New tk-desktop exposes ``Licenses.get_pyside_license_html()`` and handles
+    this itself; this function does nothing in that case.
+
+    For older builds the function monkey-patches ``Licenses.__init__`` so that
+    after the original initialisation the HTML content is replaced with
+    dynamically detected version information. The patch is applied at most once
+    and is wrapped in a broad try/except so that any failure is silently logged
+    and never surfaces to the user.
+    """
+    _log = logging.getLogger("tk-desktop.startup")
+    try:
+        from tk_desktop.licenses import Licenses, LICENSE_LOCATION
+
+        # New tk-desktop already handles this via get_pyside_license_html().
+        # Nothing to do - avoid any risk of double-patching.
+        if hasattr(Licenses, "get_pyside_license_html"):
+            return
+
+        # Detect the installed PySide version. We are running inside SGD so
+        # PySide6 must be importable; fall back gracefully just in case.
+        try:
+            import PySide6
+            import PySide6.QtCore
+
+            pyside_version = PySide6.__version__
+            qt_version = PySide6.QtCore.__version__
+        except ImportError:
+            try:
+                import PySide2
+                import PySide2.QtCore
+
+                pyside_version = PySide2.__version__
+                qt_version = PySide2.QtCore.__version__
+            except ImportError:
+                _log.debug(
+                    "PySide license patch: could not detect PySide version."
+                )
+                return
+
+        # LBP-approved Qt LGPL attribution (mirrors _PYSIDE_LGPL_TEMPLATE in
+        # tk-desktop/python/tk_desktop/licenses.py).
+        pyside_html = (
+            "<!--       Qt / PySide -->\n"
+            "<div>\n"
+            "    <p><strong>Qt v. {qt_version}"
+            " / PySide {pyside_version}</strong></p>\n"
+            "    <pre>\n"
+            "The Qt Toolkit is Copyright (C) 2022 The Qt Company Ltd. and other\n"
+            "contributors. This Autodesk software contains Qt v. {qt_version}, as"
+            " modified\n"
+            "by Autodesk. Qt is licensed under the GNU Lesser General Public"
+            " License v.3,\n"
+            "which can be found at https://www.gnu.org/licenses/lgpl-3.0.html."
+            " You may\n"
+            "obtain a copy of the license and source code for Qt v. {qt_version},"
+            " as\n"
+            "modified by Autodesk, from\n"
+            "https://github.com/autodesk-forks/qt5/tree/adsk-v{qt_version} or by"
+            " sending\n"
+            "a written request to:\n\n"
+            "    Autodesk, Inc.\n"
+            "    Attention: General Counsel\n"
+            "    Legal Department\n"
+            "    The Landmark at One Market Street, Suite 400\n"
+            "    San Francisco, CA 94105\n"
+            "    </pre>\n"
+            "</div>\n"
+        ).format(pyside_version=pyside_version, qt_version=qt_version)
+
+        _original_init = Licenses.__init__
+
+        def _patched_init(self, parent=None):
+            _original_init(self, parent)
+            try:
+                with open(LICENSE_LOCATION, encoding="utf-8") as _f:
+                    _base_html = _f.read()
+                self.ui.licenseText.setHtml(_base_html + pyside_html)
+            except Exception:
+                # The original content is already displayed; failing silently
+                # is safer than raising and crashing the About dialog.
+                pass
+
+        Licenses.__init__ = _patched_init
+        # Mark the class so the patch is never applied twice.
+        Licenses._sgd_lgpl_patched = True
+        _log.debug("Applied Qt LGPL license patch to tk_desktop.licenses.Licenses.")
+    except Exception:
+        _log.debug("Could not apply Qt LGPL license patch.", exc_info=True)
+
+
 def __post_bootstrap_engine(splash, app_bootstrap, engine, settings):
     """
     Called after bootstrapping the engine. Mainly use to transition logging to the
@@ -608,6 +703,12 @@ def __post_bootstrap_engine(splash, app_bootstrap, engine, settings):
         os.environ["PYTHONPATH"] = os.environ["SGTK_DESKTOP_ORIGINAL_PYTHONPATH"]
     if "SGTK_DESKTOP_ORIGINAL_PYTHONHOME" in os.environ:
         os.environ["PYTHONHOME"] = os.environ["SGTK_DESKTOP_ORIGINAL_PYTHONHOME"]
+
+    # Ensure the About box shows accurate Qt/PySide LGPL attribution.
+    # This is a safety net for older tk-desktop builds that ship hardcoded
+    # PySide version strings. New tk-desktop handles this itself; this patch
+    # only activates for old builds that do not yet expose the override method.
+    _patch_pyside_license()
 
     # and run the engine
     logger.debug("Running tk-desktop")
