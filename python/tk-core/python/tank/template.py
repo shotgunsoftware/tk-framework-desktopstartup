@@ -16,11 +16,12 @@ Management of file and directory templates.
 import os
 import sys
 
-from . import templatekey
+from tank.util import is_linux, is_macos, is_windows
+from tank.util import sgre as re
+
+from . import constants, templatekey
 from .errors import TankError
-from . import constants
 from .template_path_parser import TemplatePathParser
-from tank.util import is_linux, is_macos, is_windows, sgre as re
 
 
 class Template(object):
@@ -474,7 +475,7 @@ class Template(object):
         :returns:           True if the path is valid for this template
         :rtype:             Bool
         """
-        return self.validate_and_get_fields(path, fields, skip_keys) != None
+        return self.validate_and_get_fields(path, fields, skip_keys) is not None
 
     def get_fields(self, input_path, skip_keys=None):
         """
@@ -503,7 +504,7 @@ class Template(object):
         for ordered_keys, static_tokens in zip(self._ordered_keys, self._static_tokens):
             path_parser = TemplatePathParser(ordered_keys, static_tokens)
             fields = path_parser.parse_path(input_path, skip_keys)
-            if fields != None:
+            if fields is not None:
                 break
 
         if fields is None:

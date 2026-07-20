@@ -14,10 +14,7 @@ from tank_vendor import yaml
 
 from .. import LogManager
 from ..errors import TankError
-
-from . import filesystem
-from . import ShotgunPath
-from . import yaml_cache
+from . import ShotgunPath, filesystem, yaml_cache
 
 log = LogManager.get_logger(__name__)
 
@@ -144,7 +141,7 @@ class StorageRoots(object):
             the required roots.
         """
 
-        (local_storage_lookup, unmapped_roots) = storage_roots.get_local_storages(
+        local_storage_lookup, unmapped_roots = storage_roots.get_local_storages(
             sg_connection
         )
 

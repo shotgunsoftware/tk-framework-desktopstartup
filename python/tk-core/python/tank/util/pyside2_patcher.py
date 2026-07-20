@@ -12,10 +12,10 @@
 PySide 2 backwards compatibility layer for use with PySide 1 code.
 """
 
-import os
-import sys
 import functools
+import os
 import subprocess
+import sys
 import types
 import warnings
 import webbrowser
@@ -328,7 +328,7 @@ class PySide2Patcher(object):
                     # returns False or raises some error.
                     try:
                         return webbrowser.open_new_tab(url.toString().encode("utf-8"))
-                    except:
+                    except Exception:
                         return False
 
             @classmethod

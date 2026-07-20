@@ -13,19 +13,15 @@ import sys
 import textwrap
 import traceback
 
-from .action_base import Action
-from . import core_localize
-from ..errors import TankError
-from ..util import shotgun
-from ..util import ShotgunPath
-from ..util import is_linux, is_macos, is_windows
-from . import constants
 from .. import pipelineconfig_utils
+from ..errors import TankError
+from ..util import ShotgunPath, is_linux, is_macos, is_windows, shotgun
 from ..util.filesystem import ensure_folder_exists
-
+from . import constants, core_localize
+from .action_base import Action
+from .interaction import YesToEverythingInteraction
 from .setup_project_core import run_project_setup
 from .setup_project_params import ProjectSetupParameters
-from .interaction import YesToEverythingInteraction
 
 
 class SetupProjectAction(Action):
@@ -483,7 +479,7 @@ class SetupProjectAction(Action):
             ["archived", "is_not", True],
         ]
 
-        if show_initialized_projects == False:
+        if show_initialized_projects is False:
             # not force mode. Only show non-set up projects
             filters.append(["tank_name", "is", None])
 
@@ -545,7 +541,7 @@ class SetupProjectAction(Action):
             raise TankError("Aborted by user.")
         try:
             project_id = int(answer)
-        except:
+        except Exception:
             raise TankError("Please enter a number!")
 
         if project_id not in [x["id"] for x in projs]:
@@ -687,9 +683,7 @@ class SetupProjectAction(Action):
 
         default_config_locations = self._get_default_configuration_location(log, params)
 
-        linux_path = self._ask_location(
-            log, default_config_locations["linux"], "Linux"
-        )
+        linux_path = self._ask_location(log, default_config_locations["linux"], "Linux")
         windows_path = self._ask_location(
             log, default_config_locations["win32"], "Windows"
         )
@@ -726,7 +720,6 @@ class SetupProjectAction(Action):
         # location for the installed config.
         # Multi-root configurations require a storage named "primary" so we base
         # our default on that. If only a single storage is available, we just use it.
-        storage_names = params.get_required_storages()
         default_storage_name = params.default_storage_name
 
         # There is no default storage name for a config that doesn't use roots, like
@@ -950,7 +943,7 @@ class SetupProjectAction(Action):
         mapped_roots = []
 
         # loop over required storage roots
-        for (root_name, root_info) in required_roots.items():
+        for root_name, root_info in required_roots.items():
 
             log.info("%s" % (root_name,))
             log.info("-" * len(root_name))
@@ -1057,7 +1050,7 @@ class SetupProjectAction(Action):
         # ---- now we've mapped the roots, and they're all valid, we need to
         #      update the root information on the core wizard
 
-        for (root_name, storage_name) in mapped_roots:
+        for root_name, storage_name in mapped_roots:
 
             root_info = required_roots[root_name]
             storage_data = storage_by_name[storage_name.lower()]

@@ -12,9 +12,10 @@
 # This is automatically replaced with appropriate values
 # as the core bundle is uploaded to the app store.
 
-version: "v0.23.8"
+version: "v0.23.10"
 documentation_url: "https://help.autodesk.com/view/SGDEV/ENU/?contextId=SA_INTEGRATIONS_USER_GUIDE"
 requires_shotgun_version: "v5.0.0"
+minimum_python_version: "3.9"
 
 features:
    # lean_config history
