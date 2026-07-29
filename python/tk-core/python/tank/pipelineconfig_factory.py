@@ -8,21 +8,14 @@
 # agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
-import os
 import collections
+import os
 import pprint
 
-
+from . import LogManager, constants, pipelineconfig_utils
 from .errors import TankError, TankInitError
-from . import LogManager
-from .util import shotgun
-from .util import pickle
-from .util import filesystem
-from .util import ShotgunPath
-from . import constants
-from . import pipelineconfig_utils
 from .pipelineconfig import PipelineConfiguration
-from .util import LocalFileStorageManager
+from .util import LocalFileStorageManager, ShotgunPath, filesystem, pickle, shotgun
 
 log = LogManager.get_logger(__name__)
 
@@ -184,7 +177,8 @@ def _from_path(path, force_reread_shotgun_cache):
         pc_registered_path = pipelineconfig_utils.get_config_install_location(path)
 
         log.debug(
-            "Resolved the official path registered in PTR to be %s." % pc_registered_path
+            "Resolved the official path registered in PTR to be %s."
+            % pc_registered_path
         )
 
         if pc_registered_path is None:
@@ -259,7 +253,7 @@ def _validate_and_create_pipeline_configuration(associated_pipeline_configs, sou
     """
     # extract path data from the pipeline configuration shotgun data
     # this will return lists of dicts with keys ``id``, (local os) ``path`` and ``project_id``
-    (all_pc_data, primary_pc_data) = _get_pipeline_configuration_data(
+    all_pc_data, primary_pc_data = _get_pipeline_configuration_data(
         associated_pipeline_configs
     )
 

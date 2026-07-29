@@ -11,10 +11,9 @@
 import os
 
 from ...errors import TankError
-
 from .base import Folder
 from .entity import Entity
-from .util import translate_filter_tokens, resolve_shotgun_filters
+from .util import resolve_shotgun_filters, translate_filter_tokens
 
 
 class Static(Folder):
@@ -136,7 +135,7 @@ class Static(Folder):
         """
         # check our special condition - is this node set to be auto-created with its parent node?
         # note that primary nodes are always created with their parent nodes!
-        if is_primary == False and self._create_with_parent == False:
+        if is_primary is False and self._create_with_parent is False:
             return False
 
         # base class implementation

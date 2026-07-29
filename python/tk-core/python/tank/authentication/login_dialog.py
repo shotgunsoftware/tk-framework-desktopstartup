@@ -17,37 +17,34 @@ not be called directly. Interfaces and implementation of this module may change
 at any point.
 --------------------------------------------------------------------------------
 """
+
 import os
 import sys
+
 from tank_vendor import shotgun_api3
-from .. import constants
-from .web_login_support import get_shotgun_authenticator_support_web_login
-from .ui import resources_rc  # noqa
-from .ui import login_dialog
-from . import constants as auth_constants
-from . import session_cache
+
+from .. import LogManager, constants
+from ..util import LocalFileStorageManager, login, metrics_cache
 from ..util.metrics import EventMetric
 from ..util.shotgun import connection
-from ..util import login
-from ..util import LocalFileStorageManager
-from ..util import metrics_cache
-from .errors import AuthenticationError
-from .ui.qt_abstraction import (
-    QtGui,
-    QtCore,
-    QtNetwork,
-    QtWebEngineWidgets,
-    qt_version_tuple,
-)
 from . import app_session_launcher
-from . import site_info
+from . import constants as auth_constants
+from . import session_cache, site_info
+from .errors import AuthenticationError
 from .sso_saml2 import (
     SsoSaml2IncompletePySide2,
     SsoSaml2MissingQtModuleError,
 )
 from .sso_saml2.sso_saml2_toolkit import SsoSaml2Toolkit
-
-from .. import LogManager
+from .ui import resources_rc  # noqa
+from .ui import login_dialog
+from .ui.qt_abstraction import (
+    QtCore,
+    QtGui,
+    QtNetwork,
+    QtWebEngineWidgets,
+)
+from .web_login_support import get_shotgun_authenticator_support_web_login
 
 logger = LogManager.get_logger(__name__)
 
@@ -108,6 +105,7 @@ class QuerySiteAndUpdateUITask(QtCore.QThread):
         Runs the thread.
         """
         self._site_info.reload(self._url_to_test, self._http_proxy)
+
 
 class LoginDialog(QtGui.QDialog):
     """
@@ -315,6 +313,16 @@ class LoginDialog(QtGui.QDialog):
                 % self._get_current_site()
             )
 
+        # QThread.finished is delivered through the Qt event queue and requires
+        # the event loop to be running. Since we are still in the constructor,
+        # the _toggle_web slot has not been called yet even though wait()
+        # returned and the thread is done. Call it directly here so the dialog
+        # opens with the correct UI (e.g. Identity/SSO sites must not flash the
+        # 3-fields credentials form before switching to the web-login view).
+        # The guard inside _toggle_web makes the subsequent signal delivery a
+        # no-op, so this is safe.
+        self._toggle_web()
+
         # Initialize exit confirm message box
         self.confirm_box = QtGui.QMessageBox(
             QtGui.QMessageBox.Question,
@@ -484,15 +492,21 @@ class LoginDialog(QtGui.QDialog):
             # - they need to use the legacy login / passphrase to use a PAT with
             #   Autodesk Identity authentication
             if os.environ.get("SGTK_FORCE_STANDARD_LOGIN_DIALOG"):
-                logger.info("Using the standard login dialog with the Flow Production Tracking")
+                logger.info(
+                    "Using the standard login dialog with the Flow Production Tracking"
+                )
             else:
                 if _is_running_in_desktop():
-                    can_use_web = can_use_web or self.site_info.autodesk_identity_enabled
+                    can_use_web = (
+                        can_use_web or self.site_info.autodesk_identity_enabled
+                    )
 
                 # If we have full support for Web-based login, or if we enable it in our
                 # environment, use the Unified Login Flow for all authentication modes.
                 if get_shotgun_authenticator_support_web_login():
-                    can_use_web = can_use_web or self.site_info.unified_login_flow_enabled
+                    can_use_web = (
+                        can_use_web or self.site_info.unified_login_flow_enabled
+                    )
 
         if method_selected:
             # Selecting requested mode (credentials, qt_web_login or app_session_launcher)
@@ -504,9 +518,7 @@ class LoginDialog(QtGui.QDialog):
             method_selected = session_cache.get_preferred_method(site)
 
         # Make sure that the method_selected is currently supported
-        if (
-            method_selected == auth_constants.METHOD_WEB_LOGIN and not can_use_web
-        ) or (
+        if (method_selected == auth_constants.METHOD_WEB_LOGIN and not can_use_web) or (
             method_selected == auth_constants.METHOD_ASL and not can_use_asl
         ):
             method_selected = None
@@ -518,9 +530,7 @@ class LoginDialog(QtGui.QDialog):
             )
 
         # Make sure that the method_selected is currently supported
-        if (
-            method_selected == auth_constants.METHOD_WEB_LOGIN and not can_use_web
-        ) or (
+        if (method_selected == auth_constants.METHOD_WEB_LOGIN and not can_use_web) or (
             method_selected == auth_constants.METHOD_ASL and not can_use_asl
         ):
             method_selected = None
@@ -691,7 +701,9 @@ class LoginDialog(QtGui.QDialog):
             "Logged In",
             properties={
                 "authentication_method": self.site_info.user_authentication_method,
-                "authentication_experience": auth_constants.method_resolve.get(self.method_selected),
+                "authentication_experience": auth_constants.method_resolve.get(
+                    self.method_selected
+                ),
                 "authentication_interface": "qt_dialog",
                 "authentication_renewal": self._is_session_renewal,
             },
@@ -760,7 +772,10 @@ class LoginDialog(QtGui.QDialog):
 
         # Cleanup the URL and update the GUI.
         if self.method_selected != auth_constants.METHOD_BASIC:
-            if site.startswith("http://") and "SGTK_AUTH_ALLOW_NO_HTTPS" not in os.environ:
+            if (
+                site.startswith("http://")
+                and "SGTK_AUTH_ALLOW_NO_HTTPS" not in os.environ
+            ):
                 site = "https" + site[4:]
             self.ui.site.setEditText(site)
 

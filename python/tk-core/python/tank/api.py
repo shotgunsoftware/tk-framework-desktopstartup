@@ -12,20 +12,22 @@
 Classes for the main Sgtk API.
 """
 
-import os
 import glob
+import os
 
-from . import folder
-from . import context
-from .util import shotgun, yaml_cache
+from . import (
+    LogManager,
+    constants,
+    context,
+    folder,
+    pipelineconfig,
+    pipelineconfig_factory,
+    pipelineconfig_utils,
+)
 from .errors import TankError, TankMultipleMatchingTemplatesError
 from .path_cache import PathCache
 from .template import read_templates
-from . import constants
-from . import pipelineconfig
-from . import pipelineconfig_utils
-from . import pipelineconfig_factory
-from . import LogManager
+from .util import shotgun, yaml_cache
 
 log = LogManager.get_logger(__name__)
 
@@ -38,7 +40,7 @@ class Sgtk(object):
     manipulation and the Toolkit template system.
     """
 
-    (DEFAULT, CENTRALIZED, DISTRIBUTED) = range(3)
+    DEFAULT, CENTRALIZED, DISTRIBUTED = range(3)
 
     def __init__(self, project_path):
         """
@@ -1032,7 +1034,6 @@ def get_authenticated_user():
     :returns: A :class:`~sgtk.authentication.ShotgunUser` derived object if set,
         None otherwise.
     """
-    global _authenticated_user
     return _authenticated_user
 
 

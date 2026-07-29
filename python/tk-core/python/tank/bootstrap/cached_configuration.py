@@ -9,21 +9,18 @@
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
 import os
-import sys
-import traceback
 import pprint
-
-from . import constants
-
-from ..descriptor import create_descriptor, Descriptor
-from .errors import TankBootstrapError, TankMissingTankNameError
-
-from ..util import filesystem, version
+import traceback
 
 from tank_vendor import yaml
+
+from .. import LogManager
+from ..descriptor import Descriptor, create_descriptor
+from ..util import filesystem
+from . import constants
 from .configuration import Configuration
 from .configuration_writer import ConfigurationWriter
-from .. import LogManager
+from .errors import TankBootstrapError, TankMissingTankNameError
 
 log = LogManager.get_logger(__name__)
 
@@ -140,7 +137,7 @@ class CachedConfiguration(Configuration):
             % (storage_roots.roots_file, storage_roots.required_roots)
         )
 
-        (_, unmapped_roots) = storage_roots.get_local_storages(self._sg_connection)
+        _, unmapped_roots = storage_roots.get_local_storages(self._sg_connection)
 
         # get a list of all defined storage roots without a corresponding PTR
         # local storage defined
@@ -258,10 +255,10 @@ class CachedConfiguration(Configuration):
         try:
             # Move to backup needs to undo changes when failing because we need to put the configuration
             # in a usable state.
-            (config_backup_path, core_backup_path) = self._config_writer.move_to_backup(
+            config_backup_path, core_backup_path = self._config_writer.move_to_backup(
                 undo_on_error=True
             )
-        except Exception as e:
+        except Exception:
             log.exception(
                 "Unexpected error while making a backup of the configuration. Toolkit will use the "
                 "original configuration."

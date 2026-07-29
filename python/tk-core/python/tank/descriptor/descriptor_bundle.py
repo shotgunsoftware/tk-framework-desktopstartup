@@ -8,13 +8,11 @@
 # agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
-from .descriptor import Descriptor
-from .errors import TankDescriptorError, CheckVersionConstraintsError
-from . import constants
-from .. import LogManager
+from .. import LogManager, pipelineconfig_utils
 from ..util.version import is_version_older
-from ..util import shotgun
-from .. import pipelineconfig_utils
+from . import constants
+from .descriptor import Descriptor
+from .errors import CheckVersionConstraintsError, TankDescriptorError
 
 log = LogManager.get_logger(__name__)
 

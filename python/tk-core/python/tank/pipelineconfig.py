@@ -12,26 +12,20 @@
 Encapsulates the pipeline configuration and helps navigate and resolve paths
 across storages, configurations etc.
 """
-import os
+
 import glob
+import os
 import pickle
 
 from tank_vendor import yaml
 
-from .errors import TankError, TankUnreadableFileError
-from .util.version import is_version_older
-from . import constants
-from .platform.environment import InstalledEnvironment, WritableEnvironment
-from .util import shotgun, yaml_cache
-from .util import ShotgunPath
-from .util import StorageRoots
-from .util.pickle import retrieve_env_var_pickled
-from . import hook
-from . import pipelineconfig_utils
-from . import template_includes
-from . import LogManager
-
+from . import LogManager, constants, hook, pipelineconfig_utils, template_includes
 from .descriptor import Descriptor, create_descriptor, descriptor_uri_to_dict
+from .errors import TankError, TankUnreadableFileError
+from .platform.environment import InstalledEnvironment, WritableEnvironment
+from .util import ShotgunPath, StorageRoots, shotgun, yaml_cache
+from .util.pickle import retrieve_env_var_pickled
+from .util.version import is_version_older
 
 log = LogManager.get_logger(__name__)
 
@@ -664,7 +658,7 @@ class PipelineConfiguration(object):
             return None
 
         # get the storage data for required roots
-        (mapped_roots, unmapped_roots) = self.get_local_storage_mapping()
+        mapped_roots, unmapped_roots = self.get_local_storage_mapping()
 
         if root_name in mapped_roots:
             return mapped_roots[root_name]
@@ -1127,7 +1121,7 @@ class PipelineConfiguration(object):
         env_names = []
         for f in glob.glob(self.get_environment_path("*")):
             file_name = os.path.basename(f)
-            (name, _) = os.path.splitext(file_name)
+            name, _ = os.path.splitext(file_name)
             env_names.append(name)
         return env_names
 
@@ -1215,7 +1209,7 @@ class PipelineConfiguration(object):
 
         try:
             return_value = hook.execute_hook(hook_path, parent, **kwargs)
-        except:
+        except Exception:
             # log the full callstack to make sure that whatever the
             # calling code is doing, this error is logged to help
             # with troubleshooting and support
@@ -1249,9 +1243,6 @@ class PipelineConfiguration(object):
         )
         hook_paths = [os.path.join(hooks_path, file_name)]
 
-        # the hook.method display name used when logging the metric
-        hook_method_display = "%s.%s" % (hook_name, method_name)
-
         # now add a custom hook if that exists.
         hook_folder = self.get_core_hooks_location()
         hook_path = os.path.join(hook_folder, file_name)
@@ -1262,7 +1253,7 @@ class PipelineConfiguration(object):
             return_value = hook.execute_hook_method(
                 hook_paths, parent, method_name, **kwargs
             )
-        except:
+        except Exception:
             # log the full callstack to make sure that whatever the
             # calling code is doing, this error is logged to help
             # with troubleshooting and support

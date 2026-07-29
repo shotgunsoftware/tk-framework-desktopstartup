@@ -13,27 +13,25 @@ Resolver module. This module provides a way to resolve a pipeline configuration
 on disk.
 """
 
-import sys
-import os
 import fnmatch
+import os
 import pprint
+import sys
 
+from .. import LogManager
 from ..descriptor import (
     Descriptor,
     create_descriptor,
     descriptor_uri_to_dict,
     is_descriptor_version_missing,
 )
-from .errors import TankBootstrapError, TankBootstrapInvalidPipelineConfigurationError
+from ..descriptor.descriptor_installed_config import InstalledConfigDescriptor
+from ..util import LocalFileStorageManager, ShotgunPath, filesystem
+from . import constants
 from .baked_configuration import BakedConfiguration
 from .cached_configuration import CachedConfiguration
+from .errors import TankBootstrapError, TankBootstrapInvalidPipelineConfigurationError
 from .installed_configuration import InstalledConfiguration
-from ..descriptor.descriptor_installed_config import InstalledConfigDescriptor
-from ..util import filesystem
-from ..util import ShotgunPath
-from ..util import LocalFileStorageManager
-from .. import LogManager
-from . import constants
 
 log = LogManager.get_logger(__name__)
 
@@ -376,9 +374,9 @@ class ConfigurationResolver(object):
                 # field. Note that this may be None if for example the pipeline configuration
                 # is defined for another operating system.
                 try:
-                    pipeline_config[
-                        "config_descriptor"
-                    ] = self._create_config_descriptor(sg_connection, pipeline_config)
+                    pipeline_config["config_descriptor"] = (
+                        self._create_config_descriptor(sg_connection, pipeline_config)
+                    )
                     yield pipeline_config
 
                 except TankBootstrapInvalidPipelineConfigurationError as e:
@@ -841,7 +839,9 @@ class ConfigurationResolver(object):
                 "Will use pipeline configuration id '%s'" % pipeline_config_identifier
             )
 
-            log.debug("Requesting pipeline configuration data from Flow Production Tracking...")
+            log.debug(
+                "Requesting pipeline configuration data from Flow Production Tracking..."
+            )
 
             # Fetch the one and only config that matches this id.
             pipeline_config = sg_connection.find_one(
@@ -869,7 +869,9 @@ class ConfigurationResolver(object):
 
             # We couldn't resolve anything from Shotgun, so we'll resolve the configuration using
             # an offline resolve.
-            return self.resolve_not_found_sg_configuration(fallback_config_descriptor, sg_connection)
+            return self.resolve_not_found_sg_configuration(
+                fallback_config_descriptor, sg_connection
+            )
 
         else:
             # Something was found in Shotgun, which means we've also potentially resolved its
