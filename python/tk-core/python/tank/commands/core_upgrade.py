@@ -11,21 +11,20 @@
 """
 Tank command allowing to do core updates.
 """
-from ..errors import TankError
-from .action_base import Action
 
+import copy
+import optparse
 import os
 import sys
 import textwrap
-import optparse
-import copy
-
-from ..util import shotgun
-from .. import pipelineconfig_utils
-from . import console_utils
-from ..util.version import is_version_newer, is_version_head
 
 from tank_vendor import yaml
+
+from .. import pipelineconfig_utils
+from ..errors import TankError
+from ..util import shotgun
+from ..util.version import is_version_head, is_version_newer
+from .action_base import Action
 
 
 # FIXME: This should be refactored into something that can be used by other commands.
@@ -197,7 +196,7 @@ class CoreUpdateAction(Action):
 
         elif status == TankCoreUpdater.UPDATE_POSSIBLE:
 
-            (summary, url) = installer.get_release_notes()
+            summary, url = installer.get_release_notes()
 
             log.info("")
             log.info("Newer version %s is available." % new_version)

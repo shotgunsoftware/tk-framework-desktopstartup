@@ -13,18 +13,13 @@ Default implementation for the Tank Dialog
 
 """
 
-from . import QtCore, QtGui
-from . import ui_tank_dialog
-from . import TankDialogBase
-from .config_item import ConfigItem
-from .. import engine
-from .. import application
-from .. import constants
-from ...errors import TankError
-
-import sys
-import os
 import inspect
+import os
+
+from ...errors import TankError
+from .. import application, constants, engine
+from . import QtCore, QtGui, TankDialogBase, ui_tank_dialog
+from .config_item import ConfigItem
 
 
 class TankQDialog(TankDialogBase):
@@ -70,7 +65,7 @@ class TankQDialog(TankDialogBase):
 
                 # stop if we've previously checked this class:
                 cls_type = checked_classes.get(cls, None)
-                if cls_type != None:
+                if cls_type is not None:
                     break
                 checked_classes[cls] = ""
 
@@ -104,7 +99,7 @@ class TankQDialog(TankDialogBase):
                         # assume that this is derived from an actual tk-multi-workfiles.SaveAsForm!
                         cls_type = "SaveAsForm"
 
-                if cls_type != None:
+                if cls_type is not None:
                     checked_classes[cls] = cls_type
                     break
 
@@ -331,7 +326,8 @@ class TankQDialog(TankDialogBase):
             tooltip += "<b>System Information</b>"
             tooltip += "<hr>"
             tooltip += (
-                "<b>Flow Production Tracking Toolkit Version: </b>%s<br>" % self._bundle.tank.version
+                "<b>Flow Production Tracking Toolkit Version: </b>%s<br>"
+                % self._bundle.tank.version
             )
             tooltip += "<b>Pipeline Config: </b>%s<br>" % pc.get_name()
             tooltip += "<b>Config Path: </b>%s<br>" % pc.get_path()
@@ -360,7 +356,7 @@ class TankQDialog(TankDialogBase):
                 context_info += "You are currently running in the %s environment." % (
                     self._bundle.engine.environment["name"]
                 )
-            except:
+            except Exception:
                 pass
 
             self.ui.app_work_area_info.setText(context_info)

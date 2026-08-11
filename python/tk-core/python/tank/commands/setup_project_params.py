@@ -9,29 +9,21 @@
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
 import os
+import sys
 import tempfile
 import uuid
-import sys
-
-from . import constants
-from . import util
-
-from ..util import StorageRoots
-from ..util import sgre as re
-from ..util import shotgun
-from ..util import filesystem
-from ..util import is_windows
-from ..util.version import is_version_newer
-from ..util.zip import unzip_file, zip_file
-
-from .. import hook
-from ..errors import TankError, TankErrorProjectIsSetup
-from .. import pipelineconfig_utils
-from ..descriptor import create_descriptor, Descriptor
 
 from tank_vendor import yaml
 
-from ..util import ShotgunPath
+from .. import hook, pipelineconfig_utils
+from ..descriptor import Descriptor, create_descriptor
+from ..errors import TankError, TankErrorProjectIsSetup
+from ..util import ShotgunPath, StorageRoots, filesystem
+from ..util import sgre as re
+from ..util import shotgun
+from ..util.version import is_version_newer
+from ..util.zip import unzip_file, zip_file
+from . import constants, util
 
 
 class ProjectSetupParameters(object):
@@ -57,7 +49,7 @@ class ProjectSetupParameters(object):
     - run project setup!
     """
 
-    (CENTRALIZED_CONFIG, DISTRIBUTED_CONFIG) = range(2)
+    CENTRALIZED_CONFIG, DISTRIBUTED_CONFIG = range(2)
 
     def __init__(self, log, sg):
         """
@@ -514,8 +506,8 @@ class ProjectSetupParameters(object):
 
             # if force is false then tank_name must be empty
             if (
-                self.get_auto_path_mode() == False
-                and force == False
+                self.get_auto_path_mode() is False
+                and force is False
                 and proj["tank_name"] is not None
             ):
                 raise TankErrorProjectIsSetup()
@@ -1019,7 +1011,7 @@ class TemplateConfiguration(object):
         # now extract the cfg and validate
         old_umask = os.umask(0)
         try:
-            (self._cfg_folder, self._version, self._config_mode) = self._process_config(
+            self._cfg_folder, self._version, self._config_mode = self._process_config(
                 config_uri
             )
         finally:
@@ -1272,7 +1264,7 @@ class TemplateConfiguration(object):
         storage_info = {}
 
         # do the storage lookup and mapping in PTR
-        (local_storage_lookup, unmapped_roots) = self._storage_roots.get_local_storages(
+        local_storage_lookup, unmapped_roots = self._storage_roots.get_local_storages(
             self._sg
         )
 

@@ -29,9 +29,8 @@ import hashlib
 import json
 import os
 
-from . import metrics
-
 from .. import LogManager
+from . import metrics
 
 logger = LogManager.get_logger(__name__)
 
@@ -97,7 +96,7 @@ def consume():
             logger.debug("Invalid cached metric format")
             continue
 
-        (args, kwargs) = data
+        args, kwargs = data
         if not isinstance(args, list) or not isinstance(kwargs, dict):
             logger.debug("Invalid cached metric format")
             continue

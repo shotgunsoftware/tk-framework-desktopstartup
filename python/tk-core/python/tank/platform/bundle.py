@@ -827,7 +827,7 @@ class TankBundle(object):
             # Entries are on the following form
             #
             # hook_publish_file:
-            #    type: hook
+            # type: hook
             #    description: Called when a file is published, e.g. copied from a work area to a publish area.
             #    default_value: maya_publish_file
             #
@@ -1074,7 +1074,7 @@ class TankBundle(object):
         # therefore get an error.
         try:
             engine_name = self.engine.name
-        except:
+        except Exception:
             engine_name = None
 
         return engine_name
@@ -1133,7 +1133,7 @@ def _post_process_settings_r(tk, key, value, schema, bundle=None):
         items = schema.get("items", {})
         # note - we assign the original values here because we
         processed_val = value
-        for (key, value_schema) in items.items():
+        for key, value_schema in items.items():
             processed_val[key] = _post_process_settings_r(
                 tk=tk, key=key, value=value[key], schema=value_schema, bundle=bundle
             )

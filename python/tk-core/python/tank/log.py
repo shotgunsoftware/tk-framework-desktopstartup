@@ -220,15 +220,14 @@ Python provides a large number of log handlers as part of its standard library.
 For more information, see https://docs.python.org/2/library/logging.handlers.html#module-logging.handlers
 """
 
-
 import logging
-from logging.handlers import RotatingFileHandler
 import os
-import sys
 import time
-import weakref
 import uuid
+import weakref
 from functools import wraps
+from logging.handlers import RotatingFileHandler
+
 from . import constants
 
 
@@ -303,7 +302,7 @@ class LogManager(object):
 
             try:
                 os.rename(self.baseFilename, temp_backup_name)
-            except:
+            except Exception:
                 # It failed, so we'll simply append from now on.
                 log.debug(
                     "Cannot rotate log file '%s'. Logging will continue to this file, "
@@ -318,7 +317,7 @@ class LogManager(object):
             # so doRollover can do its work.
             try:
                 os.rename(temp_backup_name, self.baseFilename)
-            except:
+            except Exception:
                 # For some reason we couldn't move the backup in its place.
                 log.debug(
                     "Unexpected issue while rotating log file '%s'. Logging will continue to this file, "
@@ -338,7 +337,7 @@ class LogManager(object):
             # disable rollover and append to the current log.
             try:
                 RotatingFileHandler.doRollover(self)
-            except:
+            except Exception:
                 # Something probably failed trying to rollover the backups,
                 # since the code above proved that in theory the main log file
                 # should be renamable. In any case, we didn't succeed in renaming,
@@ -595,7 +594,7 @@ class LogManager(object):
 
     @property
     def log_file(self):
-        """ Full path to the current log file or None if logging is not active. """
+        """Full path to the current log file or None if logging is not active."""
         return self._std_file_handler_log_file
 
     @property
@@ -832,6 +831,8 @@ sgtk_root_logger.propagate = False
 # this should not be changed, but any filtering
 # should happen via log handlers
 sgtk_root_logger.setLevel(logging.DEBUG)
+
+
 #
 # create a 'nop' log handler to be attached.
 # this is to avoid warnings being reported that

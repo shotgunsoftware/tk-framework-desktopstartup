@@ -12,8 +12,9 @@
 Utilities relating to Shotgun entities
 """
 
-from . import constants, sgre as re
 from ..errors import TankError
+from . import constants
+from . import sgre as re
 
 # A dictionary for Shotgun entities which do not store their name
 # in the standard "code" field.
@@ -165,7 +166,7 @@ class EntityExpression(object):
                 regex_obj = None
 
                 if ":" in field_token_expression:
-                    (full_field_name, regex) = field_token_expression.split(":", 1)
+                    full_field_name, regex = field_token_expression.split(":", 1)
 
                     try:
                         regex_obj = re.compile(regex, re.UNICODE)
@@ -428,7 +429,7 @@ class EntityExpression(object):
         match = regex_obj.match(value_to_convert)
         if match is None:
             # no match. return empty string
-            resolved_value = u""
+            resolved_value = ""
         else:
             # we have a match object. concatenate the groups
             resolved_value = "".join(match.groups())

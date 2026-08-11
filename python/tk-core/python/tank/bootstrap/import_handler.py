@@ -102,7 +102,7 @@ class CoreImportHandler(object):
         try:
             if prev_log_file:
                 tank.LogManager().initialize_base_file_handler_from_path(prev_log_file)
-        except AttributeError as e:
+        except AttributeError:
             # older versions of the API may not have this defined.
             log.debug(
                 "Switching to a version of the core API that doesn't "
@@ -289,20 +289,14 @@ class CoreImportHandler(object):
             # later raise FileNotFoundError instead of the expected ImportError
             # when the module doesn't exist on disk.
             if os.path.isdir(os.path.join(package_path[0], module_name)):
-                module_file = os.path.join(
-                    package_path[0], module_name, "__init__.py"
-                )
+                module_file = os.path.join(package_path[0], module_name, "__init__.py")
             else:
-                module_file = os.path.join(
-                    package_path[0], module_name + ".py"
-                )
+                module_file = os.path.join(package_path[0], module_name + ".py")
 
             if not os.path.isfile(module_file):
                 return None
 
-            loader = importlib.machinery.SourceFileLoader(
-                module_fullname, module_file
-            )
+            loader = importlib.machinery.SourceFileLoader(module_fullname, module_file)
             spec = importlib.util.spec_from_loader(loader.name, loader)
             self._module_info[module_fullname] = spec
         except ImportError:
@@ -328,9 +322,7 @@ class CoreImportHandler(object):
         try:
             spec.loader.exec_module(module)
         except FileNotFoundError as e:
-            raise ImportError(
-                f"No module named '{module_fullname}'"
-            ) from e
+            raise ImportError(f"No module named '{module_fullname}'") from e
 
         # the module needs to know the loader so that reload() works
         module.__loader__ = self

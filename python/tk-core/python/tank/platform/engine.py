@@ -12,44 +12,39 @@
 Defines the base class for all Tank Engines.
 """
 
-import os
-import sys
-import logging
-import pprint
-import traceback
+from __future__ import annotations  # required to support python 3.9
+
 import inspect
-import weakref
+import logging
+import os
+import pprint
+import sys
 import threading
+import traceback
+import weakref
 
-from ..util.qt_importer import QtImporter
-from ..util.loader import load_plugin
+from tank.flowam import host as flow_host  # noqa: F401 (used in return annotation)
+from tank.flowam import utils as flow_utils
+
 from .. import hook
-
 from ..errors import TankError
+from ..log import LogManager
+from ..util import metrics_cache
+from ..util import sgre as re
+from ..util.loader import load_plugin
+from ..util.metrics import EventMetric, MetricsDispatcher
+from ..util.qt_importer import QtImporter
+from . import application, constants, events, qt, qt5, qt6, validation
+from .bundle import TankBundle
+from .engine_logging import ToolkitEngineHandler, ToolkitEngineLegacyHandler
 from .errors import (
-    TankEngineInitError,
-    TankUnresolvedEnvironmentError,
     TankContextChangeNotSupportedError,
     TankEngineEventError,
+    TankEngineInitError,
     TankMissingEngineError,
+    TankUnresolvedEnvironmentError,
 )
-
-from ..util import sgre as re
-from ..util.metrics import EventMetric
-from ..util.metrics import MetricsDispatcher
-from ..util import metrics_cache
-from ..log import LogManager
-
-from . import application
-from . import constants
-from . import validation
-from . import events
-from . import qt
-from . import qt5
-from . import qt6
-from .bundle import TankBundle
 from .framework import setup_frameworks
-from .engine_logging import ToolkitEngineHandler, ToolkitEngineLegacyHandler
 
 # std core level logger
 core_logger = LogManager.get_logger(__name__)
@@ -67,6 +62,11 @@ class Engine(TankBundle):
         """
         Engine instances are constructed by the toolkit launch process
         and various factory methods such as :meth:`start_engine`.
+
+        For Flow-enabled contexts (``context.flow_project_id`` set), this
+        also runs ``flow_utils.init_flow()`` to set up the Flow Integration
+        SDK session and provision pipeline schemas when the SG schema
+        config version does not match the bundled config.
 
         :param tk: :class:`~sgtk.Sgtk` instance
         :param context: A context object to define the context on disk where the engine is operating
@@ -104,6 +104,10 @@ class Engine(TankBundle):
         # to access the invoker don't trip on undefined variables.
         self._invoker = None
         self._async_invoker = None
+
+        # Flow host object used in Flow asset management integration
+        # Engines that support Flow integration will initialize this value to an instance of FlowHost
+        self._flow_host = None
 
         # get the engine settings
         settings = self.__env.get_engine_settings(self.__engine_instance_name)
@@ -161,6 +165,18 @@ class Engine(TankBundle):
             if not os.path.exists(init_path):
                 self.log_debug("Appending to PYTHONPATH: %s" % python_path)
                 sys.path.append(python_path)
+
+        # Do Flow sdk initialization if context is configured with Flow
+        if context.flow_project_id:
+            try:
+                flow_utils.init_flow(
+                    tk.pipeline_configuration,
+                    tk.shotgun,
+                    context,
+                )
+            except RuntimeError as exc:
+                self.log_error("Error occurred during Flow initialization!")
+                self.log_exception(exc)
 
         # Note, 'init_engine()' is now deprecated and all derived initialisation should be
         # done in either 'pre_app_init()' or 'post_app_init()'.  'init_engine()' is left
@@ -322,7 +338,7 @@ class Engine(TankBundle):
 
         if self.has_ui:
             # only import QT if we have a UI
-            from .qt import QtGui, QtCore
+            from .qt import QtCore, QtGui
 
             url = QtCore.QUrl.fromLocalFile(LogManager().log_folder)
             status = QtGui.QDesktopServices.openUrl(url)
@@ -410,10 +426,10 @@ class Engine(TankBundle):
         if self.has_ui:
             # we cannot import QT until here as non-ui engines don't have QT defined.
             try:
+                from .qt import QtCore
                 from .qt.busy_dialog import BusyDialog
-                from .qt import QtGui, QtCore
 
-            except:
+            except Exception:
                 # QT import failed. This may be because someone has upgraded the core
                 # to the latest but are still running a earlier version of the
                 # Shotgun or Shell engine where the self.has_ui method is not
@@ -684,6 +700,18 @@ class Engine(TankBundle):
         """
         return True
 
+    @property
+    def flow_host(self) -> flow_host.FlowHost | None:  # noqa: F811
+        """If the current context is Flow enabled, and the current
+        engine supports Flow integration, this value will be an instance of FlowHost.
+        The FlowHost class implements the required interface for the Flow asset management
+        integration to work within a dcc/engine.
+
+        If the current context is not Flow enabled, or the current engine has not had
+        Flow support added, the value will be None.
+        """
+        return self._flow_host
+
     ##########################################################################################
     # init and destroy
 
@@ -774,7 +802,7 @@ class Engine(TankBundle):
         # context change, it's that the target context isn't configured properly.
         # As such, we'll let any exceptions (mostly TankEngineInitError) bubble
         # up since it's a critical error case.
-        (new_env, engine_descriptor) = get_env_and_descriptor_for_engine(
+        new_env, engine_descriptor = get_env_and_descriptor_for_engine(
             engine_name=self.instance_name, tk=self.tank, context=new_context
         )
 
@@ -808,7 +836,6 @@ class Engine(TankBundle):
             # a context change. If one of them is not, then we remove it
             # from the persistent app pool, which will force it to be
             # rebuilt when apps are loaded later on.
-            non_compliant_app_paths = []
             for install_path, app_instances in self.__application_pool.items():
                 for instance_name, app in app_instances.items():
                     self.log_debug(
@@ -1198,7 +1225,7 @@ class Engine(TankBundle):
             self._invoker if invoker_id == self._SYNC_INVOKER else self._async_invoker
         )
         if invoker:
-            from .qt import QtGui, QtCore
+            from .qt import QtCore, QtGui
 
             if (
                 QtGui.QApplication.instance()
@@ -1247,7 +1274,7 @@ class Engine(TankBundle):
         """
         # return a dictionary grouping all the commands by instance name
         commands_by_instance = {}
-        for (name, value) in self.commands.items():
+        for name, value in self.commands.items():
             app_instance = value["properties"].get("app")
             if app_instance is None:
                 continue
@@ -1684,7 +1711,8 @@ class Engine(TankBundle):
             self.logger.exception(exc)
 
             import traceback
-            from sgtk.platform.qt import QtGui, QtCore
+
+            from sgtk.platform.qt import QtCore, QtGui
 
             # A very simple widget that ensures that the exception is visible and
             # selectable should the user need to copy/paste it into a support
@@ -1984,7 +2012,7 @@ class Engine(TankBundle):
         :returns: Stylesheet string with replacements applied
         """
         processed_style_sheet = style_sheet
-        for (token, value) in constants.SG_STYLESHEET_CONSTANTS.items():
+        for token, value in constants.SG_STYLESHEET_CONSTANTS.items():
             processed_style_sheet = processed_style_sheet.replace(
                 "{{%s}}" % token, value
             )
@@ -2128,7 +2156,12 @@ class Engine(TankBundle):
 
         :returns: dict
         """
-        base = {"qt_core": None, "qt_gui": None, "qt_web_engine_widgets": None, "dialog_base": None}
+        base = {
+            "qt_core": None,
+            "qt_gui": None,
+            "qt_web_engine_widgets": None,
+            "dialog_base": None,
+        }
         try:
             importer = QtImporter()
             base["qt_core"] = importer.QtCore
@@ -2140,7 +2173,7 @@ class Engine(TankBundle):
                 base["dialog_base"] = None
             base["wrapper"] = importer.binding
             base["shiboken"] = importer.shiboken
-        except:
+        except Exception:
 
             self.log_exception(
                 "Default engine QT definition failed to find QT. "
@@ -2441,7 +2474,7 @@ class Engine(TankBundle):
         invoker = None
         async_invoker = None
         if self.has_ui:
-            from .qt import QtGui, QtCore
+            from .qt import QtCore, QtGui
 
             # Classes are defined locally since Qt might not be available.
             if QtGui and QtCore:
@@ -2863,7 +2896,6 @@ def current_engine():
 
     :returns: :class:`Engine` instance or None if no engine is running.
     """
-    global g_current_engine
     return g_current_engine
 
 
@@ -2892,7 +2924,7 @@ def get_engine_path(engine_name, tk, context):
     """
     # get environment and engine location
     try:
-        (env, engine_descriptor) = get_env_and_descriptor_for_engine(
+        env, engine_descriptor = get_env_and_descriptor_for_engine(
             engine_name, tk, context
         )
     except TankEngineInitError:
@@ -3068,7 +3100,7 @@ def _start_engine(engine_name, tk, old_context, new_context):
         LogManager().initialize_base_file_handler(engine_name)
 
     # get environment and engine location
-    (env, engine_descriptor) = get_env_and_descriptor_for_engine(
+    env, engine_descriptor = get_env_and_descriptor_for_engine(
         engine_name, tk, new_context
     )
 
