@@ -169,7 +169,7 @@ from shotgun_desktop.errors import (
     ShotgunDesktopError,
     RequestRestartException,
     UpgradeEngine200Error,
-    EngineNotCompatibleWithDesktop16,
+    EngineNotCompatibleWithDesktop,
     UpgradeCoreError,
     UpgradeCorePython3Error,
     InvalidPipelineConfiguration,
@@ -452,14 +452,7 @@ def __launch_app(app, splash, user, app_bootstrap, settings):
             "python/tk_desktop/".replace("/", os.path.sep)
             in deepest.tb_frame.f_code.co_filename
         ):
-            raise EngineNotCompatibleWithDesktop16(app_bootstrap.get_version())
-        raise
-    except Exception as e:
-        # We may end up here when running with an older version of core pre 0.19.
-        # If we are running a pre 0.19 version of core and we are using Python 3
-        # Then we will likely hit an error: ModuleNotFoundError: No module named 'Cookie'
-        if "No module named 'Cookie'" in e.args:
-            raise UpgradeCorePython3Error()
+            raise EngineNotCompatibleWithDesktop(app_bootstrap.get_version())
         raise
 
     return __post_bootstrap_engine(splash, app_bootstrap, engine, settings)
@@ -620,25 +613,9 @@ def __post_bootstrap_engine(splash, app_bootstrap, engine, settings):
     # doesn't include browser integration, so we'll launch it ourselves.
     server = None
 
-    try:
-        return _run_engine(
-            engine, splash, startup_version, app_bootstrap, startup_desc, settings
-        )
-    except TypeError as e:
-        # When running in Python 3 mode and launching into tk-desktop 2.5.0, the engine
-        # does support PySide2, but the engine doesn't yet support Python 3 fully and the gui
-        # can't initialize, so a TypeError will be launched by qRegisterResourceData.
-        # So catch it, and let the user know that this error is due to missing Python3
-        # support for the engine.
-        if sys.version_info[0] != 3:
-            raise
-        if (
-            "PySide2.QtCore.qRegisterResourceData' called with wrong argument types"
-            in str(e)
-        ):
-            raise EngineNotCompatibleWithDesktop16(app_bootstrap.get_version())
-        raise
-
+    return _run_engine(
+        engine, splash, startup_version, app_bootstrap, startup_desc, settings
+    )
 
 def __ensure_engine_compatible_with_qt_version(engine, app_version):
     """
@@ -663,8 +640,8 @@ def __ensure_engine_compatible_with_qt_version(engine, app_version):
         return
 
     # Versions of desktop older than v2.5.0 have issues with desktop 1.6.1+, so raise an error.
-    if is_version_newer_or_equal(app_version, "v1.6.1"):
-        raise EngineNotCompatibleWithDesktop16(app_version)
+    if is_version_newer_or_equal(app_version, "v1.8.0"):
+        raise EngineNotCompatibleWithDesktop(app_version)
 
 
 def _is_pipeline_config_disabled(error_message):
