@@ -1,0 +1,8 @@
+[packaging]
+exclude=
+    .pre-commit-config.yaml
+    azure-pipelines.yml
+    build_resources.yml
+    codecov.yml
+    tests
+    tk_core_update.sh
