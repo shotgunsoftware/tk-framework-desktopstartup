@@ -22,7 +22,7 @@ class Splash(QtGui.QDialog):
         """
         Constructor. Widget is initially hidden.
         """
-        QtGui.QDialog.__init__(self, parent)
+        super().__init__(parent)
 
         self.ui = splash.Ui_Splash()
         self.ui.setupUi(self)
@@ -50,7 +50,7 @@ class Splash(QtGui.QDialog):
         """
         Shows the dialog of top of all other dialogs.
         """
-        QtGui.QDialog.show(self)
+        super().show()
         self.raise_()
         self.activateWindow()
 
@@ -61,4 +61,4 @@ class Splash(QtGui.QDialog):
         # There's no sense showing the previous message when we show the
         # splash next time.
         self.set_message("")
-        QtGui.QDialog.hide(self)
+        super().hide()
