@@ -56,6 +56,34 @@ def _out_of_date_check(latest_descriptor, current_desc):
             % current_desc.get_version(),
         )
         return False
+
+    # Test if app_store version is lower than the current version
+    try:
+        import packaging.version
+
+        current_version = packaging.version.parse(current_desc.get_version())
+        app_store_version = packaging.version.parse(latest_descriptor.get_version())
+    except ImportError:
+        logger.exception("Could not import packaging module")
+    except packaging.version.InvalidVersion:
+        logger.warning(
+            "Could not parse version(s) %s/%s",
+            current_desc.get_version(),
+            latest_descriptor.get_version(),
+        )
+    else:
+        if current_version <= app_store_version:
+            pass
+        elif os.environ.get("SGTK_STARTUP_ALLOW_OLDER_VERSION"):
+            pass
+        else:
+            logger.warning(
+                "Ignore app_store version %s since current version is newer %s",
+                latest_descriptor.version,
+                current_desc.get_version(),
+            )
+            return False
+
     return latest_descriptor.get_version() != current_desc.get_version()
 
 
