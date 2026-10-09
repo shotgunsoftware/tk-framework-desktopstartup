@@ -23,14 +23,15 @@ import threading
 import traceback
 import weakref
 
-from tank.flowam import host as flow_host  # noqa: F401 (used in return annotation)
-from tank.flowam import utils as flow_utils
+from tank.flowam import (
+    host as flow_host,  # noqa: F401 (used in return annotation)
+    utils as flow_utils,
+)
 
 from .. import hook
 from ..errors import TankError
 from ..log import LogManager
-from ..util import metrics_cache
-from ..util import sgre as re
+from ..util import metrics_cache, sgre as re
 from ..util.loader import load_plugin
 from ..util.metrics import EventMetric, MetricsDispatcher
 from ..util.qt_importer import QtImporter
@@ -272,7 +273,6 @@ class Engine(TankBundle):
         # note: we make an exception for the shotgun engine which is a
         # special case.
         if self.name != constants.SHOTGUN_ENGINE_NAME:
-
             self.register_command(
                 "Open Log Folder",
                 self.__open_log_folder,
@@ -440,7 +440,6 @@ class Engine(TankBundle):
             else:
                 # our qt import worked!
                 if not self.__global_progress_widget:
-
                     # no window exists - create one!
                     (
                         window,
@@ -467,7 +466,6 @@ class Engine(TankBundle):
                     window.show()
 
                 else:
-
                     # just update the message for the existing window
                     self.__global_progress_widget.set_contents(title, details)
 
@@ -1051,9 +1049,9 @@ class Engine(TankBundle):
                 new_name_for_existing = "%s:%s" % (command_prefix, name)
                 self.__commands[new_name_for_existing] = existing_item
                 # Record the command prefix in the properties dictionary for future reference.
-                self.__commands[new_name_for_existing]["properties"][
-                    "prefix"
-                ] = command_prefix
+                self.__commands[new_name_for_existing]["properties"]["prefix"] = (
+                    command_prefix
+                )
                 del self.__commands[name]
                 # Record the original command name to make sure any additional commands
                 # registered with this name are treated as duplicates and fully prefixed.
@@ -1581,12 +1579,10 @@ class Engine(TankBundle):
 
         # in the parent directly, get all the font-specific directories
         for font_dir_name in os.listdir(fonts_parent_dir):
-
             # the specific font directory
             font_dir = os.path.join(fonts_parent_dir, font_dir_name)
 
             if os.path.isdir(font_dir):
-
                 # iterate over the font files and attempt to load them
                 #
                 # NOTE: We're loading the ttf files in reverse order to work around
@@ -1597,7 +1593,6 @@ class Engine(TankBundle):
                 # instead of the regular style. So...we're going to install these in
                 # reverse order so that the regular light style is preferred.
                 for font_file_name in reversed(list(os.listdir(font_dir))):
-
                     # only process actual font files. It appears as though .ttf
                     # is the most common extension for use on win/mac/linux so
                     # for now limit to those files.
@@ -1821,6 +1816,9 @@ class Engine(TankBundle):
 
         Better to be safe though as deleting/releasing a widget that
         still has events in the event queue will cause a hard crash!
+
+        Widgets that are never released here can crash some hosts when
+        they quit: see :meth:`_destroy_qt_dialogs`.
         """
         still_trash = []
         for widget in self.__qt_widget_trash:
@@ -1848,6 +1846,65 @@ class Engine(TankBundle):
         self.log_debug(
             "Widget trash contains %d widgets" % (len(self.__qt_widget_trash))
         )
+
+    def _destroy_qt_dialogs(self):
+        """
+        Close every dialog created by this engine that is still open, then
+        immediately delete the Qt widgets of all closed dialogs.
+
+        When a dialog is closed, its widgets are kept in a widget trash and only
+        deleted once nothing else references them. Widgets with reference
+        cycles, which most app dialogs have, are never deleted that way: they
+        stay alive as parentless top-level widgets until the host application
+        quits. Some hosts destroy these widgets natively as part of their own
+        shutdown, which can crash PySide. For example, release builds of Maya
+        2027.2 (PySide6) crash on quit after a Toolkit dialog was opened and
+        closed.
+
+        Call this method from an engine when the host application starts to
+        quit, while the host and the Qt event loop are still fully alive, for
+        example from a ``kMayaExiting`` callback in Maya. It is not called by
+        :meth:`destroy`, and the engine should not show dialogs afterwards.
+
+        Each dialog still open is closed first, so its app shuts down as if the
+        user had closed it. A dialog whose widget refuses to close is left
+        alone. Then the C++ object of every widget in the trash is deleted right
+        away, rather than with ``deleteLater()``, because deferred deletions
+        might never be processed while the host quits. Python references to
+        these widgets raise ``RuntimeError`` if they are used afterwards.
+        """
+        from .qt import shiboken
+
+        for dialog in self.__created_qt_dialogs[:]:
+            if shiboken is not None and not shiboken.isValid(dialog):
+                # Already deleted, for example with a parent dialog.
+                self.__created_qt_dialogs.remove(dialog)
+                continue
+            try:
+                # The dialog_closed signal moves the dialog and its widget to
+                # the widget trash, see _on_dialog_closed.
+                dialog.close()
+            except Exception:
+                self.logger.exception("Could not close a dialog.")
+
+        if not self.__qt_widget_trash:
+            return
+
+        if shiboken is None:
+            self.logger.debug("Cannot delete the widget trash: no shiboken.")
+            return
+
+        trash = self.__qt_widget_trash
+        self.__qt_widget_trash = []
+        self.logger.debug("Deleting %d widgets in the widget trash." % len(trash))
+        for widget in trash:
+            # detach_widget returns None for a dialog without a widget.
+            if widget is None or not shiboken.isValid(widget):
+                continue
+            try:
+                shiboken.delete(widget)
+            except Exception:
+                self.logger.exception("Could not delete a widget.")
 
     def show_dialog(self, title, bundle, widget_class, *args, **kwargs):
         """
@@ -2174,7 +2231,6 @@ class Engine(TankBundle):
             base["wrapper"] = importer.binding
             base["shiboken"] = importer.shiboken
         except Exception:
-
             self.log_exception(
                 "Default engine QT definition failed to find QT. "
                 "This may need to be subclassed."

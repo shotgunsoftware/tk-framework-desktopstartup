@@ -21,10 +21,15 @@ echo "indicate which version being bundled with core."
 echo ""
 echo "This script is intended to be used by developers and maintainers of the tk-core API."
 echo ""
-echo "Note requires sed on Linux or gsed on MacOS."
+echo "Run it with bash (not python): bash $0 tk-core-tag"
 echo ""
 echo ""
 echo ""
+
+if [[ -z "$1" ]]; then
+    echo "Missing tk-core tag argument." >&2
+    exit 1
+fi
 
 # Stops the script
 set -e
@@ -75,19 +80,9 @@ rm -rf "$DEST/tests"
 rm -rf "$DEST/docs"
 
 echo "Updating tk-core info.yml..."
-if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    sed -i "$DEST/info.yml" -e "s/version: \"HEAD\"/version: \"$1\"/"
-elif [[ "$OSTYPE" == "darwin"* ]]; then
-    if hash gsed 2>/dev/null; then
-        gsed -i "$DEST/info.yml" -e "s/version: \"HEAD\"/version: \"$1\"/"
-    else
-        echo "gsed not found, please install it using brew install gnu-sed"
-        exit 1
-    fi
-else
-    echo "This script should run on Linux or MacOS only."
-    exit 1
-fi
+# "-i.bak" with a suffix is the form accepted by both GNU and BSD sed.
+sed -i.bak -e "s/version: \"HEAD\"/version: \"$1\"/" "$DEST/info.yml"
+rm -f "$DEST/info.yml.bak"
 
 cp python/tk-core/software_credits software_credits
 git add software_credits
