@@ -136,14 +136,14 @@ class UpgradeEngine200Error(ShotgunDesktopError):
         )
 
 
-class EngineNotCompatibleWithDesktop16(ShotgunDesktopError):
+class EngineNotCompatibleWithDesktop(ShotgunDesktopError):
     def __init__(self, app_version):
         super().__init__(
-            "Your version of tk-desktop is not compatible with this PTR desktop app {}.\n"
+            "Your version of tk-desktop is not compatible with this FlowPT Desktop {}.\n"
             "\n"
-            "Please upgrade your site configuration's tk-desktop to v2.5.9+ or "
-            "download PTR desktop app 1.5.9 or earlier <a href='{}'>here</a>".format(
+            "Please upgrade your site configuration's tk-desktop to v2.5.9+ or " ## TODO change
+            "download FlowPT desktop v1.XXX5.9 or earlier <a href='{}'>here</a>".format( # OK but wrong info since unsupported....
                 app_version,
-                "https://community.shotgridsoftware.com/t/a-new-version-of-shotgrid-desktop-has-been-released/13877/99999",
+                "https://community.shotgridsoftware.com/t/13877",
             )
         )
