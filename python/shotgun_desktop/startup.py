@@ -164,19 +164,16 @@ import shotgun_desktop.splash
 from shotgun_desktop.desktop_message_box import DesktopMessageBox
 from shotgun_desktop.upgrade_startup import upgrade_startup
 from shotgun_desktop.location import get_startup_descriptor
+from shotgun_desktop.compatibility import (
+    ensure_engine_compatible_with_desktop,
+    get_incompatible_code_error,
+)
 
 from shotgun_desktop.errors import (
     ShotgunDesktopError,
     RequestRestartException,
-    UpgradeEngine200Error,
-    EngineNotCompatibleWithDesktop,
     UpgradeCoreError,
     InvalidPipelineConfiguration,
-)
-
-from tank.util.version import (
-    is_version_older_or_equal,
-    is_version_newer_or_equal,
 )
 
 global_debug_flag_at_startup = None
@@ -202,42 +199,6 @@ def __backup_global_debug_flag():
     import sgtk
 
     global_debug_flag_at_startup = sgtk.LogManager().global_debug
-
-
-def __desktop_engine_supports_authentication_module(engine):
-    """
-    Tests if the engine supports the login based authentication. All versions above 2.0.0 supports
-    login based authentication.
-
-    :param engine: The desktop engine to test.
-
-    :returns: True if the engine supports the authentication module, False otherwise.
-    """
-    if engine.version.lower() == "undefined":
-        logger.warning(
-            "The version of the tk-desktop engine is undefined. "
-            "Assuming engine it supports sgtk.authentication module."
-        )
-        return True
-    return is_version_newer_or_equal(engine.version, "v2.0.0")
-
-
-def __desktop_engine_supports_websocket(engine):
-    """
-    Tests if the engine implements the browser integration. All versions above 2.1.0 supports
-    login based authentication.
-
-    :param engine: The desktop engine to test.
-
-    :returns: True if the engine supports the authentication module, False otherwise.
-    """
-    if engine.version.lower() == "undefined":
-        logger.warning(
-            "The version of the tk-desktop engine is undefined. "
-            "Assuming it has built-in browser integration support."
-        )
-        return True
-    return is_version_newer_or_equal(engine.version, "v2.1.0")
 
 
 def __supports_pipeline_configuration_upgrade(pipeline_configuration):
@@ -422,32 +383,19 @@ def __launch_app(app, splash, user, app_bootstrap, settings):
     del sgtk
     try:
         if toolkit_classic_required:
-            engine = __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path)
+            engine = __start_engine_in_toolkit_classic(
+                app, app_bootstrap, splash, user, pc, pc_path
+            )
         else:
             engine = __start_engine_in_zero_config(app, app_bootstrap, splash, user)
-    except SyntaxError:
-        # Try to see if this SyntaxError might be due to non-Python 3 compatible
-        # code.
-
-        # Reach the end of the stack.
-        exc_type, exc_value, current_stack_frame = sys.exc_info()
-        deepest = None
-        while deepest is None:
-            if current_stack_frame.tb_next is None:
-                deepest = current_stack_frame
-                break
-            else:
-                current_stack_frame = current_stack_frame.tb_next
-
-        # If the syntax error was from somewhere in the tk-desktop engine,
-        # then it's likely the engine is too old. This will yield false-positives
-        # in development when making syntax errors, but is robust enough
-        # for released code.
-        if (
-            "python/tk_desktop/".replace("/", os.path.sep)
-            in deepest.tb_frame.f_code.co_filename
-        ):
-            raise EngineNotCompatibleWithDesktop(app_bootstrap.get_version())
+    except (SyntaxError, ImportError) as e:
+        # The site configuration's tk-core or tk-desktop might be too old to run with
+        # this version of Python.
+        error = get_incompatible_code_error(
+            e, e.__traceback__, app_bootstrap.get_version()
+        )
+        if error:
+            raise error from e
         raise
 
     return __post_bootstrap_engine(splash, app_bootstrap, engine, settings)
@@ -466,11 +414,12 @@ def __bootstrap_progress_callback(splash, app, progress_value, message):
     logger.debug(message)
 
 
-def __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path):
+def __start_engine_in_toolkit_classic(app, app_bootstrap, splash, user, pc, pc_path):
     """
     Create a Toolkit instance by boostraping into the pipeline configuration.
 
     :param app: Application object for event processing.
+    :param app_bootstrap: Application bootstrap.
     :param splash: Splash dialog to update user on what is currently going on
     :param user: Current ShotgunUser.
     :param pc: Pipeline configuration entity dictionary.
@@ -522,20 +471,14 @@ def __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path):
             if not ctx.sgtk.pipeline_configuration.is_site_configuration():
                 ctx.sgtk.pipeline_configuration.convert_to_site_config()
 
+        ensure_engine_compatible_with_desktop(ctx, app_bootstrap.get_version())
+
         splash.set_message("Launching Engine...")
 
     # We need to validate a few things before the engine starts.
     mgr.pre_engine_start_callback = pre_engine_start_callback
 
-    engine = mgr.bootstrap_engine("tk-desktop")
-
-    if not __desktop_engine_supports_authentication_module(engine):
-        raise UpgradeEngine200Error(
-            "This version of the PTR desktop app only supports tk-desktop engine 2.0.0 and higher.",
-            pc_path,
-        )
-
-    return engine
+    return mgr.bootstrap_engine("tk-desktop")
 
 
 def __start_engine_in_zero_config(app, app_bootstrap, splash, user):
@@ -572,7 +515,17 @@ def __start_engine_in_zero_config(app, app_bootstrap, splash, user):
     if bundle_cache_path:
         mgr.bundle_cache_fallback_paths.append(bundle_cache_path)
 
-    mgr.pre_engine_start_callback = lambda ctx: __restore_global_debug_flag()
+    def pre_engine_start_callback(ctx):
+        """
+        Called before the engine starts during bootstrap.
+
+        :param ctx: Toolkit context we are bootstrapping into.
+        :type ctx: :class:`sgtk.Context`
+        """
+        __restore_global_debug_flag()
+        ensure_engine_compatible_with_desktop(ctx, app_bootstrap.get_version())
+
+    mgr.pre_engine_start_callback = pre_engine_start_callback
 
     return mgr.bootstrap_engine("tk-desktop")
 
@@ -604,42 +557,9 @@ def __post_bootstrap_engine(splash, app_bootstrap, engine, settings):
     # Uses the old API as we may have bootstrap into an old core.
     startup_version = startup_desc.get_version()
 
-    # If the site config is running an older version of the desktop engine, it
-    # doesn't include browser integration, so we'll launch it ourselves.
-    server = None
-
     return _run_engine(
         engine, splash, startup_version, app_bootstrap, startup_desc, settings
     )
-
-
-def __ensure_engine_compatible_with_qt_version(engine, app_version):
-    """
-    Make sure the tk-desktop engine is compatible with the PySide version we distribute
-    with Desktop.
-
-    When using tk-desktop versions before v2.5.0, PySide2 builds of desktop can't launch
-    DCCs because a QAction's signal emit an unexpected boolean that crashes older tk-desktop
-    builds.
-    """
-    # If we can't find the version, we assume it's good.
-    if engine.version.lower() == "undefined":
-        logger.warning(
-            "The version of the tk-desktop engine is undefined. "
-            "Assuming the engine is compatible with the builtin Qt."
-        )
-        return
-
-    # tk-desktop 2.5.0 introduced Python 3 and PySide2 support while being backward
-    # compatible with PySide, so it can't be a problem.
-    if is_version_newer_or_equal(engine.version, "v2.5.0"):
-        return
-
-    # tk-desktop versions older than v2.5.0 don't support PySide2/Python 3. FlowPT
-    # Desktop v1.8.0 is the minimum supported version (see requires_desktop_version
-    # in info.yml) and only ships those, so this combination can't work.
-    if is_version_newer_or_equal(app_version, "v1.8.0"):
-        raise EngineNotCompatibleWithDesktop(app_version)
 
 
 def _is_pipeline_config_disabled(error_message):
@@ -661,8 +581,6 @@ def _is_pipeline_config_disabled(error_message):
 
 
 def _run_engine(engine, splash, startup_version, app_bootstrap, startup_desc, settings):
-    __ensure_engine_compatible_with_qt_version(engine, app_bootstrap.get_version())
-
     return engine.run(
         splash,
         version=app_bootstrap.get_version(),
