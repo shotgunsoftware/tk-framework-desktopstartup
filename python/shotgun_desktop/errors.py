@@ -100,22 +100,6 @@ class UpgradeCoreError(ShotgunDesktopError):
         )
 
 
-class UpgradeCorePython3Error(ShotgunDesktopError):
-    """
-    This exception notifies the catcher that the site's core needs to be upgraded in order to
-    use this version of the Desktop installer, due to a Python 3 incompatibility.
-    """
-
-    def __init__(self):
-        """Constructor"""
-        ShotgunDesktopError.__init__(
-            self,
-            "You are running a pre v0.19.x version of tk-core, "
-            "which is not compatible with Python 3.\n"
-            "Please upgrade your site configuration's tk-core to v0.19.5 or greater.",
-        )
-
-
 class UpgradeEngine200Error(ShotgunDesktopError):
     """
     This exception notifies the catcher that the site's desktop engine needs to be upgraded in order
@@ -137,13 +121,20 @@ class UpgradeEngine200Error(ShotgunDesktopError):
 
 
 class EngineNotCompatibleWithDesktop(ShotgunDesktopError):
+    """
+    This exception notifies the catcher that the site's desktop engine is too old to
+    run in this version of the Desktop installer.
+    """
+
     def __init__(self, app_version):
+        """Constructor"""
         super().__init__(
-            "Your version of tk-desktop is not compatible with this FlowPT Desktop {}.\n"
+            "Your version of tk-desktop is not compatible with FlowPT Desktop {}.\n"
             "\n"
-            "Please upgrade your site configuration's tk-desktop to v2.5.9+ or " ## TODO change
-            "download FlowPT desktop v1.XXX5.9 or earlier <a href='{}'>here</a>".format( # OK but wrong info since unsupported....
+            "Please upgrade your site configuration's tk-desktop to the latest "
+            "version (v2.5.0 or later is required). See the "
+            "<a href='{}'>release announcements</a> for more information.".format(
                 app_version,
-                "https://community.shotgridsoftware.com/t/13877",
+                "https://community.shotgridsoftware.com/t/a-new-version-of-shotgrid-desktop-has-been-released/13877",
             )
         )

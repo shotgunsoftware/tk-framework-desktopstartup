@@ -171,7 +171,6 @@ from shotgun_desktop.errors import (
     UpgradeEngine200Error,
     EngineNotCompatibleWithDesktop,
     UpgradeCoreError,
-    UpgradeCorePython3Error,
     InvalidPipelineConfiguration,
 )
 
@@ -430,10 +429,6 @@ def __launch_app(app, splash, user, app_bootstrap, settings):
         # Try to see if this SyntaxError might be due to non-Python 3 compatible
         # code.
 
-        # If we're not in Python 3, we can reraise right away.
-        if sys.version_info[0] != 3:
-            raise
-
         # Reach the end of the stack.
         exc_type, exc_value, current_stack_frame = sys.exc_info()
         deepest = None
@@ -617,6 +612,7 @@ def __post_bootstrap_engine(splash, app_bootstrap, engine, settings):
         engine, splash, startup_version, app_bootstrap, startup_desc, settings
     )
 
+
 def __ensure_engine_compatible_with_qt_version(engine, app_version):
     """
     Make sure the tk-desktop engine is compatible with the PySide version we distribute
@@ -639,7 +635,9 @@ def __ensure_engine_compatible_with_qt_version(engine, app_version):
     if is_version_newer_or_equal(engine.version, "v2.5.0"):
         return
 
-    # Versions of desktop older than v2.5.0 have issues with desktop 1.6.1+, so raise an error.
+    # tk-desktop versions older than v2.5.0 don't support PySide2/Python 3. FlowPT
+    # Desktop v1.8.0 is the minimum supported version (see requires_desktop_version
+    # in info.yml) and only ships those, so this combination can't work.
     if is_version_newer_or_equal(app_version, "v1.8.0"):
         raise EngineNotCompatibleWithDesktop(app_version)
 
