@@ -63,7 +63,7 @@
 
 # Port to listen for requests coming from the browser. If not specified,
 # defaults to 9000. Note that you will need to contact support at
-# https://knowledge.autodesk.com/contact-support in order to have your site communicate
+# https://www.autodesk.com/support in order to have your site communicate
 # on a custom port.
 #
 # port=9000

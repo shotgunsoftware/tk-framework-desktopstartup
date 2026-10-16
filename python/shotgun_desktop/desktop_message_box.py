@@ -149,8 +149,7 @@ class DesktopMessageBox(QtGui.QMessageBox):
 
         # Retrieve the style to get the message box icon associated to it. Icon is a temporary
         # object.
-        self.setStyleSheet(
-            """QWidget
+        self.setStyleSheet("""QWidget
             {
                 background-color:  rgb(36, 39, 42);
                 color: rgb(192, 193, 195);
@@ -174,8 +173,7 @@ class DesktopMessageBox(QtGui.QMessageBox):
                 color: rgb(248, 248, 248);
                 background-color: rgb(35, 165, 225);
             }
-            """
-        )
+            """)
         # Set the requested icon
         self.setIcon(icon)
 
@@ -196,8 +194,7 @@ class DesktopMessageBox(QtGui.QMessageBox):
                 for para in message.split("\n")
             ]
         )
-        self.setText(
-            """
+        self.setText("""
             <html>
                 <head>
                     <style>
@@ -205,9 +202,7 @@ class DesktopMessageBox(QtGui.QMessageBox):
                     </style>
                 </head>
                 <body>%s</body>
-            </html>"""
-            % message
-        )
+            </html>""" % message)
 
     def exec_(self):
         """

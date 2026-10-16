@@ -129,6 +129,21 @@ def add_to_python_path(bundled_path, env_var_override, module_name):
     logger.info("Using %s from '%s'", module_name, path)
 
 
+def init_sgtk_logger():
+    """
+    Initialize the SGTK logger now and not later (main) so we don't miss logs
+    coming from sgtk. For instance, before this change, we were missing any
+    logs coming from the QtImporter because the logger was not initialized
+    already.
+    """
+
+    # Do not import sgtk globally to avoid using the wrong sgtk once we
+    # bootstrap in the right config.
+    import sgtk
+
+    sgtk.LogManager().initialize_base_file_handler("tk-desktop")
+
+
 # Add Toolkit to the path.
 add_to_python_path(
     os.path.join(
@@ -138,6 +153,8 @@ add_to_python_path(
     "SGTK_CORE_LOCATION",
     "tk-core",
 )
+
+init_sgtk_logger()
 
 # now proceed with non builtin imports
 from .qt import QtCore, QtGui
@@ -162,7 +179,6 @@ from tank.util.version import (
     is_version_older_or_equal,
     is_version_newer_or_equal,
 )
-
 
 global_debug_flag_at_startup = None
 
@@ -842,25 +858,8 @@ def main(**kwargs):
 
     global logger
 
-    # Older versions of the desktop on Windows logged at %APPDATA%\Shotgun\tk-desktop.log. Notify the user that
-    # this logging location is deprecated and the logs are now at %APPDATA%\Shotgun\Logs\tk-desktop.log
-    if sgtk.util.is_windows() and is_version_older_or_equal(
-        app_bootstrap.get_version(), "v1.3.6"
-    ):
-        logger.info(
-            "Logging at this location will now stop and resume at {0}\\tk-desktop.log".format(
-                sgtk.LogManager().log_folder
-            )
-        )
-        logger.info(
-            "If you see any more logs past this line, you need to upgrade your site configuration to "
-            "the latest core and apps using 'tank core' and 'tank updates'."
-        )
-
     # Core will take over logging
     app_bootstrap.tear_down_logging()
-
-    sgtk.LogManager().initialize_base_file_handler("tk-desktop")
 
     logger = sgtk.LogManager.get_logger(__name__)
     logger.debug("Running main from %s" % __file__)
@@ -868,12 +867,9 @@ def main(**kwargs):
     # Create some ui related objects
     app, splash = __init_app()
 
-    if is_version_newer_or_equal(app_bootstrap.get_version(), "v1.6.0"):
-        splash.set_version(
-            f"{app_bootstrap.get_version()} - Python {sys.version_info[0]}.{sys.version_info[1]}"
-        )
-    else:
-        splash.set_version(app_bootstrap.get_version())
+    splash.set_version(
+        f"{app_bootstrap.get_version()} - Python {sys.version_info[0]}.{sys.version_info[1]}"
+    )
 
     splash.set_message("Loading the application...")
     splash.show()
