@@ -172,7 +172,6 @@ from shotgun_desktop.compatibility import (
 from shotgun_desktop.errors import (
     ShotgunDesktopError,
     RequestRestartException,
-    UpgradeCoreError,
     InvalidPipelineConfiguration,
 )
 
@@ -186,9 +185,7 @@ def __restore_global_debug_flag():
     global global_debug_flag_at_startup
     import sgtk
 
-    # If there is no LogManager for the new core, there's no need to restore any flag.
-    if hasattr(sgtk, "LogManager"):
-        sgtk.LogManager().global_debug = global_debug_flag_at_startup
+    sgtk.LogManager().global_debug = global_debug_flag_at_startup
 
 
 def __backup_global_debug_flag():
@@ -199,18 +196,6 @@ def __backup_global_debug_flag():
     import sgtk
 
     global_debug_flag_at_startup = sgtk.LogManager().global_debug
-
-
-def __supports_pipeline_configuration_upgrade(pipeline_configuration):
-    """
-    Tests if the given pipeline configuration supports the None project id.
-
-    :param sgtk: A pipeline configuration.
-
-    :returns: True if the pipeline configuration can have a None project, False otherwise.
-    """
-    # if the authentication module is not supported, this method won't be present on the core.
-    return hasattr(pipeline_configuration, "convert_to_site_config")
 
 
 def __init_app():
@@ -358,7 +343,7 @@ def __launch_app(app, splash, user, app_bootstrap, settings):
 
     logger.debug("Getting the default site configuration.")
     (
-        pc_path,
+        _,
         pc,
         toolkit_classic_required,
     ) = shotgun_desktop.paths.get_pipeline_configuration_info(connection)
@@ -384,7 +369,7 @@ def __launch_app(app, splash, user, app_bootstrap, settings):
     try:
         if toolkit_classic_required:
             engine = __start_engine_in_toolkit_classic(
-                app, app_bootstrap, splash, user, pc, pc_path
+                app, app_bootstrap, splash, user, pc
             )
         else:
             engine = __start_engine_in_zero_config(app, app_bootstrap, splash, user)
@@ -414,7 +399,7 @@ def __bootstrap_progress_callback(splash, app, progress_value, message):
     logger.debug(message)
 
 
-def __start_engine_in_toolkit_classic(app, app_bootstrap, splash, user, pc, pc_path):
+def __start_engine_in_toolkit_classic(app, app_bootstrap, splash, user, pc):
     """
     Create a Toolkit instance by boostraping into the pipeline configuration.
 
@@ -423,7 +408,6 @@ def __start_engine_in_toolkit_classic(app, app_bootstrap, splash, user, pc, pc_p
     :param splash: Splash dialog to update user on what is currently going on
     :param user: Current ShotgunUser.
     :param pc: Pipeline configuration entity dictionary.
-    :param pc_path: Path to the pipeline configuration.
 
     :returns: Toolkit engine that was started.
     """
@@ -456,17 +440,6 @@ def __start_engine_in_toolkit_classic(app, app_bootstrap, splash, user, pc, pc_p
         # If the pipeline configuration we got from Shotgun is not assigned to a project, we might have
         # some patching to be done to local site configuration.
         if pc["project"] is None:
-
-            # make sure that the version of core we are using supports the new-style site configuration
-            if not __supports_pipeline_configuration_upgrade(
-                ctx.sgtk.pipeline_configuration
-            ):
-                raise UpgradeCoreError(
-                    "Running a site configuration without the Template Project requires core v0.16.8 "
-                    "or higher.",
-                    pc_path,
-                )
-
             # If the configuration on disk is not the site configuration, update it to the site config.
             if not ctx.sgtk.pipeline_configuration.is_site_configuration():
                 ctx.sgtk.pipeline_configuration.convert_to_site_config()
@@ -627,10 +600,7 @@ def __handle_unexpected_exception(
 
     exc_type, exc_value, exc_traceback = sys.exc_info()
 
-    if hasattr(sgtk, "LogManager"):
-        log_location = sgtk.LogManager().base_file_handler.baseFilename
-    else:
-        log_location = app_bootstrap.get_logfile_location()
+    log_location = sgtk.LogManager().base_file_handler.baseFilename
 
     logger.exception("Fatal error, user will be logged out.")
 

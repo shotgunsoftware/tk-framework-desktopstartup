@@ -17,19 +17,6 @@ from sgtk import LogManager
 logger = LogManager.get_logger(__name__)
 
 
-def _supports_get_from_location_and_paths(sgtk):
-    """
-    Tests if the descriptor factory in core supports non-pipeline configuration based
-    setups.
-
-    :param sgtk: The Toolkit API handle.
-
-    :returns: True if the sgtk.deploy.descriptor.get_from_location_and_paths is available,
-        False otherwise.
-    """
-    return hasattr(sgtk.deploy.descriptor, "get_from_location_and_paths")
-
-
 def _out_of_date_check(latest_descriptor, current_desc):
     """
     Check if the version is out of date.
@@ -52,12 +39,6 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
 
     :returns: True if an update was downloaded and the descriptor updated, False otherwise.
     """
-
-    # It is possible to launch the app with a version of core
-    # that doesn't support the functionality needed to update
-    # the startup code.
-    if not _supports_get_from_location_and_paths(sgtk):
-        return False
 
     sg = sgtk.get_authenticated_user().create_sg_connection()
 

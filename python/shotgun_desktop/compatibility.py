@@ -9,13 +9,15 @@
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
 """
-Compatibility checks between the PTR desktop app and the tk-core and tk-desktop
+Compatibility checks between FlowPT Desktop and the tk-core and tk-desktop
 versions picked by the site configuration.
 
 The site configuration can point to any version of tk-core and tk-desktop, including
 versions that can't run with the Python and Qt shipped with this app. These checks
 turn those failures into an error message telling the user what to upgrade, instead
 of a generic crash.
+
+The intended behavior, and why, is specified in tests/test_compatibility.py.
 """
 
 import logging
@@ -54,14 +56,14 @@ def _get_python_version():
 def ensure_engine_compatible_with_desktop(ctx, app_version):
     """
     Make sure the tk-desktop engine of the site configuration can run in this
-    PTR desktop app, before its code gets imported.
+    FlowPT Desktop, before its code gets imported.
 
     This is meant to be called from a bootstrap ``pre_engine_start_callback``, so
     after the site configuration's tk-core has been swapped in.
 
     :param ctx: Context the engine is about to be started in.
     :type ctx: :class:`sgtk.Context`
-    :param str app_version: Version of the PTR desktop app.
+    :param str app_version: Version of FlowPT Desktop.
 
     :raises EngineNotCompatibleWithDesktop: If the engine is not compatible.
     """
@@ -91,7 +93,7 @@ def check_engine_descriptor(descriptor, app_version):
 
     :param descriptor: Descriptor of the tk-desktop engine.
     :type descriptor: :class:`sgtk.descriptor.EngineDescriptor`
-    :param str app_version: Version of the PTR desktop app.
+    :param str app_version: Version of FlowPT Desktop.
 
     :raises EngineNotCompatibleWithDesktop: If the engine is not compatible.
     """
@@ -151,7 +153,7 @@ def get_incompatible_code_error(error, error_traceback, app_version):
 
     :param error: Exception raised while bootstrapping.
     :param error_traceback: Traceback of the exception.
-    :param str app_version: Version of the PTR desktop app.
+    :param str app_version: Version of FlowPT Desktop.
 
     :returns: An error to show to the user, or None if the error is not recognized.
     :rtype: :class:`~shotgun_desktop.errors.ShotgunDesktopError`

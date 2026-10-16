@@ -12,7 +12,6 @@
 Flow Production Tracking Errors
 """
 
-import os
 import sys
 import sgtk
 
@@ -79,27 +78,6 @@ class InvalidPipelineConfiguration(ShotgunDesktopError):
         )
 
 
-class UpgradeCoreError(ShotgunDesktopError):
-    """
-    This exception notifies the catcher that the site's core needs to be upgraded in order to
-    use this version of the Desktop installer.
-    """
-
-    def __init__(self, reason, toolkit_path):
-        """Constructor"""
-        ShotgunDesktopError.__init__(
-            self,
-            "%s Please upgrade your site core by running:\n\n%s core"
-            % (
-                reason,
-                os.path.join(
-                    toolkit_path,
-                    "tank.bat" if sgtk.util.is_windows() else "tank",
-                ),
-            ),
-        )
-
-
 class EngineNotCompatibleWithDesktop(ShotgunDesktopError):
     """
     This exception notifies the catcher that the site's desktop engine can't run in
@@ -110,12 +88,12 @@ class EngineNotCompatibleWithDesktop(ShotgunDesktopError):
         """
         Constructor
 
-        :param str app_version: Version of the PTR desktop app.
+        :param str app_version: Version of FlowPT Desktop.
         :param str reason: Why the engine is not compatible.
         """
         super().__init__(
             "The tk-desktop engine of your site configuration is not compatible with "
-            "this PTR desktop app {} running Python {}.{}.\n"
+            "FlowPT Desktop {} running Python {}.{}.\n"
             "\n"
             "{}\n"
             "\n"
@@ -140,12 +118,12 @@ class CoreNotCompatibleWithDesktop(ShotgunDesktopError):
         """
         Constructor
 
-        :param str app_version: Version of the PTR desktop app.
+        :param str app_version: Version of FlowPT Desktop.
         :param str reason: Why the core is not compatible.
         """
         super().__init__(
             "The tk-core of your site configuration is not compatible with "
-            "this PTR desktop app {} running Python {}.{}.\n"
+            "FlowPT Desktop {} running Python {}.{}.\n"
             "\n"
             "{}\n"
             "\n"
