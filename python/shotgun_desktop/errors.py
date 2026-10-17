@@ -88,12 +88,12 @@ class EngineNotCompatibleWithDesktop(ShotgunDesktopError):
         """
         Constructor
 
-        :param str app_version: Version of FlowPT Desktop.
+        :param str app_version: Version of the PTR desktop app.
         :param str reason: Why the engine is not compatible.
         """
         super().__init__(
             "The tk-desktop engine of your site configuration is not compatible with "
-            "FlowPT Desktop {} running Python {}.{}.\n"
+            "this PTR desktop app {} running Python {}.{}.\n"
             "\n"
             "{}\n"
             "\n"
@@ -118,12 +118,12 @@ class CoreNotCompatibleWithDesktop(ShotgunDesktopError):
         """
         Constructor
 
-        :param str app_version: Version of FlowPT Desktop.
+        :param str app_version: Version of the PTR desktop app.
         :param str reason: Why the core is not compatible.
         """
         super().__init__(
             "The tk-core of your site configuration is not compatible with "
-            "FlowPT Desktop {} running Python {}.{}.\n"
+            "this PTR desktop app {} running Python {}.{}.\n"
             "\n"
             "{}\n"
             "\n"

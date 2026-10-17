@@ -9,17 +9,17 @@
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
 """
-Specification of how FlowPT Desktop handles a site configuration whose tk-core or
+Specification of how the PTR desktop app handles a site configuration whose tk-core or
 tk-desktop can't run with the Python and Qt it ships.
 
 Context:
 
-- FlowPT Desktop itself only runs a tk-framework-desktopstartup that is compatible
+- The PTR desktop app itself only runs a tk-framework-desktopstartup that is compatible
   with it. This is enforced by requires_desktop_version, requires_core_version and
   minimum_python_version in this framework's info.yml, when upgrading the framework.
 - This framework then bootstraps into the site configuration, which can use any
   tk-core and tk-desktop version, including very old ones.
-- FlowPT Desktop is a UI application. When something is not compatible, the user must
+- The PTR desktop app is a UI application. When something is not compatible, the user must
   get a message telling them what to upgrade, not a crash or a stack trace.
 
 Intentions:
@@ -38,7 +38,7 @@ Intentions:
    Python versions are dropped and added every year, without listing them.
 4. Errors coming from the tk-core bundled with this framework are not blamed on the
    site configuration: that core is known to be compatible.
-5. The checks must never be the reason FlowPT Desktop fails to start. If a check
+5. The checks must never be the reason the PTR desktop app fails to start. If a check
    can't run, e.g. a core without the expected API, log it and let the bootstrap
    continue.
 """
@@ -129,10 +129,10 @@ def test_engine_minimum_python_version_met():
 
 def test_engine_minimum_python_version_not_met():
     """
-    A tk-desktop requiring a newer Python than the one shipped with this FlowPT
-    Desktop is rejected. This happens when a site configuration is upgraded to a
-    tk-desktop dropping a Python version while users still run an older FlowPT
-    Desktop.
+    A tk-desktop requiring a newer Python than the one shipped with this PTR
+    desktop app is rejected. This happens when a site configuration is upgraded to a
+    tk-desktop dropping a Python version while users still run an older PTR
+    desktop app.
     """
     descriptor = MockDescriptor(manifest={"minimum_python_version": "99.0"})
     with pytest.raises(EngineNotCompatibleWithDesktop) as e:
@@ -258,7 +258,7 @@ def test_other_errors_not_reported():
     )
 
 
-# Intention 5: checks never prevent FlowPT Desktop from starting.
+# Intention 5: checks never prevent the PTR desktop app from starting.
 
 
 def test_ensure_engine_compatible_cant_resolve_descriptor():
@@ -302,11 +302,11 @@ def test_engine_manifest_unreadable():
 def test_error_message(error_class, component):
     """
     Messages say which component of the site configuration to upgrade, and give the
-    FlowPT Desktop and Python versions and the reason, so support can diagnose the
+    PTR desktop app and Python versions and the reason, so support can diagnose the
     issue from a screenshot.
     """
     message = str(error_class(APP_VERSION, "Some reason."))
     assert "upgrade your site configuration's {}".format(component) in message
-    assert "FlowPT Desktop {}".format(APP_VERSION) in message
+    assert "PTR desktop app {}".format(APP_VERSION) in message
     assert "Python {}.{}".format(*sys.version_info[:2]) in message
     assert "Some reason." in message
