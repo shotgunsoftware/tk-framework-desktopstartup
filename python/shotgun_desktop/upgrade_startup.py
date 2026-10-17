@@ -122,8 +122,8 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
         logger.exception("Unexpected error when updating startup code.")
         DesktopMessageBox.critical(
             "Flow Production Tracking update failed",
-            "There is a new update of the FlowPT Desktop startup component, but it couldn't be installed. "
-            "FlowPT Desktop will be launched with the currently installed version of the code.\n"
+            "There is a new update of the PTR desktop component, but it couldn't be installed. The PTR desktop "
+            "app will be launched with the currently installed version of the code.\n"
             "If this problem persists, please <a href='%s'>contact</a> Flow Production Tracking support.\n"
             "\n"
             "Error: %s" % (sgtk.support_url, str(e)),
