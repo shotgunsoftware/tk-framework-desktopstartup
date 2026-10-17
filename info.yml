@@ -14,7 +14,7 @@
 configuration:
 
 
-# the Shotgun fields that this engine needs in order to operate correctly
+# the FlowPT fields that this engine needs in order to operate correctly
 requires_shotgun_fields:
 
 # More verbose description of this item

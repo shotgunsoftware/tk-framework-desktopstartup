@@ -55,7 +55,7 @@ class ShotgunDesktopError(Exception):
 
 class InvalidPipelineConfiguration(ShotgunDesktopError):
     """
-    This exception notifies the caller that the pipeline configuration id found in Shotgun
+    This exception notifies the caller that the pipeline configuration id found in FlowPT
     doesn't match the pipeline configuration found on disk.
     """
 

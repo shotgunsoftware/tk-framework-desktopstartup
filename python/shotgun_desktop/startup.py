@@ -277,7 +277,7 @@ def __optional_state_cleanup(splash, shotgun_authenticator, app_bootstrap):
     Cleans the Desktop state if the alt key is pressed. Restarts the Desktop when done.
 
     :param splash: Splash screen widget.
-    :param shotgun_authenticator: Shotgun authenticator used to logout if alt is pressed.
+    :param shotgun_authenticator: ShotgunAuthenticator used to logout if alt is pressed.
     :params app_bootstrap: The application bootstrap.
     """
     # If the application was launched holding the alt key, log the user out.
@@ -296,7 +296,7 @@ def __do_login(splash, shotgun_authenticator):
     cached on disk.
 
     :param splash: Splash screen widget.
-    :param shotgun_authenticator: Instance of the Shotgun Authenticator to use for login.
+    :param shotgun_authenticator: Instance of the ShotgunAuthenticator to use for login.
 
     :returns tank.authentication.ShotgunUser: The logged in user or None
     """
@@ -493,7 +493,7 @@ def __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path):
     import sgtk
 
     mgr = sgtk.bootstrap.ToolkitManager(user)
-    # Tell the manager to resolve the config in Shotgun so it can resolve the location on disk.
+    # Tell the manager to resolve the config in FlowPT so it can resolve the location on disk.
     mgr.do_shotgun_config_lookup = True
     mgr.progress_callback = (
         lambda progress_value, message: __bootstrap_progress_callback(
@@ -511,12 +511,12 @@ def __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path):
         :param ctx: Toolkit context we are bootstrapping into.
         :type ctx: :class:`sgtk.Context`
         """
-        # If the pipeline configuration found in Shotgun doesn't match what we have locally, we have a
+        # If the pipeline configuration found in FlowPT doesn't match what we have locally, we have a
         # problem.
         if pc["id"] != ctx.sgtk.pipeline_configuration.get_shotgun_id():
             raise InvalidPipelineConfiguration(pc, ctx.sgtk.pipeline_configuration)
 
-        # If the pipeline configuration we got from Shotgun is not assigned to a project, we might have
+        # If the pipeline configuration we got from FlowPT is not assigned to a project, we might have
         # some patching to be done to local site configuration.
         if pc["project"] is None:
 
