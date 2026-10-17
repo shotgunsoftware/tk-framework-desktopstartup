@@ -12,7 +12,6 @@
 Flow Production Tracking Errors
 """
 
-import os
 import sys
 import sgtk
 
@@ -79,71 +78,59 @@ class InvalidPipelineConfiguration(ShotgunDesktopError):
         )
 
 
-class UpgradeCoreError(ShotgunDesktopError):
+class EngineNotCompatibleWithDesktop(ShotgunDesktopError):
     """
-    This exception notifies the catcher that the site's core needs to be upgraded in order to
-    use this version of the Desktop installer.
-    """
-
-    def __init__(self, reason, toolkit_path):
-        """Constructor"""
-        ShotgunDesktopError.__init__(
-            self,
-            "%s Please upgrade your site core by running:\n\n%s core"
-            % (
-                reason,
-                os.path.join(
-                    toolkit_path,
-                    "tank.bat" if sgtk.util.is_windows() else "tank",
-                ),
-            ),
-        )
-
-
-class UpgradeCorePython3Error(ShotgunDesktopError):
-    """
-    This exception notifies the catcher that the site's core needs to be upgraded in order to
-    use this version of the Desktop installer, due to a Python 3 incompatibility.
+    This exception notifies the catcher that the site's desktop engine can't run in
+    this version of the Desktop installer.
     """
 
-    def __init__(self):
-        """Constructor"""
-        ShotgunDesktopError.__init__(
-            self,
-            "You are running a pre v0.19.x version of tk-core, "
-            "which is not compatible with Python 3.\n"
-            "Please upgrade your site configuration's tk-core to v0.19.5 or greater.",
-        )
+    def __init__(self, app_version, reason):
+        """
+        Constructor
 
-
-class UpgradeEngine200Error(ShotgunDesktopError):
-    """
-    This exception notifies the catcher that the site's desktop engine needs to be upgraded in order
-    to use this version of the Desktop installer.
-    """
-
-    def __init__(self, reason, toolkit_path):
-        """Constructor"""
-        ShotgunDesktopError.__init__(
-            self,
-            "%s Please upgrade your site engine by running:\n\n%s updates site"
-            % (
-                reason,
-                os.path.join(
-                    toolkit_path, "tank.bat" if sgtk.util.is_windows() else "tank"
-                ),
-            ),
-        )
-
-
-class EngineNotCompatibleWithDesktop16(ShotgunDesktopError):
-    def __init__(self, app_version):
+        :param str app_version: Version of the PTR desktop app.
+        :param str reason: Why the engine is not compatible.
+        """
         super().__init__(
-            "Your version of tk-desktop is not compatible with this PTR desktop app {}.\n"
+            "The tk-desktop engine of your site configuration is not compatible with "
+            "this PTR desktop app {} running Python {}.{}.\n"
             "\n"
-            "Please upgrade your site configuration's tk-desktop to v2.5.9+ or "
-            "download PTR desktop app 1.5.9 or earlier <a href='{}'>here</a>".format(
+            "{}\n"
+            "\n"
+            "Please upgrade your site configuration's tk-desktop to the latest version. "
+            "See the <a href='{}'>release announcements</a> for more information.".format(
                 app_version,
-                "https://community.shotgridsoftware.com/t/a-new-version-of-shotgrid-desktop-has-been-released/13877/99999",
+                sys.version_info[0],
+                sys.version_info[1],
+                reason,
+                "https://community.shotgridsoftware.com/t/a-new-version-of-shotgrid-desktop-has-been-released/13877",
+            )
+        )
+
+
+class CoreNotCompatibleWithDesktop(ShotgunDesktopError):
+    """
+    This exception notifies the catcher that the site's core can't run in this
+    version of the Desktop installer.
+    """
+
+    def __init__(self, app_version, reason):
+        """
+        Constructor
+
+        :param str app_version: Version of the PTR desktop app.
+        :param str reason: Why the core is not compatible.
+        """
+        super().__init__(
+            "The tk-core of your site configuration is not compatible with "
+            "this PTR desktop app {} running Python {}.{}.\n"
+            "\n"
+            "{}\n"
+            "\n"
+            "Please upgrade your site configuration's tk-core to the latest version.".format(
+                app_version,
+                sys.version_info[0],
+                sys.version_info[1],
+                reason,
             )
         )
