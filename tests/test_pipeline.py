@@ -20,7 +20,7 @@ from shotgun_desktop import paths
 
 
 class MockUser:
-    """Mock a PTR User class"""
+    """Mock a FlowPT User class"""
 
     def resolve_entity(self, *args, **kwargs):
         pass
