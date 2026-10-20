@@ -12,6 +12,7 @@
 Flow Production Tracking Errors
 """
 
+import os
 import sys
 import sgtk
 
@@ -78,59 +79,69 @@ class InvalidPipelineConfiguration(ShotgunDesktopError):
         )
 
 
-class EngineNotCompatibleWithDesktop(ShotgunDesktopError):
+class UpgradeCoreError(ShotgunDesktopError):
     """
-    This exception notifies the catcher that the site's desktop engine can't run in
-    this version of the Desktop installer.
+    This exception notifies the catcher that the site's core needs to be upgraded in order to
+    use this version of the Desktop installer.
     """
 
-    def __init__(self, app_version, reason):
-        """
-        Constructor
-
-        :param str app_version: Version of the PTR desktop app.
-        :param str reason: Why the engine is not compatible.
-        """
-        super().__init__(
-            "The tk-desktop engine of your site configuration is not compatible with "
-            "this PTR desktop app {} running Python {}.{}.\n"
-            "\n"
-            "{}\n"
-            "\n"
-            "Please upgrade your site configuration's tk-desktop to the latest version. "
-            "See the <a href='{}'>release announcements</a> for more information.".format(
-                app_version,
-                sys.version_info[0],
-                sys.version_info[1],
+    def __init__(self, reason, toolkit_path):
+        """Constructor"""
+        ShotgunDesktopError.__init__(
+            self,
+            "%s Please upgrade your site core by running:\n\n%s core"
+            % (
                 reason,
-                "https://community.shotgridsoftware.com/t/a-new-version-of-shotgrid-desktop-has-been-released/13877",
-            )
+                os.path.join(
+                    toolkit_path,
+                    "tank.bat" if sgtk.util.is_windows() else "tank",
+                ),
+            ),
         )
 
 
 class CoreNotCompatibleWithDesktop(ShotgunDesktopError):
     """
-    This exception notifies the catcher that the site's core can't run in this
-    version of the Desktop installer.
+    This exception notifies the catcher that the site's core can't run in this version
+    of the Desktop installer.
     """
 
     def __init__(self, app_version, reason):
-        """
-        Constructor
+        """Constructor"""
+        ShotgunDesktopError.__init__(
+            self,
+            "The tk-core of your site configuration is not compatible with this "
+            "PTR desktop app {} running Python {}.{}.\n"
+            "\n"
+            "{}".format(app_version, sys.version_info[0], sys.version_info[1], reason),
+        )
 
-        :param str app_version: Version of the PTR desktop app.
-        :param str reason: Why the core is not compatible.
-        """
+
+class UpgradeEngine200Error(ShotgunDesktopError):
+    """
+    This exception notifies the catcher that the site's desktop engine needs to be upgraded in order
+    to use this version of the Desktop installer.
+    """
+
+    def __init__(self, reason, toolkit_path):
+        """Constructor"""
+        ShotgunDesktopError.__init__(
+            self,
+            "%s Please upgrade your site engine by running:\n\n%s updates site"
+            % (
+                reason,
+                os.path.join(
+                    toolkit_path, "tank.bat" if sgtk.util.is_windows() else "tank"
+                ),
+            ),
+        )
+
+
+class EngineNotCompatibleWithDesktop(ShotgunDesktopError):
+    def __init__(self, app_version, reason):
         super().__init__(
-            "The tk-core of your site configuration is not compatible with "
+            "The tk-desktop engine of your site configuration is not compatible with "
             "this PTR desktop app {} running Python {}.{}.\n"
             "\n"
-            "{}\n"
-            "\n"
-            "Please upgrade your site configuration's tk-core to the latest version.".format(
-                app_version,
-                sys.version_info[0],
-                sys.version_info[1],
-                reason,
-            )
+            "{}".format(app_version, sys.version_info[0], sys.version_info[1], reason)
         )
