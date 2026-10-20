@@ -759,7 +759,7 @@ def __handle_unexpected_exception(
 
     else:
         formatted_error_message = (
-            "Something went wrong in the PTR desktop app! If you <a href={link}>contact us</a> "
+            "Something went wrong in FlowPT Desktop! If you <a href={link}>contact us</a> "
             "we'll help you diagnose the issue.\n"
             "Error: {error}\n"
             "For more information, see the log file at {log}.".format(
@@ -826,7 +826,7 @@ class _BootstrapProxy(object):
 
     def get_bundle_cache_location(self):
         """
-        Retrieves the bundle cache that is distributed with the PTR desktop app.
+        Retrieves the bundle cache that is distributed with FlowPT Desktop.
 
         We're implementing this method on the proxy because Desktop versions 1.3.6 and earlier didn't
         have a bundle cache.
@@ -876,7 +876,7 @@ def main(**kwargs):
     # We might crash before even initializing the authenticator, so instantiate
     # it right away.
     shotgun_authenticator = None
-    # PTR desktop app startup has always been logging every debug string to disk since the new authentication from 0.16
+    # FlowPT Desktop startup has always been logging every debug string to disk since the new authentication from 0.16
     # was released and the startup has been difficult to work with and debug, so keep that logic in place during the
     # startup sequence. It will be restored during the ToolkitManager's pre_engine_start_callback.
     __backup_global_debug_flag()
