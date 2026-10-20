@@ -48,6 +48,9 @@ class AppBoostrap(object):
     def get_startup_path(self):
         return repo_root
 
+    def get_bundle_cache_location(self):
+        return os.environ.get("SHOTGUN_DESKTOP_BUNDLE_CACHE_LOCATION")
+
     def get_version(self):
         return "2.0.0.debug"
 

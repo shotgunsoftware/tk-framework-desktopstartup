@@ -172,14 +172,7 @@ from shotgun_desktop.compatibility import (
 from shotgun_desktop.errors import (
     ShotgunDesktopError,
     RequestRestartException,
-    UpgradeEngine200Error,
-    UpgradeCoreError,
     InvalidPipelineConfiguration,
-)
-
-from tank.util.version import (
-    is_version_older_or_equal,
-    is_version_newer_or_equal,
 )
 
 global_debug_flag_at_startup = None
@@ -192,9 +185,7 @@ def __restore_global_debug_flag():
     global global_debug_flag_at_startup
     import sgtk
 
-    # If there is no LogManager for the new core, there's no need to restore any flag.
-    if hasattr(sgtk, "LogManager"):
-        sgtk.LogManager().global_debug = global_debug_flag_at_startup
+    sgtk.LogManager().global_debug = global_debug_flag_at_startup
 
 
 def __backup_global_debug_flag():
@@ -205,54 +196,6 @@ def __backup_global_debug_flag():
     import sgtk
 
     global_debug_flag_at_startup = sgtk.LogManager().global_debug
-
-
-def __desktop_engine_supports_authentication_module(engine):
-    """
-    Tests if the engine supports the login based authentication. All versions above 2.0.0 supports
-    login based authentication.
-
-    :param engine: The desktop engine to test.
-
-    :returns: True if the engine supports the authentication module, False otherwise.
-    """
-    if engine.version.lower() == "undefined":
-        logger.warning(
-            "The version of the tk-desktop engine is undefined. "
-            "Assuming engine it supports sgtk.authentication module."
-        )
-        return True
-    return is_version_newer_or_equal(engine.version, "v2.0.0")
-
-
-def __desktop_engine_supports_websocket(engine):
-    """
-    Tests if the engine implements the browser integration. All versions above 2.1.0 supports
-    login based authentication.
-
-    :param engine: The desktop engine to test.
-
-    :returns: True if the engine supports the authentication module, False otherwise.
-    """
-    if engine.version.lower() == "undefined":
-        logger.warning(
-            "The version of the tk-desktop engine is undefined. "
-            "Assuming it has built-in browser integration support."
-        )
-        return True
-    return is_version_newer_or_equal(engine.version, "v2.1.0")
-
-
-def __supports_pipeline_configuration_upgrade(pipeline_configuration):
-    """
-    Tests if the given pipeline configuration supports the None project id.
-
-    :param sgtk: A pipeline configuration.
-
-    :returns: True if the pipeline configuration can have a None project, False otherwise.
-    """
-    # if the authentication module is not supported, this method won't be present on the core.
-    return hasattr(pipeline_configuration, "convert_to_site_config")
 
 
 def __init_app():
@@ -426,7 +369,7 @@ def __launch_app(app, splash, user, app_bootstrap, settings):
     try:
         if toolkit_classic_required:
             engine = __start_engine_in_toolkit_classic(
-                app, app_bootstrap, splash, user, pc, pc_path
+                app, app_bootstrap, splash, user, pc
             )
         else:
             engine = __start_engine_in_zero_config(app, app_bootstrap, splash, user)
@@ -454,7 +397,7 @@ def __bootstrap_progress_callback(splash, app, progress_value, message):
     logger.debug(message)
 
 
-def __start_engine_in_toolkit_classic(app, app_bootstrap, splash, user, pc, pc_path):
+def __start_engine_in_toolkit_classic(app, app_bootstrap, splash, user, pc):
     """
     Create a Toolkit instance by boostraping into the pipeline configuration.
 
@@ -463,7 +406,6 @@ def __start_engine_in_toolkit_classic(app, app_bootstrap, splash, user, pc, pc_p
     :param splash: Splash dialog to update user on what is currently going on
     :param user: Current ShotgunUser.
     :param pc: Pipeline configuration entity dictionary.
-    :param pc_path: Path to the pipeline configuration.
 
     :returns: Toolkit engine that was started.
     """
@@ -496,17 +438,6 @@ def __start_engine_in_toolkit_classic(app, app_bootstrap, splash, user, pc, pc_p
         # If the pipeline configuration we got from Shotgun is not assigned to a project, we might have
         # some patching to be done to local site configuration.
         if pc["project"] is None:
-
-            # make sure that the version of core we are using supports the new-style site configuration
-            if not __supports_pipeline_configuration_upgrade(
-                ctx.sgtk.pipeline_configuration
-            ):
-                raise UpgradeCoreError(
-                    "Running a site configuration without the Template Project requires core v0.16.8 "
-                    "or higher.",
-                    pc_path,
-                )
-
             # If the configuration on disk is not the site configuration, update it to the site config.
             if not ctx.sgtk.pipeline_configuration.is_site_configuration():
                 ctx.sgtk.pipeline_configuration.convert_to_site_config()
@@ -518,15 +449,7 @@ def __start_engine_in_toolkit_classic(app, app_bootstrap, splash, user, pc, pc_p
     # We need to validate a few things before the engine starts.
     mgr.pre_engine_start_callback = pre_engine_start_callback
 
-    engine = mgr.bootstrap_engine("tk-desktop")
-
-    if not __desktop_engine_supports_authentication_module(engine):
-        raise UpgradeEngine200Error(
-            "This version of the PTR desktop app only supports tk-desktop engine 2.0.0 and higher.",
-            pc_path,
-        )
-
-    return engine
+    return mgr.bootstrap_engine("tk-desktop")
 
 
 def __start_engine_in_zero_config(app, app_bootstrap, splash, user):
@@ -599,10 +522,6 @@ def __post_bootstrap_engine(splash, app_bootstrap, engine, settings):
     # Uses the old API as we may have bootstrap into an old core.
     startup_version = startup_desc.get_version()
 
-    # If the site config is running an older version of the desktop engine, it
-    # doesn't include browser integration, so we'll launch it ourselves.
-    server = None
-
     return _run_engine(
         engine, splash, startup_version, app_bootstrap, startup_desc, settings
     )
@@ -673,10 +592,7 @@ def __handle_unexpected_exception(
 
     exc_type, exc_value, exc_traceback = sys.exc_info()
 
-    if hasattr(sgtk, "LogManager"):
-        log_location = sgtk.LogManager().base_file_handler.baseFilename
-    else:
-        log_location = app_bootstrap.get_logfile_location()
+    log_location = sgtk.LogManager().base_file_handler.baseFilename
 
     logger.exception("Fatal error, user will be logged out.")
 
@@ -721,63 +637,6 @@ def __handle_unexpected_exception(
         shotgun_authenticator.clear_default_user()
 
 
-class _BootstrapProxy(object):
-    """
-    Wraps the application bootstrap code to add functionality that is present only in more recent builds of the
-    Desktop, which the startup code is not necessarily running off of.
-    """
-
-    def __init__(self, app_bootstrap):
-        """
-        Constructor
-
-        :param app_bootstrap: Application bootstrap instance.
-        """
-        self._app_bootstrap = app_bootstrap
-
-    def __getattr__(self, name):
-        """
-        Retrieves an attribute on the proxied instance.
-
-        :param name: Name of the attribute.
-
-        :returns: The attribute instance.
-        """
-        # Python hasn't found the requested attribute on this class, so let's look for it on the
-        # proxied class.
-        return getattr(self._app_bootstrap, name)
-
-    def get_app_root(self):
-        """
-        Retrieves the application root.
-
-        :returns: Path to the root of the installation directory.
-        """
-        # If the bootstrap now has the method, forward the call to it.
-        if hasattr(self._app_bootstrap, "get_app_root"):
-            return self._app_bootstrap.get_app_root()
-        # Otherwise retrieve the bootstrap.py module from tk-desktop-internal (which can't be imported manually since it
-        # isn't in the Python path.
-        bootstrap_module = sys.modules[self._app_bootstrap.__module__]
-        # Pick the SHOTGUN_APP_ROOT:
-        # https://github.com/shotgunsoftware/tk-desktop-internal/blob/a31e9339b7e438cd111fb8f4a2b0436e77c98a17/Common/Shotgun/python/bootstrap.py#L80
-        return bootstrap_module.SHOTGUN_APP_ROOT
-
-    def get_bundle_cache_location(self):
-        """
-        Retrieves the bundle cache that is distributed with the PTR desktop app.
-
-        We're implementing this method on the proxy because Desktop versions 1.3.6 and earlier didn't
-        have a bundle cache.
-
-        :returns: Path to the bundle cache or None if no bundle cache is present.
-        """
-        if hasattr(self._app_bootstrap, "get_bundle_cache_location"):
-            return self._app_bootstrap.get_bundle_cache_location()
-        else:
-            return os.environ.get("SHOTGUN_DESKTOP_BUNDLE_CACHE_LOCATION") or None
-
-
 def main(**kwargs):
     """
     Main
@@ -791,7 +650,7 @@ def main(**kwargs):
     :returns: Error code for the process.
     """
 
-    app_bootstrap = _BootstrapProxy(kwargs["app_bootstrap"])
+    app_bootstrap = kwargs["app_bootstrap"]
 
     # Do not import sgtk globally to avoid using the wrong sgtk once we bootstrap in
     # the right config.
