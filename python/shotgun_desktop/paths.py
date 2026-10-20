@@ -23,7 +23,7 @@ def get_pipeline_configuration_info(connection):
     """
     Finds the site configuration root on disk.
 
-    :param shotgun_api3.Shotgun connection: Shotgun instance for the site we want
+    :param connection: :class:`~shotgun_api3.shotgun.Shotgun` instance for the site we want
         to find a configuration for.
 
     :returns (str, str, bool): The pipeline configuration root, the pipeline configuration

@@ -20,14 +20,14 @@ from shotgun_desktop import paths
 
 
 class MockUser:
-    """Mock the ShotgunUser class from tk-core."""
+    """Mock the :class:`~sgtk.authentication.ShotgunUser` class from tk-core."""
 
     def resolve_entity(self, *args, **kwargs):
         pass
 
 
 class MockConnection:
-    """Mock the Shotgun class from python_api."""
+    """Mock the :class:`~shotgun_api3.shotgun.Shotgun` class from python-api."""
 
     def __init__(self, **kwargs):
         self.base_url = ""

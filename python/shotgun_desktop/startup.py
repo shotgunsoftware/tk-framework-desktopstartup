@@ -277,7 +277,7 @@ def __optional_state_cleanup(splash, shotgun_authenticator, app_bootstrap):
     Cleans the Desktop state if the alt key is pressed. Restarts the Desktop when done.
 
     :param splash: Splash screen widget.
-    :param shotgun_authenticator: ShotgunAuthenticator used to logout if alt is pressed.
+    :param shotgun_authenticator: :class:`~sgtk.authentication.ShotgunAuthenticator` used to logout if alt is pressed.
     :params app_bootstrap: The application bootstrap.
     """
     # If the application was launched holding the alt key, log the user out.
@@ -296,9 +296,9 @@ def __do_login(splash, shotgun_authenticator):
     cached on disk.
 
     :param splash: Splash screen widget.
-    :param shotgun_authenticator: Instance of the ShotgunAuthenticator to use for login.
+    :param shotgun_authenticator: Instance of :class:`~sgtk.authentication.ShotgunAuthenticator` to use for login.
 
-    :returns tank.authentication.ShotgunUser: The logged in user or None
+    :returns: The logged in :class:`~sgtk.authentication.ShotgunUser` or None
     """
     from sgtk.authentication import AuthenticationCancelled
 
@@ -366,7 +366,7 @@ def __launch_app(app, splash, user, app_bootstrap, settings):
 
     :param app: Application object for event processing.
     :param splash: Splash dialog to update user on what is currently going on
-    :param user: Current ShotgunUser.
+    :param user: Current :class:`~sgtk.authentication.ShotgunUser`.
     :param app_bootstrap: Application bootstrap.
     :param settings: The application's settings.
 
@@ -484,7 +484,7 @@ def __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path):
 
     :param app: Application object for event processing.
     :param splash: Splash dialog to update user on what is currently going on
-    :param user: Current ShotgunUser.
+    :param user: Current :class:`~sgtk.authentication.ShotgunUser`.
     :param pc: Pipeline configuration entity dictionary.
     :param pc_path: Path to the pipeline configuration.
 
@@ -557,7 +557,7 @@ def __start_engine_in_zero_config(app, app_bootstrap, splash, user):
     :param app: Application object for event processing.
     :param app_bootstrap: Application bootstrap.
     :param splash: Splash dialog to update user on what is currently going on
-    :param user: Current ShotgunUser.
+    :param user: Current :class:`~sgtk.authentication.ShotgunUser`.
 
     :returns: Toolkit engine that was started.
     """
