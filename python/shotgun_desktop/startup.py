@@ -118,6 +118,8 @@ def add_to_python_path(bundled_path, env_var_override, module_name):
     :param str bundled_path: Path to the bundled code.
     :param env_var_override: Name of the environment variable that can override that path.
     :param module_name: Friendly name of the module.
+
+    :returns: The path added to the Python path.
     """
     if env_var_override in os.environ:
         path = os.path.join(os.environ[env_var_override])
@@ -127,6 +129,7 @@ def add_to_python_path(bundled_path, env_var_override, module_name):
     path = os.path.join(path, "python")
     sys.path.insert(0, path)
     logger.info("Using %s from '%s'", module_name, path)
+    return path
 
 
 def init_sgtk_logger():
@@ -145,7 +148,7 @@ def init_sgtk_logger():
 
 
 # Add Toolkit to the path.
-add_to_python_path(
+core_path = add_to_python_path(
     os.path.join(
         "..",
         "tk-core",
@@ -154,10 +157,22 @@ add_to_python_path(
     "tk-core",
 )
 
-init_sgtk_logger()
+try:
+    init_sgtk_logger()
 
-# now proceed with non builtin imports
-from .qt import QtCore, QtGui
+    # now proceed with non builtin imports
+    from .qt import QtCore, QtGui
+
+    if QtCore is None or QtGui is None:
+        raise ImportError("tk-core couldn't import a Qt binding it supports.")
+except Exception as e:
+    # tk-core is not compatible with the Python or Qt shipped with the app, so the
+    # usual error handling, which relies on them, can't run.
+    from shotgun_desktop.fallback_error import report_core_not_loaded
+
+    logger.exception("Unable to load tk-core from '%s'.", core_path)
+    report_core_not_loaded(core_path, e)
+    sys.exit(1)
 
 import shotgun_desktop.paths
 import shotgun_desktop.splash

@@ -45,6 +45,12 @@ Intentions:
    continue.
 6. The message tells the user what to upgrade: tk-desktop, tk-core or the PTR
    desktop app itself, depending on what failed.
+7. The very first step, loading the tk-core used by this framework and its Qt
+   support, happens before any of the above. If that tk-core can't run with the
+   Python or Qt shipped with the PTR desktop app (e.g. SGTK_CORE_LOCATION points to
+   an incompatible one), report it without relying on tk-core: on stderr, for users
+   running the app from a terminal, and in a dialog using the Qt binding the PTR
+   desktop app loaded. Reporting must never raise.
 """
 
 import os
@@ -57,7 +63,7 @@ sys.path.insert(
     0, os.path.join(os.path.dirname(__file__), "..", "python/tk-core/python")
 )
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
-from shotgun_desktop import compatibility
+from shotgun_desktop import compatibility, fallback_error
 from shotgun_desktop.errors import (
     CoreNotCompatibleWithDesktop,
     EngineNotCompatibleWithDesktop,
@@ -382,3 +388,87 @@ def test_incompatible_code_advice(filename, advice):
     error = _raise_from("import Cookie", filename)
     result = compatibility.get_incompatible_code_error(error, APP_VERSION)
     assert advice in str(result)
+
+
+# Intention 7: tk-core can't be loaded by this framework.
+
+
+@pytest.fixture
+def qt_widgets():
+    """Mock the Qt binding used to show the fallback dialog."""
+    qt_widgets = MagicMock()
+    with patch.object(
+        fallback_error,
+        "_import_qt_widgets",
+        return_value=("PySide6 6.8.3", qt_widgets),
+    ):
+        yield qt_widgets
+
+
+def test_core_not_loaded_reported(qt_widgets, capsys, monkeypatch):
+    """
+    The user gets the tk-core used, the Python and Qt versions and the error, both on
+    stderr and in a dialog.
+    """
+    monkeypatch.delenv("SGTK_CORE_LOCATION", raising=False)
+    fallback_error.report_core_not_loaded(SITE_CORE_PYTHON, ImportError("No Qt"))
+
+    stderr = capsys.readouterr().err
+    for text in [
+        SITE_CORE_PYTHON,
+        "Python {}.{}".format(*sys.version_info[:2]),
+        "PySide6 6.8.3",
+        "No Qt",
+        "install the latest PTR desktop app",
+    ]:
+        assert text in stderr
+    qt_widgets.QMessageBox.critical.assert_called_once()
+    assert qt_widgets.QMessageBox.critical.call_args[0][2] in stderr
+
+
+def test_core_not_loaded_from_override(qt_widgets, capsys, monkeypatch):
+    """
+    When a developer overrides the tk-core with SGTK_CORE_LOCATION, the override is
+    the likely culprit.
+    """
+    monkeypatch.setenv("SGTK_CORE_LOCATION", SITE_CORE_PYTHON)
+    fallback_error.report_core_not_loaded(SITE_CORE_PYTHON, ImportError("No Qt"))
+    assert "SGTK_CORE_LOCATION is set" in capsys.readouterr().err
+
+
+def test_core_not_loaded_without_qt(capsys):
+    """Without any Qt binding, the error is still reported on stderr."""
+    with patch.object(fallback_error, "_import_qt_widgets", return_value=(None, None)):
+        fallback_error.report_core_not_loaded(SITE_CORE_PYTHON, ImportError("No Qt"))
+    assert "no Qt binding" in capsys.readouterr().err
+
+
+def test_core_not_loaded_never_raises(qt_widgets, monkeypatch):
+    """Reporting the error must never raise, even if stderr or Qt are broken."""
+    monkeypatch.setattr(sys, "stderr", None)
+    qt_widgets.QMessageBox.critical.side_effect = RuntimeError("Qt is broken")
+    fallback_error.report_core_not_loaded(SITE_CORE_PYTHON, ImportError("No Qt"))
+
+    with patch.object(
+        fallback_error, "_import_qt_widgets", side_effect=RuntimeError("Broken")
+    ):
+        fallback_error.report_core_not_loaded(SITE_CORE_PYTHON, ImportError("No Qt"))
+
+
+def test_core_not_loaded_prefers_loaded_binding(monkeypatch):
+    """
+    The dialog uses the Qt binding the PTR desktop app already loaded, rather than
+    loading a second one.
+    """
+    imported = []
+
+    def import_module(name):
+        imported.append(name)
+        return MagicMock(__version__="5.15.2")
+
+    monkeypatch.setitem(sys.modules, "PySide2", MagicMock())
+    monkeypatch.delitem(sys.modules, "PySide6", raising=False)
+    with patch.object(fallback_error.importlib, "import_module", import_module):
+        binding, _ = fallback_error._import_qt_widgets()
+    assert binding == "PySide2 5.15.2"
+    assert imported == ["PySide2", "PySide2.QtWidgets"]
