@@ -159,15 +159,15 @@ init_sgtk_logger()
 # now proceed with non builtin imports
 from .qt import QtCore, QtGui
 
-from . import paths
-
-# Aliased, since "splash" is used for the splash screen instance in this module.
-from . import splash as splash_module
-from . import desktop_message_box
-from . import upgrade_startup
-from . import location
-
-from . import errors
+# "splash" is aliased, since it's the name of the splash screen instance in this module.
+from . import (
+    desktop_message_box,
+    errors,
+    location,
+    paths,
+    splash as splash_module,
+    upgrade_startup,
+)
 
 from tank.util.version import (
     is_version_older_or_equal,

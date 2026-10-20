@@ -8,11 +8,11 @@
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
 
-from ..qt import QtCore
+from shotgun_desktop.qt import QtCore
 for name, cls in QtCore.__dict__.items():
     if isinstance(cls, type): globals()[name] = cls
 
-from ..qt import QtGui
+from shotgun_desktop.qt import QtGui
 for name, cls in QtGui.__dict__.items():
     if isinstance(cls, type): globals()[name] = cls
 

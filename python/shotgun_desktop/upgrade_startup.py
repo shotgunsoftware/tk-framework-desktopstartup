@@ -10,8 +10,7 @@
 
 import sys
 import os
-from . import location
-from . import desktop_message_box
+from . import desktop_message_box, location
 from sgtk.descriptor import CheckVersionConstraintsError
 
 from sgtk import LogManager
