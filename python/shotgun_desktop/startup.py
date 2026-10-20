@@ -871,8 +871,10 @@ def main(**kwargs):
         f"{app_bootstrap.get_version()} - Python {sys.version_info[0]}.{sys.version_info[1]}"
     )
 
-    splash.set_message("Loading the application...")
+    # Show the splash before setting the message, since set_message() processes
+    # the events needed to paint the splash before the authentication starts.
     splash.show()
+    splash.set_message("Loading the application...")
 
     # We might crash before even initializing the authenticator, so instantiate
     # it right away.
