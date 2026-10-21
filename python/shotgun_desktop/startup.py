@@ -269,7 +269,11 @@ def __init_app():
     if os.environ.get("QT_PLUGIN_PATH"):
         del os.environ["QT_PLUGIN_PATH"]
     # start up our QApp now
-    return QtGui.QApplication(sys.argv), shotgun_desktop.splash.Splash()
+    app = QtGui.QApplication(sys.argv)
+    # Give the splash and login dialog windows the app icon until the engine
+    # sets its own.
+    app.setWindowIcon(QtGui.QIcon(":/res/shotgun_badge.png"))
+    return app, shotgun_desktop.splash.Splash()
 
 
 def __optional_state_cleanup(splash, shotgun_authenticator, app_bootstrap):
@@ -337,8 +341,6 @@ def __restart_app_with_countdown(splash, reason):
     # splash screen that from the user point of view looks like the app is redoing work
     # it already did by mistake. This makes the behavior explicit.
     splash.show()
-    splash.raise_()
-    splash.activateWindow()
     for i in range(3, 0, -1):
         splash.set_message("%s Restarting in %d seconds..." % (reason, i))
         time.sleep(1)
@@ -872,6 +874,11 @@ def main(**kwargs):
     splash.set_version(
         f"{app_bootstrap.get_version()} - Python {sys.version_info[0]}.{sys.version_info[1]}"
     )
+
+    # Show the splash before setting the message, since set_message() processes
+    # the events needed to paint the splash before the authentication starts.
+    splash.show()
+    splash.set_message("Loading the application...")
 
     # We might crash before even initializing the authenticator, so instantiate
     # it right away.
