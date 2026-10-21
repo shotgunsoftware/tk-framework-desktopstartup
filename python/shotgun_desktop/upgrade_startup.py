@@ -10,6 +10,7 @@
 
 import sys
 import os
+
 from . import desktop_message_box, location
 from sgtk.descriptor import CheckVersionConstraintsError
 
