@@ -159,13 +159,12 @@ init_sgtk_logger()
 # now proceed with non builtin imports
 from .qt import QtCore, QtGui
 
-# "splash" is aliased, since it's the name of the splash screen instance in this module.
 from . import (
     desktop_message_box,
     errors,
     location,
     paths,
-    splash as splash_module,
+    splash as splash_module,  # Avoids a clash with splash screen variables.
     upgrade_startup,
 )
 
