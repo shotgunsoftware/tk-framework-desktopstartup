@@ -157,7 +157,7 @@ add_to_python_path(
 init_sgtk_logger()
 
 # now proceed with non builtin imports
-from .qt import QtCore, QtGui
+from . import qt
 
 from . import (
     desktop_message_box,
@@ -262,7 +262,7 @@ def __init_app():
     if os.environ.get("QT_PLUGIN_PATH"):
         del os.environ["QT_PLUGIN_PATH"]
     # start up our QApp now
-    return QtGui.QApplication(sys.argv), splash_module.Splash()
+    return qt.QtGui.QApplication(sys.argv), splash_module.Splash()
 
 
 def __optional_state_cleanup(splash, shotgun_authenticator, app_bootstrap):
@@ -275,8 +275,8 @@ def __optional_state_cleanup(splash, shotgun_authenticator, app_bootstrap):
     """
     # If the application was launched holding the alt key, log the user out.
     if (
-        QtGui.QApplication.queryKeyboardModifiers() & QtCore.Qt.AltModifier
-    ) == QtCore.Qt.AltModifier:
+        qt.QtGui.QApplication.queryKeyboardModifiers() & qt.QtCore.Qt.AltModifier
+    ) == qt.QtCore.Qt.AltModifier:
         logger.info("Alt was pressed, clearing default user and startup descriptor")
         shotgun_authenticator.clear_default_user()
         app_bootstrap.clear_startup_location()
