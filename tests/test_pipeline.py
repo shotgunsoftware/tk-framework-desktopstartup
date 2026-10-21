@@ -10,7 +10,7 @@
 
 import os
 import sys
-from unittest.mock import patch
+from unittest import mock
 
 sys.path.insert(
     0, os.path.join(os.path.dirname(__file__), "..", "python/tk-core/python")
@@ -38,18 +38,20 @@ class MockConnection:
 
 def test_no_pipeline_config(*mocks):
     """Ensure that no configuration is returned if there aren't any supplied."""
-    with patch.object(MockConnection, "find", return_value=[]):
+    with mock.patch.object(MockConnection, "find", return_value=[]):
         _, pc, _ = paths.get_pipeline_configuration_info(MockConnection())
         assert pc is None
 
 
-@patch("sgtk.get_authenticated_user", return_value=MockUser())
-@patch.object(MockUser, "resolve_entity", return_value={"type": "HumanUser", "id": 1})
+@mock.patch("sgtk.get_authenticated_user", return_value=MockUser())
+@mock.patch.object(
+    MockUser, "resolve_entity", return_value={"type": "HumanUser", "id": 1}
+)
 def test_one_pipeline_configuration(*mocks):
     """
     Just one configuration, no user restriction
     """
-    with patch.object(
+    with mock.patch.object(
         MockConnection,
         "find",
         return_value=[
@@ -70,14 +72,16 @@ def test_one_pipeline_configuration(*mocks):
         }
 
 
-@patch("sgtk.get_authenticated_user", return_value=MockUser())
-@patch.object(MockUser, "resolve_entity", return_value={"type": "HumanUser", "id": 1})
+@mock.patch("sgtk.get_authenticated_user", return_value=MockUser())
+@mock.patch.object(
+    MockUser, "resolve_entity", return_value={"type": "HumanUser", "id": 1}
+)
 def test_two_pipeline_configurations(*mocks):
     """
     Two configurations, no user restriction
     We select the one with lowest id
     """
-    with patch.object(
+    with mock.patch.object(
         MockConnection,
         "find",
         return_value=[
@@ -99,14 +103,16 @@ def test_two_pipeline_configurations(*mocks):
         assert pc["id"] == 1 and pc["code"] == "pc1"
 
 
-@patch("sgtk.get_authenticated_user", return_value=MockUser())
-@patch.object(MockUser, "resolve_entity", return_value={"type": "HumanUser", "id": 1})
+@mock.patch("sgtk.get_authenticated_user", return_value=MockUser())
+@mock.patch.object(
+    MockUser, "resolve_entity", return_value={"type": "HumanUser", "id": 1}
+)
 def test_lowest_id(*mocks):
     """
     Ensure that the configuration with the lowest id and without any user
     restrictions is selected if there are no configurations restricting the user.
     """
-    with patch.object(
+    with mock.patch.object(
         MockConnection,
         "find",
         return_value=[
@@ -134,13 +140,15 @@ def test_lowest_id(*mocks):
         assert pc["id"] == 1 and pc["code"] == "pc1"
 
 
-@patch("sgtk.get_authenticated_user", return_value=MockUser())
-@patch.object(MockUser, "resolve_entity", return_value={"type": "HumanUser", "id": 2})
+@mock.patch("sgtk.get_authenticated_user", return_value=MockUser())
+@mock.patch.object(
+    MockUser, "resolve_entity", return_value={"type": "HumanUser", "id": 2}
+)
 def test_user_restriction(*mocks):
     """
     2 Configs: one is user restricted, one has no restriction
     """
-    with patch.object(
+    with mock.patch.object(
         MockConnection,
         "find",
         return_value=[
@@ -166,14 +174,16 @@ def test_user_restriction(*mocks):
         assert pc["id"] == 1 and pc["code"] == "pc1"
 
 
-@patch("sgtk.get_authenticated_user", return_value=MockUser())
-@patch.object(MockUser, "resolve_entity", return_value={"type": "HumanUser", "id": 1})
+@mock.patch("sgtk.get_authenticated_user", return_value=MockUser())
+@mock.patch.object(
+    MockUser, "resolve_entity", return_value={"type": "HumanUser", "id": 1}
+)
 def test_user_restriction_all_restricted_different_users(*mocks):
     """
     Ensure that no configuration is returned if all have user restrictions,
     but none match the user.
     """
-    with patch.object(
+    with mock.patch.object(
         MockConnection,
         "find",
         return_value=[
@@ -189,13 +199,15 @@ def test_user_restriction_all_restricted_different_users(*mocks):
         assert pc is None
 
 
-@patch("sgtk.get_authenticated_user", return_value=MockUser())
-@patch.object(MockUser, "resolve_entity", return_value={"type": "HumanUser", "id": 1})
+@mock.patch("sgtk.get_authenticated_user", return_value=MockUser())
+@mock.patch.object(
+    MockUser, "resolve_entity", return_value={"type": "HumanUser", "id": 1}
+)
 def test_user_restriction_no_match_fallback_unrestricted(*mocks):
     """
     2 Configs: one is user restricted, one has no restriction
     """
-    with patch.object(
+    with mock.patch.object(
         MockConnection,
         "find",
         return_value=[
@@ -217,15 +229,15 @@ def test_user_restriction_no_match_fallback_unrestricted(*mocks):
         assert pc["id"] == 2 and pc["code"] == "pc2"
 
 
-@patch("sgtk.get_authenticated_user", return_value=MockUser())
+@mock.patch("sgtk.get_authenticated_user", return_value=MockUser())
 def test_user_restriction_lowest_id(*mocks):
     """
     Ensure that user-restricted configuration with lowest id is selected over
     non-restricted configuration when that user logs in.
     """
-    with patch.object(
+    with mock.patch.object(
         MockUser, "resolve_entity", return_value={"type": "HumanUser", "id": 1}
-    ), patch.object(
+    ), mock.patch.object(
         MockConnection,
         "find",
         return_value=[
