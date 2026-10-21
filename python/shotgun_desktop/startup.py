@@ -269,7 +269,11 @@ def __init_app():
     if os.environ.get("QT_PLUGIN_PATH"):
         del os.environ["QT_PLUGIN_PATH"]
     # start up our QApp now
-    return QtGui.QApplication(sys.argv), shotgun_desktop.splash.Splash()
+    app = QtGui.QApplication(sys.argv)
+    # Give the splash and login dialog windows the app icon until the engine
+    # sets its own.
+    app.setWindowIcon(QtGui.QIcon(":/res/shotgun_badge.png"))
+    return app, shotgun_desktop.splash.Splash()
 
 
 def __optional_state_cleanup(splash, shotgun_authenticator, app_bootstrap):
