@@ -8,16 +8,16 @@
 # agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
-from . import qt
+from .qt import QtCore, QtGui
 
 
-class DesktopMessageBox(qt.QtGui.QMessageBox):
+class DesktopMessageBox(QtGui.QMessageBox):
     @staticmethod
     def critical(
         title,
         message,
-        default_button=qt.QtGui.QMessageBox.Ok,
-        buttons=qt.QtGui.QMessageBox.Ok,
+        default_button=QtGui.QMessageBox.Ok,
+        buttons=QtGui.QMessageBox.Ok,
         detailed_text=None,
         parent=None,
     ):
@@ -38,7 +38,7 @@ class DesktopMessageBox(qt.QtGui.QMessageBox):
         :returns: The QtGui.QMessageBox.StandardButton value representing the user selection.
         """
         return DesktopMessageBox(
-            qt.QtGui.QMessageBox.Critical,
+            QtGui.QMessageBox.Critical,
             title,
             message,
             default_button,
@@ -51,8 +51,8 @@ class DesktopMessageBox(qt.QtGui.QMessageBox):
     def information(
         title,
         message,
-        default_button=qt.QtGui.QMessageBox.Ok,
-        buttons=qt.QtGui.QMessageBox.Ok,
+        default_button=QtGui.QMessageBox.Ok,
+        buttons=QtGui.QMessageBox.Ok,
         detailed_text=None,
         parent=None,
     ):
@@ -73,7 +73,7 @@ class DesktopMessageBox(qt.QtGui.QMessageBox):
         :returns: The QtGui.QMessageBox.StandardButton value representing the user selection.
         """
         return DesktopMessageBox(
-            qt.QtGui.QMessageBox.Information,
+            QtGui.QMessageBox.Information,
             title,
             message,
             default_button,
@@ -86,8 +86,8 @@ class DesktopMessageBox(qt.QtGui.QMessageBox):
     def warning(
         title,
         message,
-        default_button=qt.QtGui.QMessageBox.Ok,
-        buttons=qt.QtGui.QMessageBox.Ok,
+        default_button=QtGui.QMessageBox.Ok,
+        buttons=QtGui.QMessageBox.Ok,
         detailed_text=None,
         parent=None,
     ):
@@ -108,7 +108,7 @@ class DesktopMessageBox(qt.QtGui.QMessageBox):
         :returns: The QtGui.QMessageBox.StandardButton value representing the user selection.
         """
         return DesktopMessageBox(
-            qt.QtGui.QMessageBox.Warning,
+            QtGui.QMessageBox.Warning,
             title,
             message,
             default_button,
@@ -145,7 +145,7 @@ class DesktopMessageBox(qt.QtGui.QMessageBox):
         :returns: The QtGui.QMessageBox.StandardButton value representing the user selection.
         """
 
-        qt.QtGui.QMessageBox.__init__(self)
+        QtGui.QMessageBox.__init__(self)
 
         # Retrieve the style to get the message box icon associated to it. Icon is a temporary
         # object.
@@ -211,5 +211,5 @@ class DesktopMessageBox(qt.QtGui.QMessageBox):
         self.show()
         self.raise_()
         self.activateWindow()
-        self.setWindowFlags(qt.QtCore.Qt.WindowStaysOnTopHint | self.windowFlags())
-        return qt.QtGui.QDialog.exec_(self)
+        self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint | self.windowFlags())
+        return QtGui.QDialog.exec_(self)

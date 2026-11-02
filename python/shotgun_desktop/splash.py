@@ -8,12 +8,12 @@
 # agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
-from . import qt
+from .qt import QtGui, QtCore
 
 from .ui import splash
 
 
-class Splash(qt.QtGui.QDialog):
+class Splash(QtGui.QDialog):
     """
     Splash screen with customizable message shown during the application startup.
     """
@@ -22,12 +22,12 @@ class Splash(qt.QtGui.QDialog):
         """
         Constructor. Widget is initially hidden.
         """
-        qt.QtGui.QDialog.__init__(self, parent)
+        QtGui.QDialog.__init__(self, parent)
 
         self.ui = splash.Ui_Splash()
         self.ui.setupUi(self)
 
-        self.setWindowFlags(qt.QtCore.Qt.SplashScreen)
+        self.setWindowFlags(QtCore.Qt.SplashScreen)
 
     def set_message(self, text):
         """
@@ -36,7 +36,7 @@ class Splash(qt.QtGui.QDialog):
         :param text: Text to display.
         """
         self.ui.message.setText(text)
-        qt.QtGui.QApplication.instance().processEvents()
+        QtGui.QApplication.instance().processEvents()
 
     def set_version(self, version):
         """
@@ -50,7 +50,7 @@ class Splash(qt.QtGui.QDialog):
         """
         Shows the dialog of top of all other dialogs.
         """
-        qt.QtGui.QDialog.show(self)
+        QtGui.QDialog.show(self)
         self.raise_()
         self.activateWindow()
 
@@ -61,4 +61,4 @@ class Splash(qt.QtGui.QDialog):
         # There's no sense showing the previous message when we show the
         # splash next time.
         self.set_message("")
-        qt.QtGui.QDialog.hide(self)
+        QtGui.QDialog.hide(self)
