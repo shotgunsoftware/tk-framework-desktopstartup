@@ -277,7 +277,7 @@ def __optional_state_cleanup(splash, shotgun_authenticator, app_bootstrap):
     Cleans the Desktop state if the alt key is pressed. Restarts the Desktop when done.
 
     :param splash: Splash screen widget.
-    :param shotgun_authenticator: Shotgun authenticator used to logout if alt is pressed.
+    :param shotgun_authenticator: :class:`~sgtk.authentication.ShotgunAuthenticator` used to logout if alt is pressed.
     :params app_bootstrap: The application bootstrap.
     """
     # If the application was launched holding the alt key, log the user out.
@@ -296,9 +296,9 @@ def __do_login(splash, shotgun_authenticator):
     cached on disk.
 
     :param splash: Splash screen widget.
-    :param shotgun_authenticator: Instance of the Shotgun Authenticator to use for login.
+    :param shotgun_authenticator: Instance of :class:`~sgtk.authentication.ShotgunAuthenticator` to use for login.
 
-    :returns tank.authentication.ShotgunUser: The logged in user or None
+    :returns: The logged in :class:`~sgtk.authentication.ShotgunUser` or None
     """
     from sgtk.authentication import AuthenticationCancelled
 
@@ -366,7 +366,7 @@ def __launch_app(app, splash, user, app_bootstrap, settings):
 
     :param app: Application object for event processing.
     :param splash: Splash dialog to update user on what is currently going on
-    :param user: Current ShotgunUser.
+    :param user: Current :class:`~sgtk.authentication.ShotgunUser`.
     :param app_bootstrap: Application bootstrap.
     :param settings: The application's settings.
 
@@ -484,7 +484,7 @@ def __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path):
 
     :param app: Application object for event processing.
     :param splash: Splash dialog to update user on what is currently going on
-    :param user: Current ShotgunUser.
+    :param user: Current :class:`~sgtk.authentication.ShotgunUser`.
     :param pc: Pipeline configuration entity dictionary.
     :param pc_path: Path to the pipeline configuration.
 
@@ -493,7 +493,7 @@ def __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path):
     import sgtk
 
     mgr = sgtk.bootstrap.ToolkitManager(user)
-    # Tell the manager to resolve the config in Shotgun so it can resolve the location on disk.
+    # Tell the manager to resolve the config in FlowPT so it can resolve the location on disk.
     mgr.do_shotgun_config_lookup = True
     mgr.progress_callback = (
         lambda progress_value, message: __bootstrap_progress_callback(
@@ -511,12 +511,12 @@ def __start_engine_in_toolkit_classic(app, splash, user, pc, pc_path):
         :param ctx: Toolkit context we are bootstrapping into.
         :type ctx: :class:`sgtk.Context`
         """
-        # If the pipeline configuration found in Shotgun doesn't match what we have locally, we have a
+        # If the pipeline configuration found in FlowPT doesn't match what we have locally, we have a
         # problem.
         if pc["id"] != ctx.sgtk.pipeline_configuration.get_shotgun_id():
             raise InvalidPipelineConfiguration(pc, ctx.sgtk.pipeline_configuration)
 
-        # If the pipeline configuration we got from Shotgun is not assigned to a project, we might have
+        # If the pipeline configuration we got from FlowPT is not assigned to a project, we might have
         # some patching to be done to local site configuration.
         if pc["project"] is None:
 
@@ -557,7 +557,7 @@ def __start_engine_in_zero_config(app, app_bootstrap, splash, user):
     :param app: Application object for event processing.
     :param app_bootstrap: Application bootstrap.
     :param splash: Splash dialog to update user on what is currently going on
-    :param user: Current ShotgunUser.
+    :param user: Current :class:`~sgtk.authentication.ShotgunUser`.
 
     :returns: Toolkit engine that was started.
     """
@@ -759,7 +759,7 @@ def __handle_unexpected_exception(
 
     else:
         formatted_error_message = (
-            "Something went wrong in the PTR desktop app! If you <a href={link}>contact us</a> "
+            "Something went wrong in FlowPT Desktop! If you <a href={link}>contact us</a> "
             "we'll help you diagnose the issue.\n"
             "Error: {error}\n"
             "For more information, see the log file at {log}.".format(
@@ -826,7 +826,7 @@ class _BootstrapProxy(object):
 
     def get_bundle_cache_location(self):
         """
-        Retrieves the bundle cache that is distributed with the PTR desktop app.
+        Retrieves the bundle cache that is distributed with FlowPT Desktop.
 
         We're implementing this method on the proxy because Desktop versions 1.3.6 and earlier didn't
         have a bundle cache.
@@ -876,7 +876,7 @@ def main(**kwargs):
     # We might crash before even initializing the authenticator, so instantiate
     # it right away.
     shotgun_authenticator = None
-    # PTR desktop app startup has always been logging every debug string to disk since the new authentication from 0.16
+    # FlowPT Desktop startup has always been logging every debug string to disk since the new authentication from 0.16
     # was released and the startup has been difficult to work with and debug, so keep that logic in place during the
     # startup sequence. It will be restored during the ToolkitManager's pre_engine_start_callback.
     __backup_global_debug_flag()

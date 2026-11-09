@@ -23,7 +23,7 @@ def get_pipeline_configuration_info(connection):
     """
     Finds the site configuration root on disk.
 
-    :param shotgun_api3.Shotgun connection: Shotgun instance for the site we want
+    :param connection: :class:`~shotgun_api3.shotgun.Shotgun` instance for the site we want
         to find a configuration for.
 
     :returns (str, str, bool): The pipeline configuration root, the pipeline configuration
@@ -88,7 +88,7 @@ def get_pipeline_configuration_info(connection):
         ],
     )
 
-    # We don't filter in the Shotgun query for the plugin ids because not every site these fields yet.
+    # We don't filter in the FlowPT query for the plugin ids because not every site these fields yet.
     # So if any pipeline configurations with a plugin id was returned, filter them it out.
     pcs = list(
         filter(lambda pc: not (pc.get("sg_plugin_ids") or pc.get("plugin_ids")), pcs)
