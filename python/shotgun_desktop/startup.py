@@ -8,14 +8,20 @@
 # agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
+from __future__ import annotations
+
 import os
 import sys
 import time
 import subprocess
 import traceback
+import typing
 
 # initialize logging
 import logging
+
+if typing.TYPE_CHECKING:
+    import sgtk
 
 # The value of sys.executable under multiple platforms and multiple versions
 # of Desktop is unreliable. Therefore, we're patch the value if the executable
@@ -173,7 +179,7 @@ from tank.util.version import is_version_newer_or_equal
 global_debug_flag_at_startup = None
 
 
-def __restore_global_debug_flag():
+def __restore_global_debug_flag() -> None:
     """
     Restores the global debug flag
     """
@@ -285,7 +291,11 @@ def __restart_app_with_countdown(splash, reason):
     raise errors.RequestRestartException()
 
 
-def __launch_app(splash, user, app_bootstrap):
+def __launch_app(
+    splash: splash_module.Splash,
+    user: sgtk.authentication.ShotgunUser,
+    app_bootstrap: typing.Any,
+) -> int:
     """
     Shows the splash screen, optionally downloads and configures Toolkit, imports it, optionally
     updates it and then launches the desktop engine.
@@ -396,7 +406,11 @@ def __bootstrap_progress_callback(splash, message):
     logger.debug(message)
 
 
-def __start_engine_in_toolkit_classic(splash, user, pc):
+def __start_engine_in_toolkit_classic(
+    splash: splash_module.Splash,
+    user: sgtk.authentication.ShotgunUser,
+    pc: dict[str, typing.Any],
+) -> sgtk.platform.Engine:
     """
     Create a Toolkit instance by boostraping into the pipeline configuration.
 
@@ -416,14 +430,13 @@ def __start_engine_in_toolkit_classic(splash, user, pc):
     )
     mgr.pipeline_configuration = pc["id"]
 
-    def pre_engine_start_callback(ctx):
+    def pre_engine_start_callback(ctx: sgtk.Context) -> None:
         """
         Called before the engine starts during bootstrap. This is used to
         ensure that the pipeline configuration on disk is the expected one
         and has the right stat.
 
         :param ctx: Toolkit context we are bootstrapping into.
-        :type ctx: :class:`sgtk.Context`
         """
         # If the pipeline configuration found in Shotgun doesn't match what we have locally, we have a
         # problem.
@@ -602,14 +615,18 @@ def __handle_exception(splash, shotgun_authenticator, error_message):
         shotgun_authenticator.clear_default_user()
 
 
-def __handle_unexpected_exception(splash, shotgun_authenticator, error_message):
+def __handle_unexpected_exception(
+    splash: typing.Optional[splash_module.Splash],
+    shotgun_authenticator: typing.Optional[sgtk.authentication.ShotgunAuthenticator],
+    error_message: Exception,
+) -> None:
     """
     Tears down the application, logs you out and displays an error message.
 
     :param splash: Splash dialog to hide.
     :param shotgun_authenticator: Used to clear the default user so we logout
         automatically on Desktop failure.
-    :param error_message: Error string that will be displayed in a message box.
+    :param error_message: Error that will be displayed in a message box.
     """
     if splash:
         splash.hide()
