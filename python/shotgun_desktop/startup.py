@@ -13,6 +13,7 @@ import sys
 import time
 import subprocess
 import traceback
+import typing
 
 # initialize logging
 import logging
@@ -721,7 +722,7 @@ def __handle_unexpected_exception(
         shotgun_authenticator.clear_default_user()
 
 
-def main(**kwargs):
+def main(**kwargs: typing.Any) -> int:
     """
     Main
 

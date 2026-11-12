@@ -8,20 +8,32 @@
 # agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
+from __future__ import annotations
+
+import types
+import typing
+
 from . import desktop_message_box, location
 from sgtk.descriptor import CheckVersionConstraintsError
 
 from sgtk import LogManager
 
+if typing.TYPE_CHECKING:
+    from sgtk.descriptor import FrameworkDescriptor
+
+    from .splash import Splash
+
 logger = LogManager.get_logger(__name__)
 
 
-def _out_of_date_check(latest_descriptor, current_desc):
+def _out_of_date_check(
+    latest_descriptor: FrameworkDescriptor, current_desc: FrameworkDescriptor
+) -> bool:
     """
     Check if the version is out of date.
 
-    :param latest_descriptor:`sgtk.descriptor.FrameworkDescriptor` instance with the latest startup descriptor.
-    :param current_desc:`sgtk.descriptor.FrameworkDescriptor` instance with the current startup descriptor.
+    :param latest_descriptor: Latest startup descriptor.
+    :param current_desc: Current startup descriptor.
 
     :returns: True if the startup version is outdated in comparison with the latest available version on the
               appstore. False otherwise.
@@ -29,7 +41,9 @@ def _out_of_date_check(latest_descriptor, current_desc):
     return latest_descriptor.get_version() != current_desc.get_version()
 
 
-def upgrade_startup(splash, sgtk, app_bootstrap):
+def upgrade_startup(
+    splash: Splash, sgtk: types.ModuleType, app_bootstrap: typing.Any
+) -> bool:
     """
     Tries to upgrade the startup logic. If an update is available, it will be donwloaded to the
     local cache directory and the startup descriptor will be updated.

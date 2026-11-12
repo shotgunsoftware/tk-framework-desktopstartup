@@ -14,6 +14,7 @@ This script allows to launch the PTR desktop app from any Python interpreter.
 
 import sys
 import os
+import typing
 
 repo_root = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
 
@@ -48,7 +49,7 @@ class AppBoostrap(object):
     def get_startup_path(self):
         return repo_root
 
-    def get_bundle_cache_location(self):
+    def get_bundle_cache_location(self) -> typing.Optional[str]:
         return os.environ.get("SHOTGUN_DESKTOP_BUNDLE_CACHE_LOCATION") or None
 
     def get_version(self):
