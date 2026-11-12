@@ -8,58 +8,42 @@
 # agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
-import sys
-import os
+from __future__ import annotations
+
+import types
+import typing
 
 from . import desktop_message_box, location
 from sgtk.descriptor import CheckVersionConstraintsError
 
 from sgtk import LogManager
 
+if typing.TYPE_CHECKING:
+    from sgtk.descriptor import FrameworkDescriptor
+
+    from .splash import Splash
+
 logger = LogManager.get_logger(__name__)
 
 
-def _supports_get_from_location_and_paths(sgtk):
+def _out_of_date_check(
+    latest_descriptor: FrameworkDescriptor, current_desc: FrameworkDescriptor
+) -> bool:
     """
-    Tests if the descriptor factory in core supports non-pipeline configuration based
-    setups.
+    Check if the version is out of date.
 
-    :param sgtk: The Toolkit API handle.
-
-    :returns: True if the sgtk.deploy.descriptor.get_from_location_and_paths is available,
-        False otherwise.
-    """
-    return hasattr(sgtk.deploy.descriptor, "get_from_location_and_paths")
-
-
-def _out_of_date_check(latest_descriptor, current_desc):
-    """
-    Check if the version is out of date, this prevents an upgrade of the startup logic
-    in the event that it detects PTR desktop app is running on Python 2.
-
-    :param latest_descriptor:`sgtk.descriptor.FrameworkDescriptor` instance with the latest startup descriptor.
-    :param current_desc:`sgtk.descriptor.FrameworkDescriptor` instance with the current startup descriptor.
+    :param latest_descriptor: Latest startup descriptor.
+    :param current_desc: Current startup descriptor.
 
     :returns: True if the startup version is outdated in comparison with the latest available version on the
               appstore. False otherwise.
     """
-
-    # If we're running in Python 2 and if the bundled framework exists on disk,
-    # returns False to avoid upgrade the startup logic.
-    if sys.version_info[0] < 3 and os.path.exists(current_desc.get_path()):
-        logger.debug(
-            "Using Python version '%s'"
-            % ".".join(str(i) for i in sys.version_info[0:3])
-        )
-        logger.debug(
-            "Desktop startup is Currently running version %s"
-            % current_desc.get_version(),
-        )
-        return False
     return latest_descriptor.get_version() != current_desc.get_version()
 
 
-def upgrade_startup(splash, sgtk, app_bootstrap):
+def upgrade_startup(
+    splash: Splash, sgtk: types.ModuleType, app_bootstrap: typing.Any
+) -> bool:
     """
     Tries to upgrade the startup logic. If an update is available, it will be donwloaded to the
     local cache directory and the startup descriptor will be updated.
@@ -68,12 +52,6 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
 
     :returns: True if an update was downloaded and the descriptor updated, False otherwise.
     """
-
-    # It is possible to launch the app with a version of core
-    # that doesn't support the functionality needed to update
-    # the startup code.
-    if not _supports_get_from_location_and_paths(sgtk):
-        return False
 
     sg = sgtk.get_authenticated_user().create_sg_connection()
 
