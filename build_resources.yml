@@ -9,4 +9,4 @@
   res_files:
     - resources
   py_dest: python/shotgun_desktop/ui
-  import_pattern: shotgun_desktop.qt
+  import_pattern: ..qt

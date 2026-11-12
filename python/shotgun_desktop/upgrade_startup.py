@@ -10,8 +10,8 @@
 
 import sys
 import os
-from shotgun_desktop.location import write_location, get_startup_descriptor
-from shotgun_desktop.desktop_message_box import DesktopMessageBox
+
+from . import desktop_message_box, location
 from sgtk.descriptor import CheckVersionConstraintsError
 
 from sgtk import LogManager
@@ -77,7 +77,7 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
 
     sg = sgtk.get_authenticated_user().create_sg_connection()
 
-    current_desc = get_startup_descriptor(sgtk, sg, app_bootstrap)
+    current_desc = location.get_startup_descriptor(sgtk, sg, app_bootstrap)
 
     logger.debug("Testing for remote access: %s", current_desc)
 
@@ -145,7 +145,7 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
         latest_descriptor.run_post_install()
 
         # write the descriptor location
-        write_location(latest_descriptor)
+        location.write_location(latest_descriptor)
 
         # update the startup so next restart we start with the just downloaded code.
         app_bootstrap.update_startup(latest_descriptor)
@@ -155,7 +155,7 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
         # If there is an error updating, don't prevent the user from running the app, but let them
         # know something wrong is going on.
         logger.exception("Unexpected error when updating startup code.")
-        DesktopMessageBox.critical(
+        desktop_message_box.DesktopMessageBox.critical(
             "Flow Production Tracking update failed",
             "There is a new update of the PTR desktop component, but it couldn't be installed. The PTR desktop "
             "app will be launched with the currently installed version of the code.\n"
