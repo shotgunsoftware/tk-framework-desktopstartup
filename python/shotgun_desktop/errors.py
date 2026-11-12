@@ -141,9 +141,6 @@ class EngineNotCompatibleWithDesktop16(ShotgunDesktopError):
         super().__init__(
             "Your version of tk-desktop is not compatible with this PTR desktop app {}.\n"
             "\n"
-            "Please upgrade your site configuration's tk-desktop to v2.5.9+ or "
-            "download PTR desktop app 1.5.9 or earlier <a href='{}'>here</a>".format(
-                app_version,
-                "https://community.shotgridsoftware.com/t/a-new-version-of-shotgrid-desktop-has-been-released/13877/99999",
-            )
+            "Please upgrade your site configuration's tk-desktop to the latest "
+            "version.".format(app_version)
         )
