@@ -602,9 +602,7 @@ def __handle_exception(splash, shotgun_authenticator, error_message):
         shotgun_authenticator.clear_default_user()
 
 
-def __handle_unexpected_exception(
-    splash, shotgun_authenticator, error_message, app_bootstrap
-):
+def __handle_unexpected_exception(splash, shotgun_authenticator, error_message):
     """
     Tears down the application, logs you out and displays an error message.
 
@@ -612,7 +610,6 @@ def __handle_unexpected_exception(
     :param shotgun_authenticator: Used to clear the default user so we logout
         automatically on Desktop failure.
     :param error_message: Error string that will be displayed in a message box.
-    :params app_bootstrap: The application bootstrap.
     """
     if splash:
         splash.hide()
@@ -818,5 +815,5 @@ def main(**kwargs):
         __handle_exception(splash, shotgun_authenticator, str(e))
         return -1
     except Exception as e:
-        __handle_unexpected_exception(splash, shotgun_authenticator, e, app_bootstrap)
+        __handle_unexpected_exception(splash, shotgun_authenticator, e)
         return -1
