@@ -41,7 +41,9 @@ Intentions:
 """
 
 import os
+import pathlib
 import sys
+import typing
 from unittest.mock import patch
 
 import pytest
@@ -81,7 +83,7 @@ CLASSIFICATION = [
 ]
 
 
-def _raise_from(code, filename):
+def _raise_from(code: str, filename: str) -> Exception:
     """
     Run the code as if it was located in the given file.
 
@@ -98,7 +100,7 @@ def _raise_from(code, filename):
 
 
 @pytest.mark.parametrize("filename,expected", CLASSIFICATION)
-def test_incompatible_syntax(filename, expected):
+def test_incompatible_syntax(filename: str, expected: typing.Optional[type]) -> None:
     """
     Syntax no longer supported by Python is blamed on the site configuration's
     tk-desktop or tk-core, based on the file containing it. The traceback of a
@@ -116,7 +118,7 @@ def test_incompatible_syntax(filename, expected):
 
 
 @pytest.mark.parametrize("filename,expected", CLASSIFICATION)
-def test_removed_module(filename, expected):
+def test_removed_module(filename: str, expected: typing.Optional[type]) -> None:
     """
     Importing a module removed from the standard library is blamed on the site
     configuration's tk-desktop or tk-core, based on the file importing it.
@@ -133,7 +135,9 @@ def test_removed_module(filename, expected):
 
 
 @pytest.mark.parametrize("code", ["print 'Python 2'", "import Cookie"])
-def test_engine_load_error_wrapped_by_core(tmp_path, monkeypatch, code):
+def test_engine_load_error_wrapped_by_core(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, code: str
+) -> None:
     """
     tk-core loads the engine's entry point with load_plugin(), which wraps any error
     in a TankLoadPluginError. The original error, raised by the engine's code, is the
@@ -160,7 +164,7 @@ def test_engine_load_error_wrapped_by_core(tmp_path, monkeypatch, code):
 # Intention 3: other errors are reported as is.
 
 
-def test_other_errors_not_reported():
+def test_other_errors_not_reported() -> None:
     """
     Other errors are genuine bugs, not incompatibilities, and are reported as is.
     """
@@ -168,7 +172,7 @@ def test_other_errors_not_reported():
     assert compatibility.get_incompatible_code_error(error, APP_VERSION) is None
 
 
-def test_desktop_errors_not_reported():
+def test_desktop_errors_not_reported() -> None:
     """
     Errors already meant for the user are shown as is, even if they happened while
     handling an import error.
@@ -193,7 +197,7 @@ def test_desktop_errors_not_reported():
         (CoreNotCompatibleWithDesktop, "tk-core"),
     ],
 )
-def test_error_message(error_class, component):
+def test_error_message(error_class: type, component: str) -> None:
     """
     Messages say which component of the site configuration is not compatible, and
     give the PTR desktop app and Python versions and the reason, so support can
@@ -213,7 +217,7 @@ def test_error_message(error_class, component):
         (SITE_CORE_FILE, compatibility.UPGRADE_CORE),
     ],
 )
-def test_incompatible_code_advice(filename, advice):
+def test_incompatible_code_advice(filename: str, advice: str) -> None:
     """Code that can't run asks to upgrade the component it belongs to."""
     error = _raise_from("import Cookie", filename)
     result = compatibility.get_incompatible_code_error(error, APP_VERSION)
@@ -223,7 +227,7 @@ def test_incompatible_code_advice(filename, advice):
 # Intention 5: never hide the original error.
 
 
-def test_classification_never_raises():
+def test_classification_never_raises() -> None:
     """
     If the error can't be classified, None is returned so the caller re-raises the
     original error, instead of replacing it with an error raised by the
