@@ -168,26 +168,20 @@ try:
 except Exception as e:
     # tk-core is not compatible with the Python or Qt shipped with the app, so the
     # usual error handling, which relies on them, can't run.
-    from shotgun_desktop.fallback_error import report_core_not_loaded
+    from . import fallback_error
 
     logger.exception("Unable to load tk-core from '%s'.", core_path)
-    report_core_not_loaded(core_path, e)
+    fallback_error.report_core_not_loaded(core_path, e)
     sys.exit(1)
 
-import shotgun_desktop.paths
-import shotgun_desktop.splash
-from shotgun_desktop.desktop_message_box import DesktopMessageBox
-from shotgun_desktop.upgrade_startup import upgrade_startup
-from shotgun_desktop.location import get_startup_descriptor
-from shotgun_desktop.compatibility import (
-    ensure_engine_compatible_with_desktop,
-    get_incompatible_code_error,
-)
-
-from shotgun_desktop.errors import (
-    ShotgunDesktopError,
-    RequestRestartException,
-    InvalidPipelineConfiguration,
+from . import (
+    compatibility,
+    desktop_message_box,
+    errors,
+    location,
+    paths,
+    splash as splash_module,  # Avoids a clash with splash screen variables.
+    upgrade_startup,
 )
 
 global_debug_flag_at_startup = None
@@ -229,7 +223,7 @@ def __init_app():
     if os.environ.get("QT_PLUGIN_PATH"):
         del os.environ["QT_PLUGIN_PATH"]
     # start up our QApp now
-    return QtGui.QApplication(sys.argv), shotgun_desktop.splash.Splash()
+    return QtGui.QApplication(sys.argv), splash_module.Splash()
 
 
 def __optional_state_cleanup(splash, shotgun_authenticator, app_bootstrap):
@@ -302,33 +296,17 @@ def __restart_app_with_countdown(splash, reason):
     for i in range(3, 0, -1):
         splash.set_message("%s Restarting in %d seconds..." % (reason, i))
         time.sleep(1)
-    raise RequestRestartException()
+    raise errors.RequestRestartException()
 
 
-def __extract_command_line_argument(arg_name):
-    """
-    Checks if an argument was specified from the command line and extracts it. Note that this method
-    removes all instances of the argument from argv. Therefore, invoking the method twice with the
-    same parameter will always return False the second time.
-
-    :returns: True if the argument was set, False otherwise.
-    """
-    is_set = arg_name in sys.argv
-    while arg_name in sys.argv:
-        sys.argv.remove(arg_name)
-    return is_set
-
-
-def __launch_app(app, splash, user, app_bootstrap, settings):
+def __launch_app(splash, user, app_bootstrap):
     """
     Shows the splash screen, optionally downloads and configures Toolkit, imports it, optionally
     updates it and then launches the desktop engine.
 
-    :param app: Application object for event processing.
     :param splash: Splash dialog to update user on what is currently going on
     :param user: Current ShotgunUser.
     :param app_bootstrap: Application bootstrap.
-    :param settings: The application's settings.
 
     :returns: The error code to return to the shell.
     """
@@ -340,7 +318,7 @@ def __launch_app(app, splash, user, app_bootstrap, settings):
     sgtk.set_authenticated_user(user)
 
     # Downloads an upgrade for the startup if available.
-    startup_updated = upgrade_startup(splash, sgtk, app_bootstrap)
+    startup_updated = upgrade_startup.upgrade_startup(splash, sgtk, app_bootstrap)
     if startup_updated:
         # We need to restore the global debug logging setting prior to
         # restarting the app so that forced debug logging is not remembered
@@ -361,7 +339,7 @@ def __launch_app(app, splash, user, app_bootstrap, settings):
         pc_path,
         pc,
         toolkit_classic_required,
-    ) = shotgun_desktop.paths.get_pipeline_configuration_info(connection)
+    ) = paths.get_pipeline_configuration_info(connection)
 
     # We need to toggle the global debug logging setting back prior to swapping
     # core. Cores older than v0.18.117 do not manage the TK_DEBUG environment
@@ -383,40 +361,37 @@ def __launch_app(app, splash, user, app_bootstrap, settings):
     del sgtk
     try:
         if toolkit_classic_required:
-            engine = __start_engine_in_toolkit_classic(
-                app, app_bootstrap, splash, user, pc
-            )
+            engine = __start_engine_in_toolkit_classic(app_bootstrap, splash, user, pc)
         else:
-            engine = __start_engine_in_zero_config(app, app_bootstrap, splash, user)
+            engine = __start_engine_in_zero_config(app_bootstrap, splash, user)
     except Exception as e:
         # The site configuration's tk-core or tk-desktop might not be compatible with
         # this version of Python.
-        error = get_incompatible_code_error(e, app_bootstrap.get_version())
+        error = compatibility.get_incompatible_code_error(
+            e, app_bootstrap.get_version()
+        )
         if error:
             raise error from e
         raise
 
-    return __post_bootstrap_engine(splash, app_bootstrap, engine, settings)
+    return __post_bootstrap_engine(splash, app_bootstrap, engine)
 
 
-def __bootstrap_progress_callback(splash, app, progress_value, message):
+def __bootstrap_progress_callback(splash, message):
     """
     Called whenever toolkit reports progress.
 
-    :param progress_value: The current progress value as float number.
-                           values will be reported in incremental order
-                           and always in the range 0.0 to 1.0
-    :param message:        Progress message string
+    :param splash: Splash dialog used to display the progress message.
+    :param message: Progress message string
     """
     splash.set_message(message)
     logger.debug(message)
 
 
-def __start_engine_in_toolkit_classic(app, app_bootstrap, splash, user, pc):
+def __start_engine_in_toolkit_classic(app_bootstrap, splash, user, pc):
     """
     Create a Toolkit instance by boostraping into the pipeline configuration.
 
-    :param app: Application object for event processing.
     :param app_bootstrap: Application bootstrap.
     :param splash: Splash dialog to update user on what is currently going on
     :param user: Current ShotgunUser.
@@ -430,9 +405,7 @@ def __start_engine_in_toolkit_classic(app, app_bootstrap, splash, user, pc):
     # Tell the manager to resolve the config in Shotgun so it can resolve the location on disk.
     mgr.do_shotgun_config_lookup = True
     mgr.progress_callback = (
-        lambda progress_value, message: __bootstrap_progress_callback(
-            splash, app, progress_value, message
-        )
+        lambda progress_value, message: __bootstrap_progress_callback(splash, message)
     )
     mgr.pipeline_configuration = pc["id"]
 
@@ -448,7 +421,9 @@ def __start_engine_in_toolkit_classic(app, app_bootstrap, splash, user, pc):
         # If the pipeline configuration found in Shotgun doesn't match what we have locally, we have a
         # problem.
         if pc["id"] != ctx.sgtk.pipeline_configuration.get_shotgun_id():
-            raise InvalidPipelineConfiguration(pc, ctx.sgtk.pipeline_configuration)
+            raise errors.InvalidPipelineConfiguration(
+                pc, ctx.sgtk.pipeline_configuration
+            )
 
         # If the pipeline configuration we got from Shotgun is not assigned to a project, we might have
         # some patching to be done to local site configuration.
@@ -457,7 +432,9 @@ def __start_engine_in_toolkit_classic(app, app_bootstrap, splash, user, pc):
             if not ctx.sgtk.pipeline_configuration.is_site_configuration():
                 ctx.sgtk.pipeline_configuration.convert_to_site_config()
 
-        ensure_engine_compatible_with_desktop(ctx, app_bootstrap.get_version())
+        compatibility.ensure_engine_compatible_with_desktop(
+            ctx, app_bootstrap.get_version()
+        )
 
         splash.set_message("Launching Engine...")
 
@@ -467,11 +444,10 @@ def __start_engine_in_toolkit_classic(app, app_bootstrap, splash, user, pc):
     return mgr.bootstrap_engine("tk-desktop")
 
 
-def __start_engine_in_zero_config(app, app_bootstrap, splash, user):
+def __start_engine_in_zero_config(app_bootstrap, splash, user):
     """
     Launch into the engine using the new zero config based bootstrap.
 
-    :param app: Application object for event processing.
     :param app_bootstrap: Application bootstrap.
     :param splash: Splash dialog to update user on what is currently going on
     :param user: Current ShotgunUser.
@@ -490,9 +466,7 @@ def __start_engine_in_zero_config(app, app_bootstrap, splash, user):
         "sgtk:descriptor:app_store?name=tk-config-basic",
     )
     mgr.progress_callback = (
-        lambda progress_value, message: __bootstrap_progress_callback(
-            splash, app, progress_value, message
-        )
+        lambda progress_value, message: __bootstrap_progress_callback(splash, message)
     )
     mgr.plugin_id = "basic.desktop"
 
@@ -503,14 +477,16 @@ def __start_engine_in_zero_config(app, app_bootstrap, splash, user):
 
     def pre_engine_start_callback(ctx):
         __restore_global_debug_flag()
-        ensure_engine_compatible_with_desktop(ctx, app_bootstrap.get_version())
+        compatibility.ensure_engine_compatible_with_desktop(
+            ctx, app_bootstrap.get_version()
+        )
 
     mgr.pre_engine_start_callback = pre_engine_start_callback
 
     return mgr.bootstrap_engine("tk-desktop")
 
 
-def __post_bootstrap_engine(splash, app_bootstrap, engine, settings):
+def __post_bootstrap_engine(splash, app_bootstrap, engine):
     """
     Called after bootstrapping the engine. Mainly use to transition logging to the
     engine and launch the main event loop.
@@ -518,7 +494,6 @@ def __post_bootstrap_engine(splash, app_bootstrap, engine, settings):
     :param splash: Splash screen widget.
     :param app_bootstrap: Application bootstrap logic.
     :param engine: Toolkit engine that was bootstrapped.
-    :param settings: The application's settings.
 
     :returns: Application exit code.
     """
@@ -532,14 +507,12 @@ def __post_bootstrap_engine(splash, app_bootstrap, engine, settings):
 
     # and run the engine
     logger.debug("Running tk-desktop")
-    startup_desc = get_startup_descriptor(sgtk, engine.shotgun, app_bootstrap)
+    startup_desc = location.get_startup_descriptor(sgtk, engine.shotgun, app_bootstrap)
 
     # Uses the old API as we may have bootstrap into an old core.
     startup_version = startup_desc.get_version()
 
-    return _run_engine(
-        engine, splash, startup_version, app_bootstrap, startup_desc, settings
-    )
+    return _run_engine(engine, splash, startup_version, app_bootstrap, startup_desc)
 
 
 def _is_pipeline_config_disabled(error_message):
@@ -560,7 +533,7 @@ def _is_pipeline_config_disabled(error_message):
     return pipeline_config_disabled_message in str(error_message)
 
 
-def _run_engine(engine, splash, startup_version, app_bootstrap, startup_desc, settings):
+def _run_engine(engine, splash, startup_version, app_bootstrap, startup_desc):
     return engine.run(
         splash,
         version=app_bootstrap.get_version(),
@@ -581,7 +554,9 @@ def __handle_exception(splash, shotgun_authenticator, error_message):
     if splash:
         splash.hide()
     logger.exception("Fatal error, user will be logged out.")
-    DesktopMessageBox.critical("Flow Production Tracking Error", error_message)
+    desktop_message_box.DesktopMessageBox.critical(
+        "Flow Production Tracking Error", error_message
+    )
     # If we are logged in, we should log out so the user is not stuck in a loop of always
     # automatically logging in each time the app is launched again
     if shotgun_authenticator:
@@ -639,7 +614,7 @@ def __handle_unexpected_exception(
             )
         )
 
-    DesktopMessageBox.critical(
+    desktop_message_box.DesktopMessageBox.critical(
         "Flow Production Tracking Error",
         formatted_error_message,
         detailed_text="".join(
@@ -703,9 +678,6 @@ def main(**kwargs):
     )
 
     try:
-        # Reading user settings from disk.
-        settings = sgtk.util.UserSettings()
-
         # It is very important to decouple logging in from creating the shotgun authenticator.
         # If there is an error during auto login, for example proxy settings changed and you
         # can't connect anymore, we need to be able to log the user out.
@@ -733,9 +705,9 @@ def main(**kwargs):
 
         # Now that we are logged, we can proceed with launching the
         # application.
-        exit_code = __launch_app(app, splash, user, app_bootstrap, settings)
+        exit_code = __launch_app(splash, user, app_bootstrap)
         return exit_code
-    except RequestRestartException:
+    except errors.RequestRestartException:
         subprocess.Popen(sys.argv, close_fds=True)
         return 0
     except authentication.AuthenticationCancelled:
@@ -746,7 +718,7 @@ def main(**kwargs):
     except InvalidAppStoreCredentialsError as e:
         __handle_exception(splash, shotgun_authenticator, str(e))
         return -1
-    except ShotgunDesktopError as e:
+    except errors.ShotgunDesktopError as e:
         __handle_exception(splash, shotgun_authenticator, str(e))
         return -1
     except Exception as e:
