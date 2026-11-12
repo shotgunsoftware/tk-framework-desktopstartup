@@ -9,61 +9,41 @@
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
 """
-Compatibility checks between the PTR desktop app and the tk-core and tk-desktop
-versions picked by the site configuration.
+Detect site configuration code that can't run with the Python shipped with the PTR
+desktop app.
 
 The site configuration can point to any version of tk-core and tk-desktop, including
-versions that can't run with the Python and Qt shipped with this app. These checks
-turn those failures into an error message telling the user what to upgrade, instead
-of a generic crash.
+versions that can't run with the Python shipped with this app. When bootstrapping
+fails because of that, this turns the failure into an error message telling the user
+what to upgrade, instead of a generic crash.
 
 The intended behavior, and why, is specified in tests/test_compatibility.py.
 """
 
 import logging
 import os
-import sys
+from typing import Optional
 
 import tank
-from tank.util.version import is_version_older
 
-from shotgun_desktop.errors import (
-    CoreNotCompatibleWithDesktop,
-    EngineNotCompatibleWithDesktop,
-    ShotgunDesktopError,
-)
+from . import errors
 
 logger = logging.getLogger("tk-desktop.startup")
-
-ENGINE_NAME = "tk-desktop"
-
-# First tk-desktop release supporting Python 3 and PySide2. Older releases don't
-# declare any constraint in their info.yml, so we have to check for them explicitly.
-MINIMUM_ENGINE_VERSION = "v2.5.4"
 
 UPGRADE_ENGINE = (
     "Please upgrade your site configuration's tk-desktop to the latest version."
 )
 UPGRADE_CORE = "Please upgrade your site configuration's tk-core to the latest version."
-UPGRADE_DESKTOP = (
-    "Please install the latest PTR desktop app, see the "
-    "<a href='https://community.shotgridsoftware.com/t/a-new-version-of-shotgrid-desktop-has-been-released/13877'>"
-    "release announcements</a>."
-)
-UPGRADE_LISTED = (
-    "Please upgrade what is listed above, or use a version of tk-desktop compatible "
-    "with it."
-)
 
 
-def _normalize(path):
+def _normalize(path: str) -> str:
     """
     :returns: The path, absolute and normalized for comparisons.
     """
     return os.path.normcase(os.path.abspath(path))
 
 
-def _folder(*parts):
+def _folder(*parts: str) -> str:
     """
     :returns: The folder path, normalized and with a trailing separator.
     """
@@ -77,115 +57,43 @@ _BUNDLED_CORE_PATH = _folder(
     _normalize(os.path.dirname(os.path.dirname(tank.__file__)))
 )
 
-# Root folder of the tk-desktop engine about to be started, once known.
-_engine_root = None
 
-
-def _get_python_version():
-    """
-    :returns: The running Python version, e.g. "3.11.9".
-    """
-    return "{}.{}.{}".format(*sys.version_info[:3])
-
-
-def ensure_engine_compatible_with_desktop(ctx, app_version):
-    """
-    Make sure the tk-desktop engine of the site configuration can run in this
-    PTR desktop app, before its code gets imported.
-
-    This is meant to be called from a bootstrap ``pre_engine_start_callback``, so
-    after the site configuration's tk-core has been swapped in.
-
-    :param ctx: Context the engine is about to be started in.
-    :type ctx: :class:`sgtk.Context`
-    :param str app_version: Version of the PTR desktop app.
-
-    :raises EngineNotCompatibleWithDesktop: If the engine is not compatible.
-    """
-    global _engine_root
-    try:
-        # Import from the swapped tk-core, not the bundled one.
-        from tank.platform.engine import get_environment_from_context
-
-        env = get_environment_from_context(ctx.sgtk, ctx)
-        descriptor = env.get_engine_descriptor(ENGINE_NAME)
-        _engine_root = _folder(_normalize(descriptor.get_path()))
-        check_engine_descriptor(descriptor, app_version)
-    except EngineNotCompatibleWithDesktop:
-        raise
-    except Exception:
-        # The checks must never prevent the app from starting.
-        logger.warning(
-            "Unable to check the %s engine compatibility, skipping.",
-            ENGINE_NAME,
-            exc_info=True,
-        )
-
-
-def check_engine_descriptor(descriptor, app_version):
-    """
-    Check the tk-desktop engine's version and the constraints declared in its info.yml
-    (requires_core_version, requires_desktop_version and minimum_python_version)
-    against what is currently running.
-
-    :param descriptor: Descriptor of the tk-desktop engine.
-    :type descriptor: :class:`sgtk.descriptor.EngineDescriptor`
-    :param str app_version: Version of the PTR desktop app.
-
-    :raises EngineNotCompatibleWithDesktop: If the engine is not compatible.
-    """
-    if descriptor.version.lower() != "undefined" and is_version_older(
-        descriptor.version, MINIMUM_ENGINE_VERSION
-    ):
-        raise EngineNotCompatibleWithDesktop(
-            app_version,
-            "tk-desktop {} or later is required, found {}. {}".format(
-                MINIMUM_ENGINE_VERSION, descriptor.version, UPGRADE_ENGINE
-            ),
-        )
-
-    # Import from the swapped tk-core, so we catch the error class it raises.
-    from tank.descriptor import CheckVersionConstraintsError
-
-    try:
-        descriptor.check_version_constraints(desktop_version=app_version)
-    except CheckVersionConstraintsError as e:
-        raise EngineNotCompatibleWithDesktop(
-            app_version, "{} {}".format(e, UPGRADE_LISTED)
-        )
-
-    minimum_python_version = descriptor._get_manifest().get("minimum_python_version")
-    if minimum_python_version and is_version_older(
-        _get_python_version(), str(minimum_python_version)
-    ):
-        raise EngineNotCompatibleWithDesktop(
-            app_version,
-            "Requires at least Python {} but currently running {}. {}".format(
-                minimum_python_version, _get_python_version(), UPGRADE_DESKTOP
-            ),
-        )
-
-
-def get_incompatible_code_error(error, app_version):
+def get_incompatible_code_error(
+    error: BaseException, app_version: str
+) -> Optional[errors.ShotgunDesktopError]:
     """
     Check if an error raised while bootstrapping looks like site configuration code
     that can't run with this version of Python, like syntax that is no longer
     supported or a module removed from the standard library.
 
     This is a heuristic. A genuine bug in tk-core or tk-desktop will be reported the
-    same way, which is acceptable for released code.
+    same way, which is acceptable for released code. It never raises: if the error
+    can't be classified, it is logged and None is returned, so the original error is
+    reported.
 
     :param error: Exception raised while bootstrapping.
-    :param str app_version: Version of the PTR desktop app.
+    :param app_version: Version of the PTR desktop app.
 
     :returns: An error to show to the user, or None if the error is not recognized.
-    :rtype: :class:`~shotgun_desktop.errors.ShotgunDesktopError`
+    """
+    try:
+        return _classify(error, app_version)
+    except Exception:
+        logger.warning("Unable to classify the bootstrap error.", exc_info=True)
+        return None
+
+
+def _classify(
+    error: Optional[BaseException], app_version: str
+) -> Optional[errors.ShotgunDesktopError]:
+    """
+    Implementation of :func:`get_incompatible_code_error`, which may raise.
     """
     # tk-core wraps errors raised while loading the engine, e.g. in a
     # TankLoadPluginError, so look for the original error.
     seen = set()
     while error is not None and id(error) not in seen:
-        if isinstance(error, ShotgunDesktopError):
+        if isinstance(error, errors.ShotgunDesktopError):
             # Already a message for the user.
             return None
         if isinstance(error, (SyntaxError, ImportError)):
@@ -207,14 +115,14 @@ def get_incompatible_code_error(error, app_version):
         return None
 
     path = _normalize(filename)
-    if (_engine_root and path.startswith(_engine_root)) or _ENGINE_FOLDER in path:
-        return EngineNotCompatibleWithDesktop(
+    if _ENGINE_FOLDER in path:
+        return errors.EngineNotCompatibleWithDesktop(
             app_version, "{}. {}".format(error, UPGRADE_ENGINE)
         )
     if path.startswith(_BUNDLED_CORE_PATH):
         return None
     if any(folder in path for folder in _CORE_FOLDERS):
-        return CoreNotCompatibleWithDesktop(
+        return errors.CoreNotCompatibleWithDesktop(
             app_version, "{}. {}".format(error, UPGRADE_CORE)
         )
     return None

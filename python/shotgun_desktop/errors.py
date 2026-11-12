@@ -12,6 +12,7 @@
 Flow Production Tracking Errors
 """
 
+import os
 import sys
 import sgtk
 
@@ -78,25 +79,77 @@ class InvalidPipelineConfiguration(ShotgunDesktopError):
         )
 
 
+class UpgradeCoreError(ShotgunDesktopError):
+    """
+    This exception notifies the catcher that the site's core needs to be upgraded in order to
+    use this version of the Desktop installer.
+    """
+
+    def __init__(self, reason, toolkit_path):
+        """Constructor"""
+        ShotgunDesktopError.__init__(
+            self,
+            "%s Please upgrade your site core by running:\n\n%s core"
+            % (
+                reason,
+                os.path.join(
+                    toolkit_path,
+                    "tank.bat" if sgtk.util.is_windows() else "tank",
+                ),
+            ),
+        )
+
+
 class CoreNotCompatibleWithDesktop(ShotgunDesktopError):
     """
     This exception notifies the catcher that the site's core can't run in this version
     of the Desktop installer.
     """
 
-    def __init__(self, app_version, reason):
-        """Constructor"""
-        ShotgunDesktopError.__init__(
-            self,
+    def __init__(self, app_version: str, reason: str) -> None:
+        """
+        :param app_version: Version of the PTR desktop app.
+        :param reason: Why it's not compatible, and what to upgrade.
+        """
+        super().__init__(
             "The tk-core of your site configuration is not compatible with this "
             "PTR desktop app {} running Python {}.{}.\n"
             "\n"
-            "{}".format(app_version, sys.version_info[0], sys.version_info[1], reason),
+            "{}".format(app_version, sys.version_info[0], sys.version_info[1], reason)
+        )
+
+
+class UpgradeEngine200Error(ShotgunDesktopError):
+    """
+    This exception notifies the catcher that the site's desktop engine needs to be upgraded in order
+    to use this version of the Desktop installer.
+    """
+
+    def __init__(self, reason, toolkit_path):
+        """Constructor"""
+        ShotgunDesktopError.__init__(
+            self,
+            "%s Please upgrade your site engine by running:\n\n%s updates site"
+            % (
+                reason,
+                os.path.join(
+                    toolkit_path, "tank.bat" if sgtk.util.is_windows() else "tank"
+                ),
+            ),
         )
 
 
 class EngineNotCompatibleWithDesktop(ShotgunDesktopError):
-    def __init__(self, app_version, reason):
+    """
+    This exception notifies the catcher that the site's tk-desktop engine can't run in
+    this version of the Desktop installer.
+    """
+
+    def __init__(self, app_version: str, reason: str) -> None:
+        """
+        :param app_version: Version of the PTR desktop app.
+        :param reason: Why it's not compatible, and what to upgrade.
+        """
         super().__init__(
             "The tk-desktop engine of your site configuration is not compatible with "
             "this PTR desktop app {} running Python {}.{}.\n"

@@ -118,8 +118,6 @@ def add_to_python_path(bundled_path, env_var_override, module_name):
     :param str bundled_path: Path to the bundled code.
     :param env_var_override: Name of the environment variable that can override that path.
     :param module_name: Friendly name of the module.
-
-    :returns: The path added to the Python path.
     """
     if env_var_override in os.environ:
         path = os.path.join(os.environ[env_var_override])
@@ -129,7 +127,6 @@ def add_to_python_path(bundled_path, env_var_override, module_name):
     path = os.path.join(path, "python")
     sys.path.insert(0, path)
     logger.info("Using %s from '%s'", module_name, path)
-    return path
 
 
 def init_sgtk_logger():
@@ -148,7 +145,7 @@ def init_sgtk_logger():
 
 
 # Add Toolkit to the path.
-core_path = add_to_python_path(
+add_to_python_path(
     os.path.join(
         "..",
         "tk-core",
@@ -157,22 +154,10 @@ core_path = add_to_python_path(
     "tk-core",
 )
 
-try:
-    init_sgtk_logger()
+init_sgtk_logger()
 
-    # now proceed with non builtin imports
-    from .qt import QtCore, QtGui
-
-    if QtCore is None or QtGui is None:
-        raise ImportError("tk-core couldn't import a Qt binding it supports.")
-except Exception as e:
-    # tk-core is not compatible with the Python or Qt shipped with the app, so the
-    # usual error handling, which relies on them, can't run.
-    from . import fallback_error
-
-    logger.exception("Unable to load tk-core from '%s'.", core_path)
-    fallback_error.report_core_not_loaded(core_path, e)
-    sys.exit(1)
+# now proceed with non builtin imports
+from .qt import QtCore, QtGui
 
 from . import (
     compatibility,
@@ -184,6 +169,8 @@ from . import (
     upgrade_startup,
 )
 
+from tank.util.version import is_version_newer_or_equal
+
 global_debug_flag_at_startup = None
 
 
@@ -194,7 +181,9 @@ def __restore_global_debug_flag():
     global global_debug_flag_at_startup
     import sgtk
 
-    sgtk.LogManager().global_debug = global_debug_flag_at_startup
+    # If there is no LogManager for the new core, there's no need to restore any flag.
+    if hasattr(sgtk, "LogManager"):
+        sgtk.LogManager().global_debug = global_debug_flag_at_startup
 
 
 def __backup_global_debug_flag():
@@ -205,6 +194,36 @@ def __backup_global_debug_flag():
     import sgtk
 
     global_debug_flag_at_startup = sgtk.LogManager().global_debug
+
+
+def __desktop_engine_supports_authentication_module(engine):
+    """
+    Tests if the engine supports the login based authentication. All versions above 2.0.0 supports
+    login based authentication.
+
+    :param engine: The desktop engine to test.
+
+    :returns: True if the engine supports the authentication module, False otherwise.
+    """
+    if engine.version.lower() == "undefined":
+        logger.warning(
+            "The version of the tk-desktop engine is undefined. "
+            "Assuming engine it supports sgtk.authentication module."
+        )
+        return True
+    return is_version_newer_or_equal(engine.version, "v2.0.0")
+
+
+def __supports_pipeline_configuration_upgrade(pipeline_configuration):
+    """
+    Tests if the given pipeline configuration supports the None project id.
+
+    :param sgtk: A pipeline configuration.
+
+    :returns: True if the pipeline configuration can have a None project, False otherwise.
+    """
+    # if the authentication module is not supported, this method won't be present on the core.
+    return hasattr(pipeline_configuration, "convert_to_site_config")
 
 
 def __init_app():
@@ -361,7 +380,7 @@ def __launch_app(splash, user, app_bootstrap):
     del sgtk
     try:
         if toolkit_classic_required:
-            engine = __start_engine_in_toolkit_classic(app_bootstrap, splash, user, pc)
+            engine = __start_engine_in_toolkit_classic(splash, user, pc, pc_path)
         else:
             engine = __start_engine_in_zero_config(app_bootstrap, splash, user)
     except Exception as e:
@@ -388,14 +407,14 @@ def __bootstrap_progress_callback(splash, message):
     logger.debug(message)
 
 
-def __start_engine_in_toolkit_classic(app_bootstrap, splash, user, pc):
+def __start_engine_in_toolkit_classic(splash, user, pc, pc_path):
     """
     Create a Toolkit instance by boostraping into the pipeline configuration.
 
-    :param app_bootstrap: Application bootstrap.
     :param splash: Splash dialog to update user on what is currently going on
     :param user: Current ShotgunUser.
     :param pc: Pipeline configuration entity dictionary.
+    :param pc_path: Path to the pipeline configuration.
 
     :returns: Toolkit engine that was started.
     """
@@ -428,20 +447,35 @@ def __start_engine_in_toolkit_classic(app_bootstrap, splash, user, pc):
         # If the pipeline configuration we got from Shotgun is not assigned to a project, we might have
         # some patching to be done to local site configuration.
         if pc["project"] is None:
+
+            # make sure that the version of core we are using supports the new-style site configuration
+            if not __supports_pipeline_configuration_upgrade(
+                ctx.sgtk.pipeline_configuration
+            ):
+                raise errors.UpgradeCoreError(
+                    "Running a site configuration without the Template Project requires core v0.16.8 "
+                    "or higher.",
+                    pc_path,
+                )
+
             # If the configuration on disk is not the site configuration, update it to the site config.
             if not ctx.sgtk.pipeline_configuration.is_site_configuration():
                 ctx.sgtk.pipeline_configuration.convert_to_site_config()
-
-        compatibility.ensure_engine_compatible_with_desktop(
-            ctx, app_bootstrap.get_version()
-        )
 
         splash.set_message("Launching Engine...")
 
     # We need to validate a few things before the engine starts.
     mgr.pre_engine_start_callback = pre_engine_start_callback
 
-    return mgr.bootstrap_engine("tk-desktop")
+    engine = mgr.bootstrap_engine("tk-desktop")
+
+    if not __desktop_engine_supports_authentication_module(engine):
+        raise errors.UpgradeEngine200Error(
+            "This version of the PTR desktop app only supports tk-desktop engine 2.0.0 and higher.",
+            pc_path,
+        )
+
+    return engine
 
 
 def __start_engine_in_zero_config(app_bootstrap, splash, user):
@@ -475,13 +509,7 @@ def __start_engine_in_zero_config(app_bootstrap, splash, user):
     if bundle_cache_path:
         mgr.bundle_cache_fallback_paths.append(bundle_cache_path)
 
-    def pre_engine_start_callback(ctx):
-        __restore_global_debug_flag()
-        compatibility.ensure_engine_compatible_with_desktop(
-            ctx, app_bootstrap.get_version()
-        )
-
-    mgr.pre_engine_start_callback = pre_engine_start_callback
+    mgr.pre_engine_start_callback = lambda ctx: __restore_global_debug_flag()
 
     return mgr.bootstrap_engine("tk-desktop")
 
@@ -512,7 +540,51 @@ def __post_bootstrap_engine(splash, app_bootstrap, engine):
     # Uses the old API as we may have bootstrap into an old core.
     startup_version = startup_desc.get_version()
 
-    return _run_engine(engine, splash, startup_version, app_bootstrap, startup_desc)
+    try:
+        return _run_engine(engine, splash, startup_version, app_bootstrap, startup_desc)
+    except TypeError as e:
+        # When running in Python 3 mode and launching into tk-desktop 2.5.0, the engine
+        # does support PySide2, but the engine doesn't yet support Python 3 fully and the gui
+        # can't initialize, so a TypeError will be launched by qRegisterResourceData.
+        # So catch it, and let the user know that this error is due to missing Python3
+        # support for the engine.
+        if (
+            "PySide2.QtCore.qRegisterResourceData' called with wrong argument types"
+            in str(e)
+        ):
+            raise errors.EngineNotCompatibleWithDesktop(
+                app_bootstrap.get_version(), compatibility.UPGRADE_ENGINE
+            )
+        raise
+
+
+def __ensure_engine_compatible_with_qt_version(engine, app_version):
+    """
+    Make sure the tk-desktop engine is compatible with the PySide version we distribute
+    with Desktop.
+
+    When using tk-desktop versions before v2.5.0, PySide2 builds of desktop can't launch
+    DCCs because a QAction's signal emit an unexpected boolean that crashes older tk-desktop
+    builds.
+    """
+    # If we can't find the version, we assume it's good.
+    if engine.version.lower() == "undefined":
+        logger.warning(
+            "The version of the tk-desktop engine is undefined. "
+            "Assuming the engine is compatible with the builtin Qt."
+        )
+        return
+
+    # tk-desktop 2.5.0 introduced Python 3 and PySide2 support while being backward
+    # compatible with PySide, so it can't be a problem.
+    if is_version_newer_or_equal(engine.version, "v2.5.0"):
+        return
+
+    # Versions of desktop older than v2.5.0 have issues with desktop 1.6.1+, so raise an error.
+    if is_version_newer_or_equal(app_version, "v1.6.1"):
+        raise errors.EngineNotCompatibleWithDesktop(
+            app_version, compatibility.UPGRADE_ENGINE
+        )
 
 
 def _is_pipeline_config_disabled(error_message):
@@ -534,6 +606,8 @@ def _is_pipeline_config_disabled(error_message):
 
 
 def _run_engine(engine, splash, startup_version, app_bootstrap, startup_desc):
+    __ensure_engine_compatible_with_qt_version(engine, app_bootstrap.get_version())
+
     return engine.run(
         splash,
         version=app_bootstrap.get_version(),
@@ -582,7 +656,10 @@ def __handle_unexpected_exception(
 
     exc_type, exc_value, exc_traceback = sys.exc_info()
 
-    log_location = sgtk.LogManager().base_file_handler.baseFilename
+    if hasattr(sgtk, "LogManager"):
+        log_location = sgtk.LogManager().base_file_handler.baseFilename
+    else:
+        log_location = app_bootstrap.get_logfile_location()
 
     logger.exception("Fatal error, user will be logged out.")
 
@@ -627,6 +704,63 @@ def __handle_unexpected_exception(
         shotgun_authenticator.clear_default_user()
 
 
+class _BootstrapProxy(object):
+    """
+    Wraps the application bootstrap code to add functionality that is present only in more recent builds of the
+    Desktop, which the startup code is not necessarily running off of.
+    """
+
+    def __init__(self, app_bootstrap):
+        """
+        Constructor
+
+        :param app_bootstrap: Application bootstrap instance.
+        """
+        self._app_bootstrap = app_bootstrap
+
+    def __getattr__(self, name):
+        """
+        Retrieves an attribute on the proxied instance.
+
+        :param name: Name of the attribute.
+
+        :returns: The attribute instance.
+        """
+        # Python hasn't found the requested attribute on this class, so let's look for it on the
+        # proxied class.
+        return getattr(self._app_bootstrap, name)
+
+    def get_app_root(self):
+        """
+        Retrieves the application root.
+
+        :returns: Path to the root of the installation directory.
+        """
+        # If the bootstrap now has the method, forward the call to it.
+        if hasattr(self._app_bootstrap, "get_app_root"):
+            return self._app_bootstrap.get_app_root()
+        # Otherwise retrieve the bootstrap.py module from tk-desktop-internal (which can't be imported manually since it
+        # isn't in the Python path.
+        bootstrap_module = sys.modules[self._app_bootstrap.__module__]
+        # Pick the SHOTGUN_APP_ROOT:
+        # https://github.com/shotgunsoftware/tk-desktop-internal/blob/a31e9339b7e438cd111fb8f4a2b0436e77c98a17/Common/Shotgun/python/bootstrap.py#L80
+        return bootstrap_module.SHOTGUN_APP_ROOT
+
+    def get_bundle_cache_location(self):
+        """
+        Retrieves the bundle cache that is distributed with the PTR desktop app.
+
+        We're implementing this method on the proxy because Desktop versions 1.3.6 and earlier didn't
+        have a bundle cache.
+
+        :returns: Path to the bundle cache or None if no bundle cache is present.
+        """
+        if hasattr(self._app_bootstrap, "get_bundle_cache_location"):
+            return self._app_bootstrap.get_bundle_cache_location()
+        else:
+            return os.environ.get("SHOTGUN_DESKTOP_BUNDLE_CACHE_LOCATION") or None
+
+
 def main(**kwargs):
     """
     Main
@@ -640,7 +774,7 @@ def main(**kwargs):
     :returns: Error code for the process.
     """
 
-    app_bootstrap = kwargs["app_bootstrap"]
+    app_bootstrap = _BootstrapProxy(kwargs["app_bootstrap"])
 
     # Do not import sgtk globally to avoid using the wrong sgtk once we bootstrap in
     # the right config.
