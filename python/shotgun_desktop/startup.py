@@ -180,9 +180,7 @@ def __restore_global_debug_flag():
     global global_debug_flag_at_startup
     import sgtk
 
-    # If there is no LogManager for the new core, there's no need to restore any flag.
-    if hasattr(sgtk, "LogManager"):
-        sgtk.LogManager().global_debug = global_debug_flag_at_startup
+    sgtk.LogManager().global_debug = global_debug_flag_at_startup
 
 
 def __backup_global_debug_flag():
@@ -193,36 +191,6 @@ def __backup_global_debug_flag():
     import sgtk
 
     global_debug_flag_at_startup = sgtk.LogManager().global_debug
-
-
-def __desktop_engine_supports_authentication_module(engine):
-    """
-    Tests if the engine supports the login based authentication. All versions above 2.0.0 supports
-    login based authentication.
-
-    :param engine: The desktop engine to test.
-
-    :returns: True if the engine supports the authentication module, False otherwise.
-    """
-    if engine.version.lower() == "undefined":
-        logger.warning(
-            "The version of the tk-desktop engine is undefined. "
-            "Assuming engine it supports sgtk.authentication module."
-        )
-        return True
-    return is_version_newer_or_equal(engine.version, "v2.0.0")
-
-
-def __supports_pipeline_configuration_upgrade(pipeline_configuration):
-    """
-    Tests if the given pipeline configuration supports the None project id.
-
-    :param sgtk: A pipeline configuration.
-
-    :returns: True if the pipeline configuration can have a None project, False otherwise.
-    """
-    # if the authentication module is not supported, this method won't be present on the core.
-    return hasattr(pipeline_configuration, "convert_to_site_config")
 
 
 def __init_app():
@@ -379,7 +347,7 @@ def __launch_app(splash, user, app_bootstrap):
     del sgtk
     try:
         if toolkit_classic_required:
-            engine = __start_engine_in_toolkit_classic(splash, user, pc, pc_path)
+            engine = __start_engine_in_toolkit_classic(splash, user, pc)
         else:
             engine = __start_engine_in_zero_config(app_bootstrap, splash, user)
     except SyntaxError:
@@ -428,14 +396,13 @@ def __bootstrap_progress_callback(splash, message):
     logger.debug(message)
 
 
-def __start_engine_in_toolkit_classic(splash, user, pc, pc_path):
+def __start_engine_in_toolkit_classic(splash, user, pc):
     """
     Create a Toolkit instance by boostraping into the pipeline configuration.
 
     :param splash: Splash dialog to update user on what is currently going on
     :param user: Current ShotgunUser.
     :param pc: Pipeline configuration entity dictionary.
-    :param pc_path: Path to the pipeline configuration.
 
     :returns: Toolkit engine that was started.
     """
@@ -468,17 +435,6 @@ def __start_engine_in_toolkit_classic(splash, user, pc, pc_path):
         # If the pipeline configuration we got from Shotgun is not assigned to a project, we might have
         # some patching to be done to local site configuration.
         if pc["project"] is None:
-
-            # make sure that the version of core we are using supports the new-style site configuration
-            if not __supports_pipeline_configuration_upgrade(
-                ctx.sgtk.pipeline_configuration
-            ):
-                raise errors.UpgradeCoreError(
-                    "Running a site configuration without the Template Project requires core v0.16.8 "
-                    "or higher.",
-                    pc_path,
-                )
-
             # If the configuration on disk is not the site configuration, update it to the site config.
             if not ctx.sgtk.pipeline_configuration.is_site_configuration():
                 ctx.sgtk.pipeline_configuration.convert_to_site_config()
@@ -488,15 +444,7 @@ def __start_engine_in_toolkit_classic(splash, user, pc, pc_path):
     # We need to validate a few things before the engine starts.
     mgr.pre_engine_start_callback = pre_engine_start_callback
 
-    engine = mgr.bootstrap_engine("tk-desktop")
-
-    if not __desktop_engine_supports_authentication_module(engine):
-        raise errors.UpgradeEngine200Error(
-            "This version of the PTR desktop app only supports tk-desktop engine 2.0.0 and higher.",
-            pc_path,
-        )
-
-    return engine
+    return mgr.bootstrap_engine("tk-desktop")
 
 
 def __start_engine_in_zero_config(app_bootstrap, splash, user):
@@ -673,10 +621,7 @@ def __handle_unexpected_exception(
 
     exc_type, exc_value, exc_traceback = sys.exc_info()
 
-    if hasattr(sgtk, "LogManager"):
-        log_location = sgtk.LogManager().base_file_handler.baseFilename
-    else:
-        log_location = app_bootstrap.get_logfile_location()
+    log_location = sgtk.LogManager().base_file_handler.baseFilename
 
     logger.exception("Fatal error, user will be logged out.")
 

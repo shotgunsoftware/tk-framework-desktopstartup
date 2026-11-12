@@ -12,7 +12,6 @@
 Flow Production Tracking Errors
 """
 
-import os
 import sys
 import sgtk
 
@@ -79,27 +78,6 @@ class InvalidPipelineConfiguration(ShotgunDesktopError):
         )
 
 
-class UpgradeCoreError(ShotgunDesktopError):
-    """
-    This exception notifies the catcher that the site's core needs to be upgraded in order to
-    use this version of the Desktop installer.
-    """
-
-    def __init__(self, reason, toolkit_path):
-        """Constructor"""
-        ShotgunDesktopError.__init__(
-            self,
-            "%s Please upgrade your site core by running:\n\n%s core"
-            % (
-                reason,
-                os.path.join(
-                    toolkit_path,
-                    "tank.bat" if sgtk.util.is_windows() else "tank",
-                ),
-            ),
-        )
-
-
 class UpgradeCorePython3Error(ShotgunDesktopError):
     """
     This exception notifies the catcher that the site's core needs to be upgraded in order to
@@ -113,26 +91,6 @@ class UpgradeCorePython3Error(ShotgunDesktopError):
             "You are running a pre v0.19.x version of tk-core, "
             "which is not compatible with Python 3.\n"
             "Please upgrade your site configuration's tk-core to v0.19.5 or greater.",
-        )
-
-
-class UpgradeEngine200Error(ShotgunDesktopError):
-    """
-    This exception notifies the catcher that the site's desktop engine needs to be upgraded in order
-    to use this version of the Desktop installer.
-    """
-
-    def __init__(self, reason, toolkit_path):
-        """Constructor"""
-        ShotgunDesktopError.__init__(
-            self,
-            "%s Please upgrade your site engine by running:\n\n%s updates site"
-            % (
-                reason,
-                os.path.join(
-                    toolkit_path, "tank.bat" if sgtk.util.is_windows() else "tank"
-                ),
-            ),
         )
 
 
