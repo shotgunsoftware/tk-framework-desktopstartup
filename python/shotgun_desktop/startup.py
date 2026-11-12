@@ -8,14 +8,20 @@
 # agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
+from __future__ import annotations
+
 import os
 import sys
 import time
 import subprocess
 import traceback
+import typing
 
 # initialize logging
 import logging
+
+if typing.TYPE_CHECKING:
+    import sgtk
 
 # The value of sys.executable under multiple platforms and multiple versions
 # of Desktop is unreliable. Therefore, we're patch the value if the executable
@@ -160,6 +166,7 @@ init_sgtk_logger()
 from .qt import QtCore, QtGui
 
 from . import (
+    compatibility,
     desktop_message_box,
     errors,
     location,
@@ -317,7 +324,11 @@ def __restart_app_with_countdown(splash, reason):
     raise errors.RequestRestartException()
 
 
-def __launch_app(splash, user, app_bootstrap):
+def __launch_app(
+    splash: splash_module.Splash,
+    user: sgtk.authentication.ShotgunUser,
+    app_bootstrap: typing.Any,
+) -> int:
     """
     Shows the splash screen, optionally downloads and configures Toolkit, imports it, optionally
     updates it and then launches the desktop engine.
@@ -382,36 +393,14 @@ def __launch_app(splash, user, app_bootstrap):
             engine = __start_engine_in_toolkit_classic(splash, user, pc, pc_path)
         else:
             engine = __start_engine_in_zero_config(app_bootstrap, splash, user)
-    except SyntaxError:
-        # Try to see if this SyntaxError might be due to non-Python 3 compatible
-        # code.
-
-        # Reach the end of the stack.
-        exc_type, exc_value, current_stack_frame = sys.exc_info()
-        deepest = None
-        while deepest is None:
-            if current_stack_frame.tb_next is None:
-                deepest = current_stack_frame
-                break
-            else:
-                current_stack_frame = current_stack_frame.tb_next
-
-        # If the syntax error was from somewhere in the tk-desktop engine,
-        # then it's likely the engine is too old. This will yield false-positives
-        # in development when making syntax errors, but is robust enough
-        # for released code.
-        if (
-            "python/tk_desktop/".replace("/", os.path.sep)
-            in deepest.tb_frame.f_code.co_filename
-        ):
-            raise errors.EngineNotCompatibleWithDesktop16(app_bootstrap.get_version())
-        raise
     except Exception as e:
-        # We may end up here when running with an older version of core pre 0.19.
-        # If we are running a pre 0.19 version of core and we are using Python 3
-        # Then we will likely hit an error: ModuleNotFoundError: No module named 'Cookie'
-        if "No module named 'Cookie'" in e.args:
-            raise errors.UpgradeCorePython3Error()
+        # The site configuration's tk-core or tk-desktop might not be compatible with
+        # this version of Python.
+        error = compatibility.get_incompatible_code_error(
+            e, app_bootstrap.get_version()
+        )
+        if error:
+            raise error from e
         raise
 
     return __post_bootstrap_engine(splash, app_bootstrap, engine)
@@ -535,7 +524,11 @@ def __start_engine_in_zero_config(app_bootstrap, splash, user):
     return mgr.bootstrap_engine("tk-desktop")
 
 
-def __post_bootstrap_engine(splash, app_bootstrap, engine):
+def __post_bootstrap_engine(
+    splash: splash_module.Splash,
+    app_bootstrap: typing.Any,
+    engine: sgtk.platform.Engine,
+) -> int:
     """
     Called after bootstrapping the engine. Mainly use to transition logging to the
     engine and launch the main event loop.
@@ -573,11 +566,15 @@ def __post_bootstrap_engine(splash, app_bootstrap, engine):
             "PySide2.QtCore.qRegisterResourceData' called with wrong argument types"
             in str(e)
         ):
-            raise errors.EngineNotCompatibleWithDesktop16(app_bootstrap.get_version())
+            raise errors.EngineNotCompatibleWithDesktop(
+                app_bootstrap.get_version(), compatibility.UPGRADE_ENGINE
+            )
         raise
 
 
-def __ensure_engine_compatible_with_qt_version(engine, app_version):
+def __ensure_engine_compatible_with_qt_version(
+    engine: sgtk.platform.Engine, app_version: str
+) -> None:
     """
     Make sure the tk-desktop engine is compatible with the PySide version we distribute
     with Desktop.
@@ -601,7 +598,9 @@ def __ensure_engine_compatible_with_qt_version(engine, app_version):
 
     # Versions of desktop older than v2.5.0 have issues with desktop 1.6.1+, so raise an error.
     if is_version_newer_or_equal(app_version, "v1.6.1"):
-        raise errors.EngineNotCompatibleWithDesktop16(app_version)
+        raise errors.EngineNotCompatibleWithDesktop(
+            app_version, compatibility.UPGRADE_ENGINE
+        )
 
 
 def _is_pipeline_config_disabled(error_message):

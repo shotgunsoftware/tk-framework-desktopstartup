@@ -100,19 +100,22 @@ class UpgradeCoreError(ShotgunDesktopError):
         )
 
 
-class UpgradeCorePython3Error(ShotgunDesktopError):
+class CoreNotCompatibleWithDesktop(ShotgunDesktopError):
     """
-    This exception notifies the catcher that the site's core needs to be upgraded in order to
-    use this version of the Desktop installer, due to a Python 3 incompatibility.
+    This exception notifies the catcher that the site's core can't run in this version
+    of the Desktop installer.
     """
 
-    def __init__(self):
-        """Constructor"""
-        ShotgunDesktopError.__init__(
-            self,
-            "You are running a pre v0.19.x version of tk-core, "
-            "which is not compatible with Python 3.\n"
-            "Please upgrade your site configuration's tk-core to v0.19.5 or greater.",
+    def __init__(self, app_version: str, reason: str) -> None:
+        """
+        :param app_version: Version of the PTR desktop app.
+        :param reason: Why it's not compatible, and what to upgrade.
+        """
+        super().__init__(
+            "The tk-core of your site configuration is not compatible with this "
+            "PTR desktop app {} running Python {}.{}.\n"
+            "\n"
+            "{}".format(app_version, sys.version_info[0], sys.version_info[1], reason)
         )
 
 
@@ -136,14 +139,20 @@ class UpgradeEngine200Error(ShotgunDesktopError):
         )
 
 
-class EngineNotCompatibleWithDesktop16(ShotgunDesktopError):
-    def __init__(self, app_version):
+class EngineNotCompatibleWithDesktop(ShotgunDesktopError):
+    """
+    This exception notifies the catcher that the site's tk-desktop engine can't run in
+    this version of the Desktop installer.
+    """
+
+    def __init__(self, app_version: str, reason: str) -> None:
+        """
+        :param app_version: Version of the PTR desktop app.
+        :param reason: Why it's not compatible, and what to upgrade.
+        """
         super().__init__(
-            "Your version of tk-desktop is not compatible with this PTR desktop app {}.\n"
+            "The tk-desktop engine of your site configuration is not compatible with "
+            "this PTR desktop app {} running Python {}.{}.\n"
             "\n"
-            "Please upgrade your site configuration's tk-desktop to v2.5.9+ or "
-            "download PTR desktop app 1.5.9 or earlier <a href='{}'>here</a>".format(
-                app_version,
-                "https://community.shotgridsoftware.com/t/a-new-version-of-shotgrid-desktop-has-been-released/13877/99999",
-            )
+            "{}".format(app_version, sys.version_info[0], sys.version_info[1], reason)
         )
