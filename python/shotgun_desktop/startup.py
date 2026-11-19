@@ -13,6 +13,7 @@ import sys
 import time
 import subprocess
 import traceback
+import typing
 
 # initialize logging
 import logging
@@ -721,64 +722,7 @@ def __handle_unexpected_exception(
         shotgun_authenticator.clear_default_user()
 
 
-class _BootstrapProxy(object):
-    """
-    Wraps the application bootstrap code to add functionality that is present only in more recent builds of the
-    Desktop, which the startup code is not necessarily running off of.
-    """
-
-    def __init__(self, app_bootstrap):
-        """
-        Constructor
-
-        :param app_bootstrap: Application bootstrap instance.
-        """
-        self._app_bootstrap = app_bootstrap
-
-    def __getattr__(self, name):
-        """
-        Retrieves an attribute on the proxied instance.
-
-        :param name: Name of the attribute.
-
-        :returns: The attribute instance.
-        """
-        # Python hasn't found the requested attribute on this class, so let's look for it on the
-        # proxied class.
-        return getattr(self._app_bootstrap, name)
-
-    def get_app_root(self):
-        """
-        Retrieves the application root.
-
-        :returns: Path to the root of the installation directory.
-        """
-        # If the bootstrap now has the method, forward the call to it.
-        if hasattr(self._app_bootstrap, "get_app_root"):
-            return self._app_bootstrap.get_app_root()
-        # Otherwise retrieve the bootstrap.py module from tk-desktop-internal (which can't be imported manually since it
-        # isn't in the Python path.
-        bootstrap_module = sys.modules[self._app_bootstrap.__module__]
-        # Pick the SHOTGUN_APP_ROOT:
-        # https://github.com/shotgunsoftware/tk-desktop-internal/blob/a31e9339b7e438cd111fb8f4a2b0436e77c98a17/Common/Shotgun/python/bootstrap.py#L80
-        return bootstrap_module.SHOTGUN_APP_ROOT
-
-    def get_bundle_cache_location(self):
-        """
-        Retrieves the bundle cache that is distributed with the PTR desktop app.
-
-        We're implementing this method on the proxy because Desktop versions 1.3.6 and earlier didn't
-        have a bundle cache.
-
-        :returns: Path to the bundle cache or None if no bundle cache is present.
-        """
-        if hasattr(self._app_bootstrap, "get_bundle_cache_location"):
-            return self._app_bootstrap.get_bundle_cache_location()
-        else:
-            return os.environ.get("SHOTGUN_DESKTOP_BUNDLE_CACHE_LOCATION") or None
-
-
-def main(**kwargs):
+def main(**kwargs: typing.Any) -> int:
     """
     Main
 
@@ -791,7 +735,7 @@ def main(**kwargs):
     :returns: Error code for the process.
     """
 
-    app_bootstrap = _BootstrapProxy(kwargs["app_bootstrap"])
+    app_bootstrap = kwargs["app_bootstrap"]
 
     # Do not import sgtk globally to avoid using the wrong sgtk once we bootstrap in
     # the right config.
