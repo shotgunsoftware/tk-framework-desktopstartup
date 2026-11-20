@@ -15,7 +15,7 @@ display_name: "Desktop Startup Framework"
 description: "Startup logic for FlowPT Desktop"
 
 # Required minimum versions for this item to run
-# Do not update this core version, or the upgrade of FlowPT Desktop
+# Do not update this core version, or the upgrade of FlowPT Desktop (Shotgun Desktop)
 # startup code will fail.
 # When FlowPT Desktop starts, it uses the core that is packaged with
 # the desktop app to bootstrap and do an auto-update. After the update

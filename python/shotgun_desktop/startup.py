@@ -442,7 +442,7 @@ def __start_engine_in_toolkit_classic(splash, user, pc, pc_path):
     import sgtk
 
     mgr = sgtk.bootstrap.ToolkitManager(user)
-    # Tell the manager to resolve the config in FlowPT so it can resolve the location on disk.
+    # Tell the manager to resolve the config in FlowPT (Shotgun) so it can resolve the location on disk.
     mgr.do_shotgun_config_lookup = True
     mgr.progress_callback = (
         lambda progress_value, message: __bootstrap_progress_callback(splash, message)
@@ -458,14 +458,14 @@ def __start_engine_in_toolkit_classic(splash, user, pc, pc_path):
         :param ctx: Toolkit context we are bootstrapping into.
         :type ctx: :class:`sgtk.Context`
         """
-        # If the pipeline configuration found in FlowPT doesn't match what we have locally, we have a
+        # If the pipeline configuration found in FlowPT (Shotgun) doesn't match what we have locally, we have a
         # problem.
         if pc["id"] != ctx.sgtk.pipeline_configuration.get_shotgun_id():
             raise errors.InvalidPipelineConfiguration(
                 pc, ctx.sgtk.pipeline_configuration
             )
 
-        # If the pipeline configuration we got from FlowPT is not assigned to a project, we might have
+        # If the pipeline configuration we got from FlowPT (Shotgun) is not assigned to a project, we might have
         # some patching to be done to local site configuration.
         if pc["project"] is None:
 
@@ -492,7 +492,7 @@ def __start_engine_in_toolkit_classic(splash, user, pc, pc_path):
 
     if not __desktop_engine_supports_authentication_module(engine):
         raise errors.UpgradeEngine200Error(
-            "This version of the PTR desktop app only supports tk-desktop engine 2.0.0 and higher.",
+            "This version of FlowPT Desktop only supports tk-desktop engine 2.0.0 and higher.",
             pc_path,
         )
 
@@ -765,7 +765,7 @@ class _BootstrapProxy(object):
 
     def get_bundle_cache_location(self):
         """
-        Retrieves the bundle cache that is distributed with FlowPT Desktop.
+        Retrieves the bundle cache that is distributed with FlowPT Desktop (Shotgun Desktop).
 
         We're implementing this method on the proxy because Desktop versions 1.3.6 and earlier didn't
         have a bundle cache.
@@ -815,7 +815,7 @@ def main(**kwargs):
     # We might crash before even initializing the authenticator, so instantiate
     # it right away.
     shotgun_authenticator = None
-    # FlowPT Desktop startup has always been logging every debug string to disk since the new authentication from 0.16
+    # FlowPT Desktop (Shotgun Desktop) startup has always been logging every debug string to disk since the new authentication from 0.16
     # was released and the startup has been difficult to work with and debug, so keep that logic in place during the
     # startup sequence. It will be restored during the ToolkitManager's pre_engine_start_callback.
     __backup_global_debug_flag()

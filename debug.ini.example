@@ -2,7 +2,7 @@
 
 # Note that those environment variable are meant for debugging purprose by the
 # Toolkit team and therefore are subject to change. We advise that you not use
-# these to run FlowPT Desktop at any time.
+# these to run FlowPT Desktop (Shotgun Desktop) at any time.
 
 # Controls where this file is located. Obviously can't be set inside this file.
 SGTK_DESKTOP_ENVVARS_LOCATION=~/Library/Caches/Shotgun/desktop/config/envvars.ini
