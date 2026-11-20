@@ -35,7 +35,7 @@ def _supports_get_from_location_and_paths(sgtk):
 def _out_of_date_check(latest_descriptor, current_desc):
     """
     Check if the version is out of date, this prevents an upgrade of the startup logic
-    in the event that it detects PTR desktop app is running on Python 2.
+    in the event that it detects Shotgun Desktop is running on Python 2.
 
     :param latest_descriptor:`sgtk.descriptor.FrameworkDescriptor` instance with the latest startup descriptor.
     :param current_desc:`sgtk.descriptor.FrameworkDescriptor` instance with the current startup descriptor.
@@ -157,7 +157,7 @@ def upgrade_startup(splash, sgtk, app_bootstrap):
         logger.exception("Unexpected error when updating startup code.")
         desktop_message_box.DesktopMessageBox.critical(
             "Flow Production Tracking update failed",
-            "There is a new update of the PTR desktop component, but it couldn't be installed. The PTR desktop "
+            "There is a new update of the FlowPT Desktop component, but it couldn't be installed. The FlowPT Desktop "
             "app will be launched with the currently installed version of the code.\n"
             "If this problem persists, please <a href='%s'>contact</a> Flow Production Tracking support.\n"
             "\n"
